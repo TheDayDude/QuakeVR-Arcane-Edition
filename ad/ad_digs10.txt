@@ -1,0 +1,68 @@
+16.12.2023
+
+================================================================
+Title                   : The Anomaly 3: Tower
+Filename                : ad_digs10.bsp, ad_digs10.lit
+Author(s)               : Artyom "Digs" Glazkov
+Email Address           : digs@mail.ru
+
+================================================================
+
+* Play Information *
+
+Game                    : Arcane Dimensions v1.81
+Level Name              : The Anomaly 3: Tower
+
+Single Player           : Yes
+Cooperative 1-5  Player : No
+Deathmatch 2-32 Player  : No
+Difficulty Settings     : Yes
+Monster Count           : 205/234/253
+
+New Textures            : Yes   
+New Models              : No
+New Sounds              : No
+New Music               : No
+
+
+* Construction *
+
+Base            : From scracth 
+Texture WAD used: quake, The Forgotten Sepulcher
+Editors used    : NetRadiant 1.5.0, Wally
+Utils           : mapspl 
+
+
+* Require *
+  Engine with extended limits and support bsp2
+
+* Running ad_digs10.bsp *
+
+Place ad_digs10.bsp and ad_digs10.lit in quake\ad181\maps\
+From your quake directory type: 
+
+quakespasm.exe -game ad181 +map ad_digs10
+
+or start game with mode 
+
+quakespasm.exe -game ad181
+
+and from console type: map digs08
+
+
+* Credits *
+
+Thanks to:
+  for testing: Lobotomy-Lobster, Mopey bloke, Daivuk, h4724, mtsch, alexUnder
+  id Software (http://idsoftware.com)
+  Ericw for his compile utils (https://ericwa.github.io/ericw-tools/)
+  GtkRadiant & NetRadiant crews 
+
+
+* Copyright / Permissions *
+
+Commercial distribution of this material, in whole or in part, requires
+prior agreement with the author.  Commercial distribution includes any
+means by which the user has to pay either for the support (e.g. CD-ROM,
+or magazine CD-ROM) or for the material itself. Unauthorized commercial
+distribution is prohibited.

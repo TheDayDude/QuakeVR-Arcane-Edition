@@ -168,6 +168,7 @@ mon_bossjudicator.qc
 mon_bossnour.qc
 
 advr.qc
+advr_forcegrab.qc
 advr_drops.qc
 advr_impacts.qc
 advr_drop_tests.qc

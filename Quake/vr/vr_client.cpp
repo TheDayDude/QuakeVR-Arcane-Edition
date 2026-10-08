@@ -282,7 +282,7 @@ VrMove unposed;
         move.muzzlePos[h] = handMuzzle(hs, h);
 
         // Where its shots go: the aim turned by the weapon's Shot Pitch and Yaw (the drawn weapon doesn't move).
-        move.shotRot[h] = weapons::shotAngles(hs.rot[h], weapons::heldSlot(h), h == HAND_OFF);
+        move.shotRot[h] = weapons::shotAngles(hs.rot[h], weapons::heldSlot(h), h == HAND_OFF) + weaponfx::aimOffset(h);
     }
 
     move.headVel = hs.headVel;

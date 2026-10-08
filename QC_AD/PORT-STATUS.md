@@ -10,9 +10,13 @@ Start QuakeVR-AD.bat with the headset and OpenXR runtime ready. It opens AD's hu
 
 The user-supplied AD HD collection is installed in `ad_hd/textures`. The normal AD launcher loads it automatically when present; `QuakeVR-AD-Standard-Textures.bat` starts with the previous textures and the same saves/settings. Original pixels, map-specific folders and author credits are preserved. See `HD-TEXTURES.md` for installation, supported material maps and disabling instructions. No engine or gameplay changes are required.
 
+## Widowmaker and magazine update
+
+The Widowmaker now uses the long AD `g_shot3.mdl` mesh with a heavier, forward-balanced VR profile and support grip. It has its own record identity, separate from the two-shell Super Shotgun, and holds 24 shells for eight triple shots. Use standard holster/button reloading, not wrist-flick reloading. Plasma capacity is also 24 shots; Thunderbolt remains 36. See `WIDOWMAKER.md` for calibration and conversion details.
+
 ## Enemy weapon drops
 
-The Plasma Gun now uses the converted AD `g_plasma.mdl` mesh and original skin in VR, replacing the tinted Thunderbolt fallback. Held weapons, holsters and enemy drops share its calibrated geometry, muzzle, support grip and ammo display. See `PLASMA-MODEL.md` for the reproducible converter and Blender editing notes.
+The Plasma Gun now uses the converted AD `g_plasma.mdl` mesh and original skin in VR, replacing the tinted Thunderbolt fallback. Held weapons, holsters and enemy drops share its calibrated geometry, muzzle, support grip and ammo display. Its support grip has been lowered, and map pickups now preserve Plasma Gun versus Thunderbolt identity per weapon rather than converting all guns through AD's global upgrade flag. Accepted pickups into occupied hands gently drop the displaced weapon with its loaded ammo. See `PLASMA-MODEL.md` for details, the reproducible converter and Blender editing notes.
 
 Combat follow-up: heavy player hits now knock back mobile monsters using the original `vr_push`, `vr_hit_push` and `vr_kill_push` settings, scaled by creature size. AD's projectile pellets accumulate in a fixed 0.1-second window rather than multiplying the impulse, and a heavy hit interrupts a fiend's damaging leap. Bosses and anchored creatures remain in place. Swords support hilt/blade two-hand grips and transfer to the supporting hand on handle release. Thrown weapons use QuakeVR's release-speed/weight calculation and gravity, with one damaging impact per throw. Parrying and projectile batting are limited to axes, Shadow Axe and swords; guns, chainsaws, grapple and empty hands are excluded. `tests/impacts-test.cfg` exercises these changes in mock VR.
 
@@ -71,7 +75,7 @@ Reload using the base QuakeVR bindings:
 - Main/right hand: click the right stick (RTHUMB).
 - Off/left hand: X (XBUTTON).
 - Move a held gun to a hip holster while keeping hold of it to reload.
-- The double-barrel and Widowmaker also support a wrist-flick reload.
+- The ordinary double-barrel supports wrist-flick reload; the Widowmaker uses standard holster/button reload.
 - A remains jump; grips grab/holster/drop; triggers fire their own hands.
 
 Reload mode defaults to hip holsters (vr_reload_mode 2). Mode 1 permits every holster; mode 0 disables the magazine requirement. Button and supported flick reloads work in either enabled mode. There is a short reload pause and sound/haptic feedback. These are the original style of holster/button/flick reloads, not detachable magazine props.
@@ -80,16 +84,17 @@ Reload mode defaults to hip holsters (vr_reload_mode 2). Mode 1 permits every ho
 | --- | ---: |
 | Shotgun | 8 |
 | Double-barrel | 2 |
-| Widowmaker | 3 |
+| Widowmaker | 24 (8 triple shots) |
 | Nailgun | 24 |
 | Super Nailgun | 36 |
 | Grenade Launcher | 4 |
 | Rocket Launcher | 4 |
-| Lightning / Plasma | 36 |
+| Thunderbolt | 36 |
+| Plasma Gun | 24 |
 
 Loaded rounds belong to each weapon record. Holstering, hand transfers, dropping, pickup, save/load and level changes preserve them. Reloading allocates existing carried ammo; it never creates rounds. Dropping a loaded weapon transfers those rounds to the dropped gun. Weapon screens show loaded/capacity and reserve; AD's ordinary inventory ammo remains total carried ammo. Map-specific weapon removal rules still apply.
 
-The upgrades now have distinct handless VR skins: green Shadow Axe, copper/orange Widowmaker, blue Plasma Gun. They retain the calibrated VR geometry and grip/muzzle anchors, with AD's upgrade damage and firing behavior. These are recognizable VR variants, not reproductions of AD's original desktop silhouettes. Their source geometry is unchanged to avoid reintroducing baked-in hands or broken grips.
+The Shadow Axe retains its green fallback skin. Widowmaker and Plasma Gun now use the converted AD pickup meshes with their original skins and dedicated VR calibration; see their model notes above.
 
 ## Existing interaction support
 

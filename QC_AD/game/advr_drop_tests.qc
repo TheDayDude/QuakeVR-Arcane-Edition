@@ -110,3 +110,240 @@ void() ADVR_TestDropsLoad = {
     ADVR_Assert(!(self.moditems & IT_UPGRADE_LG),"save retains independent plasma upgrade state");
     bprint("ADVR DROPS SAVE PASS: enemy weapon kinds and fuel retained\n");
 };
+
+// Reproduce accepted native AD pickups, not just the VR record constructors.
+void() ADVR_TestPickups = {
+    local entity actor,item,bolt,side,stored,p,plasma,missile;
+    local float total;
+    actor=self;ADVR_Reset();self.advr_initialized=1;self.moditems=0;
+    self.items=IT_LIGHTNING|IT_SHOTGUN;self.ammo_cells=80;self.ammo_shells=20;
+    self.flags=FL_CLIENT|FL_GODMODE;self.health=1000;self.vrbits0=16384;
+    self.mainhand_hotspot=self.offhand_hotspot=0;
+    self.handpos=self.origin+self.view_ofs;self.offhandpos=self.handpos+'0 8 0';
+    self.muzzlepos=self.handpos;self.offmuzzlepos=self.offhandpos;self.shotrot=self.offshotrot='0 90 0';
+    self.advr_main=bolt=ADVR_Record(IT_LIGHTNING);bolt.wi_clip=7;
+    self.advr_off=side=ADVR_Record(IT_SHOTGUN);side.wi_clip=3;
+    self.advr_holster[0]=stored=ADVR_Record(IT_LIGHTNING);stored.wi_clip=8;
+    ADVR_Sync();
+    item=spawn();item.classname="advr_test_pickup";item.classtype=CT_UPGRADE_LG;
+    item.aflag=20;item.progspawnlist=1;item.noise=SOUND_EMPTY;
+    self=item;other=actor;weapon_touch();self=actor;
+    plasma=self.advr_main;
+    ADVR_Assert(plasma.advr_kind==ADVR_PLASMA,"native plasma pickup creates its own kind");
+    ADVR_Assert(ADVR_RecordModel(stored)==MODEL_VWEAP_LG && self.advr_off==side,"native upgrade leaves other guns alone");
+    p=find(world,classname,"advr_dropped_weapon");while(p && p.weaponinst!=bolt)p=find(p,classname,"advr_dropped_weapon");
+    ADVR_Assert(p && p.model==MODEL_VWEAP_LG && bolt.wi_clip==7 && !p.advr_throw_armed,"full main hand drops intact old gun gently");
+    ADVR_Assert(!(p.advr_moditems & IT_UPGRADE_LG),"dropped Thunderbolt cannot carry unrelated plasma upgrade");
+    total=self.ammo_cells;ADVR_Catch(p,0);ADVR_Sync();
+    ADVR_Assert(self.advr_off==bolt && self.ammo_cells==total+7,"occupied off-hand catch preserves incoming ammo");
+    p=find(world,classname,"advr_dropped_weapon");while(p && p.weaponinst!=side)p=find(p,classname,"advr_dropped_weapon");
+    ADVR_Assert(p && side.wi_clip==3,"occupied off-hand catch drops its previous gun");
+    ADVR_Assert(self.weaponmodel2==MODEL_VWEAP_LG,"caught Thunderbolt stays a Thunderbolt despite global AD flag");
+    missile=find(world,classname,"proj_plasma");self.button3=1;ADVR_Fire(0);self.button3=0;
+    ADVR_Assert(find(world,classname,"proj_plasma")==missile,"Thunderbolt fires lightning after plasma pickup");
+    self.button0=1;ADVR_Fire(1);self.button0=0;
+    ADVR_Assert(find(world,classname,"proj_plasma")!=missile,"independent Plasma Gun still fires plasma");
+    plasma.advr_animtime=0;plasma.advr_anim=SUB_Null;
+    self=item;other=actor;self.classtype=CT_LIGHTNING;weapon_touch();self=actor;
+    ADVR_Assert(self.advr_main.advr_kind==0 && ADVR_RecordModel(self.advr_main)==MODEL_VWEAP_LG,"normal map pickup stays Thunderbolt after upgrade");
+    p=find(world,classname,"advr_dropped_weapon");while(p && p.weaponinst!=plasma)p=find(p,classname,"advr_dropped_weapon");
+    ADVR_Assert(p && p.model=="progs/advr_plasma.mdl","same AD weapon bit still displaces old physical gun");
+    ADVR_Catch(p,1);ADVR_Sync();
+    ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();ADVR_Sync();
+    ADVR_Assert(self.advr_main.advr_kind==ADVR_PLASMA && self.advr_off.advr_kind==0 && self.weaponmodel2==MODEL_VWEAP_LG,"independent kinds survive map parms with global upgrade flag");
+    side=self.advr_off;self.advr_pickup_hand=1;
+    self=item;other=actor;self.classtype=CT_SHOTGUN;weapon_touch();self=actor;self.advr_pickup_hand=0;
+    ADVR_Assert(self.advr_off.advr_weapon==IT_SHOTGUN && self.advr_main.advr_kind==ADVR_PLASMA,"native hand pickup replaces the touched hand only");
+    p=find(world,classname,"advr_dropped_weapon");while(p && p.weaponinst!=side)p=find(p,classname,"advr_dropped_weapon");
+    ADVR_Assert(p!=world,"native off-hand pickup drops its old weapon");
+    remove(item);bprint("ADVR PICKUPS PASS: native plasma/Thunderbolt isolation, firing, occupied hands, same-bit replacement, magazines and map parms\n");
+};
+
+void() ADVR_TestWidow = {
+    local entity r,normal,item,actor,p;local float h,i,j,ammo,mode;
+    actor=self;ADVR_Reset();self.advr_initialized=1;self.flags=FL_CLIENT|FL_GODMODE;
+    self.health=1000;self.moditems=0;self.items=IT_SUPER_SHOTGUN|IT_LIGHTNING;
+    self.ammo_shells=self.ammo_cells=100;self.vrbits0=16384;
+    self.muzzlepos=self.offmuzzlepos=self.handpos=self.offhandpos=self.origin+self.view_ofs;
+    self.shotrot=self.offshotrot='-80 0 0';self.mainhand_hotspot=self.offhand_hotspot=0;
+    mode=cvar("vr_reload_mode");cvar_set("vr_reload_mode","2");
+    self.advr_off=normal=ADVR_Record(IT_SUPER_SHOTGUN);
+    item=spawn();item.classname="advr_test_widow";item.classtype=CT_UPGRADE_SSG;
+    item.aflag=24;item.progspawnlist=1;item.noise=SOUND_EMPTY;
+    self=item;other=actor;weapon_touch();self=actor;remove(item);
+    ADVR_Assert(self.advr_main.advr_kind==ADVR_WIDOWMAKER && ADVR_RecordModel(normal)==MODEL_VWEAP_SSG && ADVR_RecordCapacity(normal)==2,"native Widowmaker pickup preserves ordinary SSG");
+    for(h=0;h<2;h=h+1){
+        self.advr_main=self.advr_off=world;self.ammo_shells=100;
+        r=ADVR_Record(IT_SUPER_SHOTGUN);ADVR_SetHand(h,r);
+        ADVR_Assert(r.advr_kind==ADVR_WIDOWMAKER && r.wi_clip==24,"Widowmaker starts with 24 loaded shells");
+        for(i=0;i<8;i=i+1){
+            ammo=self.ammo_shells;r.advr_cooldown=r.advr_reload_until=r.advr_animtime=0;r.advr_anim=SUB_Null;
+            self.button0=self.button3=1;ADVR_Fire(h);
+            for(j=0;j<5 && self.ammo_shells==ammo && r.advr_animtime>0;j=j+1){r.advr_animtime=time;ADVR_Fire(h);}
+            self.button0=self.button3=0;
+            ADVR_Assert(self.ammo_shells==ammo-3 && r.wi_clip==24-(i+1)*3,"each Widowmaker shot costs three shells");
+        }
+        ADVR_Assert(self.ammo_shells==76 && r.wi_clip==0,"exactly eight shots per magazine");
+        r.advr_cooldown=r.advr_animtime=0;self.button0=self.button3=1;ADVR_Fire(h);self.button0=self.button3=0;
+        ADVR_Assert(self.ammo_shells==76,"empty Widowmaker cannot shoot reserve");
+        r.wi_clip=2;r.advr_cooldown=r.advr_animtime=0;self.button0=self.button3=1;ADVR_Fire(h);self.button0=self.button3=0;
+        ADVR_Assert(r.wi_clip==2 && self.ammo_shells==76,"partial magazine below three shells cannot fire reduced shot");
+        r.wi_clip=0;r.advr_reload_until=0;self.vrbits0=16384|4096|1024;ADVR_ReloadFrame(h);
+        ADVR_Assert(r.wi_clip==0,"Widowmaker no longer flick reloads");
+        self.vrbits0=16384;self.mainhand_hotspot=self.offhand_hotspot=5;ADVR_ReloadFrame(h);
+        ADVR_Assert(r.wi_clip==24 && self.ammo_shells==76,"holster reload fills 24 without creating ammo");
+        self.mainhand_hotspot=self.offhand_hotspot=0;
+    }
+    self.advr_main=r;self.advr_off=normal;ADVR_Sync();
+    self.button3=1;ammo=self.ammo_shells;normal.advr_cooldown=normal.advr_animtime=0;ADVR_Fire(0);self.button3=0;
+    ADVR_Assert(self.ammo_shells==ammo-2,"ordinary SSG still fires two shells after Widowmaker upgrade");
+    self.handthrowvel='0 0 0';ADVR_Drop(1);
+    p=find(world,classname,"advr_dropped_weapon");while(p && p.weaponinst!=r)p=find(p,classname,"advr_dropped_weapon");
+    ADVR_Assert(p && p.weaponinst.wi_clip==24,"dropped Widowmaker retains its 24-round magazine");
+    ADVR_Catch(p,1);ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();ADVR_Sync();
+    ADVR_Assert(self.advr_main.advr_kind==ADVR_WIDOWMAKER && self.advr_main.wi_clip==24 && self.advr_off.advr_kind==0,"Widowmaker and SSG identity survive map parms");
+    self.moditems=self.moditems|IT_UPGRADE_LG;self.advr_main=ADVR_Record(IT_LIGHTNING);
+    ADVR_Assert(ADVR_RecordCapacity(self.advr_main)==24,"Plasma Gun capacity is 24");
+    self.moditems=self.moditems-(self.moditems & IT_UPGRADE_LG);self.advr_off=ADVR_Record(IT_LIGHTNING);
+    ADVR_Assert(ADVR_RecordCapacity(self.advr_off)==36,"Thunderbolt keeps 36-round capacity");
+    cvar_set("vr_reload_mode",ftos(mode));ADVR_Sync();
+    bprint("ADVR WIDOW PASS: independent models/attacks, eight triple shots, partial lockout, holster reload, no flick, drop/catch, map parms and plasma capacity\n");
+};
+
+void() ADVR_TestWidowView = {
+    ADVR_TestUpgrades();self.advr_off=world;ADVR_Sync();
+};
+void() ADVR_TestShadow = {
+    local entity actor,item,normal,r,p;
+    actor=self;ADVR_Reset();self.advr_initialized=1;self.flags=FL_CLIENT|FL_GODMODE;
+    self.health=1000;self.moditems=0;self.items=IT_AXE;self.vrbits0=16384;
+    self.handpos=self.offhandpos=self.origin+self.view_ofs;
+    self.advr_off=normal=ADVR_Record(IT_AXE);
+    item=spawn();item.classname="advr_test_shadow";item.classtype=CT_UPGRADE_AXE;
+    item.progspawnlist=1;item.noise=SOUND_EMPTY;
+    self=item;other=actor;weapon_touch();self=actor;remove(item);
+    r=self.advr_main;
+    ADVR_Assert(r.advr_kind==ADVR_SHADOWAXE,"native pickup creates a distinct Shadow Axe");
+    ADVR_Assert(ADVR_RecordModel(r)=="progs/advr_shadowaxe.mdl" && ADVR_RecordModel(normal)=="progs/v_axe.mdl","normal axe does not inherit Shadow model");
+    ADVR_Assert(ADVR_CanParry(r) && ADVR_CanParry(normal),"both axe types retain parrying");
+    self.handthrowvel='0 0 0';ADVR_Drop(1);
+    p=find(world,classname,"advr_dropped_weapon");while(p && p.weaponinst!=r)p=find(p,classname,"advr_dropped_weapon");
+    ADVR_Assert(p!=world && p.model=="progs/advr_shadowaxe.mdl","dropped Shadow Axe uses its own mesh");
+    ADVR_Catch(p,1);ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();ADVR_Sync();
+    ADVR_Assert(self.advr_main.advr_kind==ADVR_SHADOWAXE && ADVR_RecordModel(self.advr_off)=="progs/v_axe.mdl","separate axes survive map parms");
+    r=self.advr_main;self.advr_holster[0]=r;self.advr_main=world;ADVR_Sync();
+    ADVR_Assert(self.holsterweaponmodel0=="progs/advr_shadowaxe.mdl","holstered Shadow Axe preserves its model");
+    self.advr_main=r;self.advr_holster[0]=world;ADVR_Sync();
+    p=spawn();p.classname="advr_test_target";p.classtype=CT_TARGETDUMMY;
+    p.movetype=MOVETYPE_NONE;p.solid=SOLID_BBOX;p.takedamage=DAMAGE_YES;p.health=1000;
+    self.handrot='0 0 0';self.handvel='3 0 0';self.muzzlepos=self.handpos+'28 0 0';
+    setsize(p,'-4 -4 -4','4 4 4');setorigin(p,self.handpos+'18 0 0');
+    self.mainhand_melee_attack_finished=0;self.advr_prevmain_time=0;ADVR_Melee(1);
+    ADVR_Assert(p.health==1000-DAMAGE_PLAYAXE2 && p.axhitme==2,"Shadow Axe retains upgraded damage and zombie finishing");
+    self.advr_main=self.advr_off;p.health=1000;
+    self.mainhand_melee_attack_finished=0;self.advr_prevmain_time=0;ADVR_Melee(1);
+    ADVR_Assert(p.health==1000-DAMAGE_PLAYAXE1 && p.axhitme==1,"ordinary axe retains normal damage after Shadow pickup");
+    remove(p);self.handvel='0 0 0';self.advr_main=r;ADVR_Sync();
+    bprint("ADVR SHADOW PASS: native pickup, separate axes, parry, drop/catch, holster and map parms\n");
+};
+void() ADVR_TestNailSpin = {
+    local entity r;local float h,i,mode;
+    ADVR_Reset();self.advr_initialized=1;self.flags=FL_CLIENT|FL_GODMODE;self.health=1000;
+    self.moditems=0;self.items=IT_SUPER_NAILGUN;self.vrbits0=16384;
+    self.muzzlepos=self.offmuzzlepos=self.origin+self.view_ofs;self.shotrot=self.offshotrot='-80 0 0';
+    mode=cvar("vr_reload_mode");cvar_set("vr_reload_mode","0");
+    for(h=0;h<2;h=h+1){
+        self.advr_main=self.advr_off=world;self.ammo_nails=100;
+        r=ADVR_Record(IT_SUPER_NAILGUN);ADVR_SetHand(h,r);
+        for(i=1;i<=10;i=i+1){
+            self.button0=self.button3=1;r.advr_cooldown=0;
+            if(r.advr_animtime)r.advr_animtime=time;
+            ADVR_Fire(h);ADVR_Sync();
+            ADVR_Assert(r.advr_frame==1+((i-1)%8),"Super Nailgun advances and wraps all eight firing frames");
+            if(h)ADVR_Assert(self.weaponframe==r.advr_frame && self.weaponframe2==0,"main-hand barrel frame reaches renderer only on main hand");
+            else ADVR_Assert(self.weaponframe2==r.advr_frame && self.weaponframe==0,"off-hand barrel frame reaches renderer only on off hand");
+        }
+        self.button0=self.button3=0;r.advr_animtime=time;ADVR_Fire(h);ADVR_Sync();
+        ADVR_Assert(r.advr_animtime==0,"Super Nailgun stops firing on trigger release");
+    }
+    cvar_set("vr_reload_mode",ftos(mode));
+    bprint("ADVR NAIL SPIN PASS: both hands, eight frames, wraparound and trigger release\n");
+};
+void() ADVR_TestForceGrab = {
+    local entity actor,r,e,oldother;local float h,ammo;
+    actor=self;oldother=other;ADVR_Reset();self.advr_initialized=1;self.flags=FL_CLIENT|FL_GODMODE;self.health=1000;
+    self.items=IT_SHOTGUN;self.moditems=0;self.ammo_shells=100;
+    cvar_set("vr_forcegrab_mode","1");cvar_set("vr_forcegrab_cone","25");
+    for(h=0;h<2;h=h+1){
+        self.advr_main=self.advr_off=world;self.vrbits0=16384;
+        self.handpos=self.offhandpos=self.origin+self.view_ofs;self.handrot=self.offhandrot='0 0 0';
+        self.handvel=self.offhandvel=self.handavel=self.offhandavel='0 0 0';
+        self.handthrowvel=self.offhandthrowvel='0 0 0';
+        r=ADVR_Record(IT_SHOTGUN);ADVR_SetHand(h,r);ADVR_Drop(h);
+        e=find(world,classname,"advr_dropped_weapon");while(e && e.weaponinst!=r)e=find(e,classname,"advr_dropped_weapon");
+        setorigin(e,ADVR_Pos(h)+'80 0 0');e.velocity='0 0 0';
+        self.button0=self.button3=1;ADVR_ForceGrab(h);
+        ADVR_Assert(ADVR_FGTarget(h)==e && !e.fg_state && e.velocity=='0 0 0',"trigger selects and highlights without moving weapon");
+        self.handvel=self.offhandvel='-3 0 3';ADVR_ForceGrab(h);
+        ADVR_Assert(!e.fg_state,"flick without grip never launches");
+        self.handvel=self.offhandvel='0 0 0';if(h)self.vrbits0=16384|8;else self.vrbits0=16384|2;
+        ADVR_ForceGrab(h);ADVR_Assert(!e.fg_state,"grip without flick locks but never launches");
+        self.button0=self.button3=0;ADVR_ForceGrab(h);ADVR_Assert(!ADVR_FGTarget(h),"trigger release cancels selection");
+        self.vrbits0=16384;self.button0=self.button3=1;ADVR_ForceGrab(h);
+        if(h)self.vrbits0=16384|8;else self.vrbits0=16384|2;
+        self.handvel=self.offhandvel='-3 0 3';ADVR_ForceGrab(h);
+        ADVR_Assert(e.fg_state==1 && ADVR_FGPulled(h)==e && e.solid==SOLID_NOT,"grip plus flick starts tracked flight");
+        self=e;ADVR_FGFlight();self=actor;
+        ADVR_Assert(vlen(e.velocity)>0,"flight think drives weapon toward hand");
+        setorigin(e,e.origin+ADVR_Pos(h)-forcegrabpoint(e));self=e;ADVR_FGFlight();self=actor;
+        ADVR_Assert(ADVR_Hand(h)==r && !ADVR_FGPulled(h),"flight catches original record in correct hand");
+        ammo=self.ammo_shells;r.advr_cooldown=0;ADVR_Fire(h);
+        ADVR_Assert(self.ammo_shells==ammo && self.advr_fg_rearm[h],"held selection trigger cannot fire caught gun");
+        self.button0=self.button3=0;ADVR_Fire(h);ADVR_Assert(!self.advr_fg_rearm[h],"release rearms caught gun");
+        self.shotrot=self.offshotrot='-80 0 0';self.muzzlepos=self.offmuzzlepos=self.origin+self.view_ofs;
+        self.button0=self.button3=1;ADVR_Fire(h);ADVR_Assert(self.ammo_shells<ammo,"deliberate trigger press fires after catch");
+        self.button0=self.button3=0;self.advr_main=self.advr_off=world;
+    }
+    e=spawn();e.classname="advr_test_native_weapon";e.classtype=CT_SHOTGUN;
+    e.progspawnlist=1;e.noise=SOUND_EMPTY;e.aflag=8;e.touch=item_touch;e.touch2=weapon_touch;
+    e.flags=FL_ITEM;e.movetype=MOVETYPE_TOSS;e.solid=SOLID_TRIGGER;
+    setmodel(e,MODEL_GWEAP_SG);setsize(e,'-6 -6 -6','6 6 6');setorigin(e,self.handpos+'80 0 0');
+    ADVR_Assert(ADVR_FGEligible(e),"ordinary map weapon is eligible");
+    self.vrbits0=16384|8;ADVR_FGLaunch(1,e);self.vrbits0=16384;
+    self=e;ADVR_FGFlight();self=actor;
+    ADVR_Assert(!e.fg_state && e.movetype==MOVETYPE_TOSS && e.solid==SOLID_TRIGGER && !self.mainhand_fgpulled,"releasing grip safely cancels flight and restores pickup");
+    self.vrbits0=16384|8;ADVR_FGLaunch(1,e);
+    setorigin(e,e.origin+self.handpos-forcegrabpoint(e));self=e;ADVR_FGFlight();self=actor;
+    ADVR_Assert(self.advr_main.advr_weapon==IT_SHOTGUN && self.advr_fg_rearm[1],"native weapon callback catches safely into selected hand");
+    remove(e); // Synthetic progspawnlist fixture deliberately skips native cleanup.
+    self.advr_main=world;self.button0=1;self.vrbits0=16384;cvar_set("vr_forcegrab_mode","0");ADVR_ForceGrab(1);
+    ADVR_Assert(!self.mainhand_fgtarget,"disabled force grab clears pointer");cvar_set("vr_forcegrab_mode","1");
+    other=oldother;self.handvel=self.offhandvel='0 0 0';ADVR_Sync();
+    bprint("ADVR FORCE GRAB PASS: both hands, selection, grip/flick gates, cancellation, flight, catch and trigger safety\n");
+};
+entity advr_grab_view_record;
+float advr_grab_view_ammo,advr_recoil_base;
+void() ADVR_TestGrabView = {
+    local entity e;
+    ADVR_Reset();self.advr_initialized=1;self.flags=FL_CLIENT|FL_GODMODE;self.health=1000;
+    self.moditems=0;self.items=IT_SHOTGUN;self.ammo_shells=80;
+    self.advr_main=ADVR_Record(IT_SHOTGUN);advr_grab_view_record=self.advr_main;ADVR_Drop(1);
+    e=find(world,classname,"advr_dropped_weapon");while(e && e.weaponinst!=advr_grab_view_record)e=find(e,classname,"advr_dropped_weapon");
+    makevectors(self.handrot);setorigin(e,self.handpos+v_forward*70);
+    e.velocity='0 0 0';e.movetype=MOVETYPE_NONE;
+    advr_grab_view_ammo=self.ammo_shells;ADVR_Sync();
+};
+void() ADVR_TestGrabSelected = {
+    ADVR_Assert(self.mainhand_fgtarget.weaponinst==advr_grab_view_record && !self.mainhand_fgpulled && !self.advr_main,"rendered selection remains stationary before grip/flick");
+    bprint("ADVR GRAB POINTER PASS\n");
+};
+void() ADVR_TestGrabArrived = {
+    ADVR_Assert(self.advr_main==advr_grab_view_record,"real-time flick flight reaches held hand");
+    ADVR_Assert(self.advr_fg_rearm[1] && self.ammo_shells==advr_grab_view_ammo+self.advr_main.wi_clip,"catch while trigger held never fires");
+    bprint("ADVR GRAB FLIGHT PASS: real frame flight and safe catch\n");
+};
+void() ADVR_TestRecoilBase = {advr_recoil_base=self.shotrot_x-self.handrot_x;};
+void() ADVR_TestRecoilAim = {
+    ADVR_Assert(self.shotrot_x-self.handrot_x<advr_recoil_base-1,"Widowmaker recoil raises actual shot direction");
+    bprint("ADVR RECOIL AIM PASS: shot direction remains above tracked aim\n");
+};

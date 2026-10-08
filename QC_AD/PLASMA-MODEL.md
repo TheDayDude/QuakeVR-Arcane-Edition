@@ -11,12 +11,13 @@ for tracked VR aiming: the engine supplies recoil, while projectiles and
 reloads retain their existing gameplay. This is an adaptation of the supplied
 art, not a new high-resolution model or a magazine-removal animation.
 
-The engine installs slot 27's calibration once through `advr_defaults`, using
+The engine installs slot 27's calibration through `advr_defaults`, using
 `advr_plasma_model_version`. It sets the muzzle at the barrel opening, the
 support grip under the forward receiver, the stock brace, and the side-mounted
 reload button/ammo display. Effective recoil/reload/weight settings are
-preserved when detaching from the old Thunderbolt geometry. Later manual
-calibration changes persist. The previous placeholder's normal map must be
+preserved when detaching from the old Thunderbolt geometry. Version 2 lowers the support grip by 1.2 model units (about 4 cm) once on
+existing installs; other calibration changes persist. Subsequent launches do
+not repeatedly lower it. The previous placeholder's normal map must be
 removed because its UV layout is incompatible.
 
 ## Rebuilding or editing
@@ -25,8 +26,7 @@ Run `python QC_AD/tools/make_plasma_model.py PATH_TO_GAME/ad` against your
 installed AD data. Later numbered PAKs and then loose files take precedence.
 The generator writes `QC_AD/runtime/progs/advr_plasma.mdl` and
 `Quake/vr/vr_ad_plasma.inc`. Rebuild the engine after regenerating calibration.
-`make_upgrade_models.py` now only generates the Shadow Axe and Widowmaker
-fallback skins, so it cannot overwrite this model.
+`make_upgrade_models.py` is retired; all three AD upgrades now use dedicated native mesh converters.
 
 For Blender, import the generated MDL with the repository's QuakeVR Models
 add-on. Keep the triangle order when editing vertices to preserve strip-order
@@ -34,3 +34,25 @@ anchors; reselect/calibrate anchors after changing topology. The conversion
 script documents its model-space transform and exact grip/muzzle points.
 
 Use the regular QuakeVR-AD launcher. No new controller bindings are required.
+
+## Independent weapon identity
+
+Map Plasma Gun pickups now create an explicit plasma weapon record. The AD
+progression flag may remain set, but it cannot change the model or attack of
+other Thunderbolts in your hands, holsters or on the floor. Normal Thunderbolt
+pickups remain normal after acquiring plasma. Physical plasma catches do not
+spread the upgrade flag. Record kinds persist through save/load and level
+changes. Old untyped lightning records are treated as Thunderbolts; acquire a
+Plasma Gun pickup to obtain an explicitly typed plasma record.
+
+Accepted map pickups replace the weapon in the touching hand (the main hand
+for body pickups). A displaced weapon falls at the hand, retaining its record
+and loaded ammo. Grabbing a physical weapon with an occupied hand follows the
+same rule. Replacement drops are not damaging throws, and a short owner
+pickup cooldown prevents immediately re-grabbing the displaced gun.
+
+`tests/pickups-test.cfg` checks native AD callbacks, matching weapon-bit
+replacement, both hands, independent lightning/plasma fire, ammo conservation,
+and existing save/load, level-transition and weapon regressions.
+
+Plasma magazine capacity is now 24 cells (24 shots); Thunderbolt remains 36.

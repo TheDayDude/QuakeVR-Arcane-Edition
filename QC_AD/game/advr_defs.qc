@@ -231,7 +231,7 @@ void() ADVR_CorpseUpdate;
 void() ADVR_RagdollPrecache;
 
 // Per-record enemy weapons; native AD inventory bits remain unchanged.
-float ADVR_SWORD=1, ADVR_HELLSWORD=2, ADVR_SAW=3, ADVR_PLASMA=4, ADVR_AXE=5, ADVR_SSG=6;
+float ADVR_SWORD=1, ADVR_HELLSWORD=2, ADVR_SAW=3, ADVR_PLASMA=4, ADVR_AXE=5, ADVR_SSG=6, ADVR_WIDOWMAKER=7, ADVR_SHADOWAXE=8;
 .float advr_kind;
 .float advr_drop_done;
 .float advr_saw_audio[2];
@@ -256,3 +256,19 @@ void(entity target,entity inflictor,entity attacker,float damage) ADVR_HitPush;
 .float advr_push_until;
 .entity advr_push_attacker;
 .entity advr_shove;
+
+.float advr_pickup_hand; // 0 body pickup, 1 off-hand, 2 main hand
+void(float h) ADVR_Displace;
+void(entity player,float weaponbit,float upgrade) ADVR_Pickup;
+
+vector(entity e) modelcentre = #0;
+vector(entity e) forcegrabpoint = #0;
+.float advr_fg_rearm[2];
+.float advr_fg_movetype, advr_fg_solid, advr_fg_nextthink, advr_fg_arrive, advr_fg_gravity;
+.void() advr_fg_think;
+void(float h) ADVR_ForceGrab;
+entity(float h) ADVR_FGTarget;
+entity(float h) ADVR_FGPulled;
+void(float h,entity e,float locked) ADVR_FGSet;
+
+void(float hand, entity e, vector org, vector ang) catchblend = #0;

@@ -1,7 +1,7 @@
 // One whitelist for guarding and projectile batting; add future melee kinds here.
 float(entity r) ADVR_CanParry = {
     if(!r || r.advr_weapon!=IT_AXE)return 0;
-    if(r.advr_kind==ADVR_SWORD || r.advr_kind==ADVR_HELLSWORD || r.advr_kind==ADVR_AXE)return 1;
+    if(r.advr_kind==ADVR_SWORD || r.advr_kind==ADVR_HELLSWORD || r.advr_kind==ADVR_AXE || r.advr_kind==ADVR_SHADOWAXE)return 1;
     if(r.advr_kind)return 0; // Chainsaw is deliberately excluded.
     return !(self.moditems & IT_UPGRADE_GHOOK); // Ordinary axe or Shadow Axe, not the grapple.
 };

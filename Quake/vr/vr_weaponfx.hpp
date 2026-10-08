@@ -31,6 +31,7 @@ void parseTracer();
 
 // The drawn hand `hand`'s recoil this frame (world units and degrees, as painknock::offset), `handAngles` the hand's
 // drawn angles (which way back is). Zero without one.
+[[nodiscard]] glm::vec3 aimOffset(int hand);
 void recoilOffset(int hand, const glm::vec3& handAngles, glm::vec3& pos, glm::vec3& angles);
 
 // Once a frame, from the view's setup, the weapons placed: the muzzle flashes put on the drawn weapons' muzzles (hidden

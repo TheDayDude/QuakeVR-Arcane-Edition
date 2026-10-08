@@ -12,6 +12,7 @@
 #include "vr_profile.hpp"
 #include "vr_render.hpp"
 #include "vr_units.hpp"
+#include "vr_twohand.hpp"
 #include "vr_weapons.hpp"
 
 #include "Zancle/Container/Vector.hpp"
@@ -49,6 +50,8 @@ struct HandFx
     int slot{-1}; // the weapon slot that fired: another in the hand, and its effects are gone
     Kick kicks[maxKicks];
     int nextKick{0};
+    float aimRise{0.f};
+    double aimAt{-1.0}, aimHoldUntil{-1.0};
     double flashAt{-1.0}; // the flash shown since (cl.time); -1 none
     float flashRoll{0.f};
     float flashJitter{1.f};
@@ -200,6 +203,14 @@ void forget(int hand)
 }
 
 // `hand`'s weapon fired (the QC's, or vr_weaponfx_test).
+void recoverAim(HandFx& h)
+{
+    const double from = za::max(h.aimAt, h.aimHoldUntil);
+    if(h.aimAt >= 0.0 && cl.time > from)
+        h.aimRise = za::max(0.f, h.aimRise - static_cast<float>(cl.time - from) * 1.5f);
+    h.aimAt = cl.time;
+}
+
 void playerFired(int hand)
 {
     const int slot = weapons::heldSlot(hand);
@@ -220,7 +231,17 @@ void playerFired(int hand)
         h.nextKick = (h.nextKick + 1) % maxKicks;
         k.time = cl.time;
         k.strength = za::max(weapons::value(slot, Key::RecoilStrength), 0.f);
+        // The AD Widowmaker is controllable with a support hand, punishing without it.
+        const qmodel_t* model = weapons::heldModel(hand);
+        if(model && strcmp(model->name, "progs/advr_widowmaker.mdl") == 0)
+            {
+            k.strength *= 1.f - 0.55f * za::clamp(twohand::transition(hand), 0.f, 1.f);
+            recoverAim(h);
+            h.aimRise = za::min(25.f, h.aimRise + k.strength);
+            h.aimHoldUntil = cl.time + 0.65;
+        }
         k.duration = za::max(weapons::value(slot, Key::RecoilTime), 0.02f);
+        if(vr_debug_weaponfx.value) Con_Printf("weaponfx kick strength %.3f support %.3f\n", k.strength, twohand::transition(hand));
         k.sideways = random01() * 2.f - 1.f;
     }
     const bool flash = vr_muzzle_flash.value != 0.f && weapons::value(slot, Key::Flash) != 0.f;
@@ -429,6 +450,7 @@ void recoilOffset(int hand, const glm::vec3& handAngles, glm::vec3& pos, glm::ve
     if(!vr_weapon_recoil.value || weapons::heldSlot(hand) != h.slot)
     {
         // Gone from the hand (or recoil turned off): its kicks with it.
+        h.aimRise = 0.f; h.aimAt = h.aimHoldUntil = -1.0;
         for(Kick& k : h.kicks)
         {
             k = Kick{};
@@ -445,13 +467,16 @@ void recoilOffset(int hand, const glm::vec3& handAngles, glm::vec3& pos, glm::ve
             sideways += e * k.sideways;
         }
     }
-    // A burst's kicks adding up go no further than two and a half.
-    if(kick > 2.5f)
+    // Keep the normal burst cap; allow the Widowmaker's deliberately heavy kick.
+    const qmodel_t* model = weapons::heldModel(hand);
+    const float cap = model && strcmp(model->name, "progs/advr_widowmaker.mdl") == 0 ? 10.f : 2.5f;
+    if(kick > cap)
     {
-        sideways *= 2.5f / kick;
-        kick = 2.5f;
+        sideways *= cap / kick;
+        kick = cap;
     }
-    if(kick <= 0.f)
+    recoverAim(h);
+    if(kick <= 0.f && h.aimRise <= 0.f)
     {
         return;
     }
@@ -459,13 +484,23 @@ void recoilOffset(int hand, const glm::vec3& handAngles, glm::vec3& pos, glm::ve
     hands::angleVectors(handAngles, fwd, right, up);
     const float back = vr_recoil_kick.value * kick * 0.01f * units::metresToUnits();
     pos = -fwd * back;
-    angles.x = -vr_recoil_rise.value * kick; // tipped up (pitch down is positive)
+    angles.x = -vr_recoil_rise.value * kick - h.aimRise; // tipped up (pitch down is positive)
     angles.y = 0.25f * vr_recoil_rise.value * sideways;
     if(vr_debug_weaponfx.value >= 2)
     {
         Con_Printf("weaponfx recoil t %.3f hand %d kick %.3f back %.3f cm pitch %.3f yaw %.3f\n", cl.time, hand, kick,
             vr_recoil_kick.value * kick, angles.x, angles.y);
     }
+}
+
+// Widowmaker shots follow the same muzzle rise seen on the held model.
+glm::vec3 aimOffset(int hand)
+{
+    const qmodel_t* model = weapons::heldModel(hand);
+    if(!model || strcmp(model->name, "progs/advr_widowmaker.mdl") != 0) return glm::vec3{0.f};
+    glm::vec3 pos, angles;
+    recoilOffset(hand, hands::current().rot[hand], pos, angles);
+    return angles;
 }
 
 void frame(const view::ViewEntity (&weapons)[2], view::ViewEntity (&flashes)[2],

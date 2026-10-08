@@ -13,6 +13,8 @@
 #include "vr_cvars.hpp"
 #include "vr_protocol.hpp"
 #include "vr_twohand.hpp"
+#include "vr_weapons.hpp"
+#include <cstring>
 
 #include "Zancle/Math/Cos.hpp"
 #include "Zancle/Math/Fmax.hpp"
@@ -32,6 +34,12 @@ glm::vec3 restUp[2]{glm::vec3{0.f, 0.f, 1.f}, glm::vec3{0.f, 0.f, 1.f}}; // hand
 double lastTime = -1.0;     // cl.time of the last detection
 double lastSpinTime = -1.0; // vr_gametime of the last spin step: every rendered frame, smoothly
 
+[[nodiscard]] bool isWidowmaker(int hand)
+{
+    const qmodel_t* model = weapons::heldModel(hand);
+    return model && std::strcmp(model->name, "progs/advr_widowmaker.mdl") == 0;
+}
+
 [[nodiscard]] bool canFlick(int hand)
 {
     using namespace protocol;
@@ -39,7 +47,7 @@ double lastSpinTime = -1.0; // vr_gametime of the last spin step: every rendered
     const int weapon = cl.stats[main ? STAT_QVR_WEAPON : STAT_QVR_WEAPON2];
     const int clip = cl.stats[main ? STAT_QVR_WEAPONCLIP : STAT_QVR_WEAPONCLIP2];
     const int clipSize = cl.stats[main ? STAT_QVR_WEAPONCLIPSIZE : STAT_QVR_WEAPONCLIPSIZE2];
-    return weapon == widSuperShotgun && clip != clipSize && twohand::flickAllowed(hand);
+    return !isWidowmaker(hand) && weapon == widSuperShotgun && clip != clipSize && twohand::flickAllowed(hand);
 }
 
 } // namespace
@@ -53,6 +61,7 @@ void update(hands::State& s)
 
     for(int h = 0; h < HAND_COUNT; h++)
     {
+        if(isWidowmaker(h)) { current[h] = false; spinLeft[h] = 0.f; }
         glm::vec3 fwd, right, up;
         hands::angleVectors(s.rot[h], fwd, right, up);
 
@@ -100,12 +109,12 @@ bool flicking(int hand)
 
 bool allowed(int hand)
 {
-    return twohand::flickAllowed(hand);
+    return !isWidowmaker(hand) && twohand::flickAllowed(hand);
 }
 
 void spin(int hand)
 {
-    spinLeft[hand] = 360.f;
+    if(!isWidowmaker(hand)) spinLeft[hand] = 360.f;
 }
 
 float spinAngle(int hand)

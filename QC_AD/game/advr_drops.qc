@@ -7,14 +7,19 @@ string(entity r) ADVR_RecordModel = {
     if(r.advr_kind==ADVR_HELLSWORD)return "progs/v_hksword.mdl";
     if(r.advr_kind==ADVR_SAW)return "progs/v_chainsaw.mdl";
     if(r.advr_kind==ADVR_PLASMA)return "progs/advr_plasma.mdl";
+    if(r.advr_weapon==IT_LIGHTNING)return MODEL_VWEAP_LG;
+    if(r.advr_kind==ADVR_SHADOWAXE)return "progs/advr_shadowaxe.mdl";
+    if(r.advr_weapon==IT_AXE && !r.advr_kind && !(self.moditems & IT_UPGRADE_GHOOK))return "progs/v_axe.mdl";
     if(r.advr_kind==ADVR_AXE)return "progs/v_axe.mdl";
-    if(r.advr_kind==ADVR_SSG)return MODEL_VWEAP_SSG;
+    if(r.advr_kind==ADVR_WIDOWMAKER)return "progs/advr_widowmaker.mdl";
+    if(r.advr_weapon==IT_SUPER_SHOTGUN)return MODEL_VWEAP_SSG;
     return ADVR_Model(r.advr_weapon,0);
 };
 float(entity r) ADVR_RecordCapacity = {
     if(!r)return 0;
     if(r.advr_kind==ADVR_SAW)return 100;
-    if(r.advr_kind==ADVR_SSG)return 2;
+    if(r.advr_kind==ADVR_PLASMA || r.advr_kind==ADVR_WIDOWMAKER)return 24;
+    if(r.advr_weapon==IT_SUPER_SHOTGUN)return 2;
     return ADVR_Capacity(r.advr_weapon);
 };
 float(entity r) ADVR_PackRecord = {return r.advr_weapon+r.advr_kind*65536;};

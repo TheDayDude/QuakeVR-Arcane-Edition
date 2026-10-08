@@ -1314,6 +1314,7 @@ void() weapon_touch =
 		if (deathmatch) DM_Weapon (other.weapon, pickupweapon);
 		else other.weapon = pickupweapon;
 		W_SetCurrentAmmo(other);
+        ADVR_Pickup(other,pickupweapon,pickupmodweapon);
 	}
 
 	// Fire any targets and display messages

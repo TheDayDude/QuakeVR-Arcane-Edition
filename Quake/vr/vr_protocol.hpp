@@ -1,0 +1,105 @@
+// vr_protocol.hpp -- Quake VR extensions to Ironwail's PROTOCOL_RMQ.
+//
+// A server running Quake VR progs sets PRFL_QUAKEVR (vr_api.h) in the RMQ protocol flags.
+// Both ends then add:
+//   - clc_move: a VR block after the vanilla fields (head, hands, muzzles, VR bits, ...);
+//   - entity updates: model scale / scale origin / offset / no-rotate in update bits 24..27;
+//   - svc_quakevr (39) + sub-command for particles, late precaches, world text, floating texts
+//     (damage numbers), haptics, knocks on the drawn hands and spent casings;
+//   - an extra "beam id" byte in TE_LIGHTNING1-3 / TE_BEAM, so one entity can own two beams;
+//   - entity updates: a weapon prop's weapon id in update bit 28 (QC vr_weaponinst.qc);
+//   - VR stats (weapons in both hands, holsters, clips, the hands' and holsters' weapon ids) in stat slots 64+, sent through
+//     Ironwail's generic stat channel.
+
+#pragma once
+
+namespace qvr::protocol
+{
+
+// Entity update bits (above U_EXTEND2, so only present when bits >= 1 << 24).
+inline constexpr int U_QVR_SCALE = 1 << 24;        // 3 floats
+inline constexpr int U_QVR_SCALEORIGIN = 1 << 25;  // 3 coords
+inline constexpr int U_QVR_OFFSET = 1 << 26;       // 3 coords
+inline constexpr int U_QVR_NOROTATE = 1 << 27;     // no data: a rigid body, whose EF_ROTATE model keeps its angles
+inline constexpr int U_QVR_WEAPONUID = 1 << 28;    // long: a weapon prop's weapon id (QC vr_weaponinst.qc: its record's)
+
+// Server -> client.
+inline constexpr int svc_quakevr = 39;
+
+enum SvcQuakeVr : int
+{
+    QVR_SVC_PARTICLE2 = 1,      // [coord3 org][char3 dir*16][byte preset][short count]
+    QVR_SVC_PRECACHE_MODEL = 2, // [short index][string name]
+    QVR_SVC_WORLDTEXT_MAKE = 3, // [short handle]
+    QVR_SVC_WORLDTEXT_TEXT = 4, // [short handle][string]
+    QVR_SVC_WORLDTEXT_POS = 5,  // [short handle][coord3]
+    QVR_SVC_WORLDTEXT_ANGLES = 6, // [short handle][float3]
+    QVR_SVC_WORLDTEXT_HALIGN = 7, // [short handle][byte 0 left, 1 centre, 2 right]
+    QVR_SVC_WORLDTEXT_SCALE = 8,  // [short handle][float]
+    QVR_SVC_PRECACHE_SOUND = 9,   // [short index][string name]
+    QVR_SVC_HAPTIC = 10,          // [byte hand][float delay][float duration][float frequency][float amplitude]
+    QVR_SVC_HANDIMPACT = 11,      // [byte hand][float strength][float3 direction]: the drawn hand is knocked (a parry)
+    QVR_SVC_FLOATTEXT = 12,       // [coord3 org][byte3 colour][byte scale * 32][string]: a text rising from a point and fading
+    QVR_SVC_EJECT = 13,           // [byte hand][byte kind][byte count][byte flags][byte delay * 100]: spent casings out of a weapon (vr_shells.cpp)
+    QVR_SVC_WOUND = 14,           // [short entity][coord3 org][char3 dir*127][byte kind][byte amount][byte extra]: a wound on a model (vr_wounds.cpp)
+    QVR_SVC_WOUNDCLEAR = 15,      // [short entity]: an entity sent wounds was removed: its slot's next entity starts clean (reliable)
+    QVR_SVC_CATCHBLEND = 16,      // [byte hand][short entity][float3 origin][float3 angles]: a force grab's weapon caught by the hand, from there (vr_drawblend.cpp)
+    QVR_SVC_ROPE = 17,            // [short entity][byte beam id][byte count][coord3 first][short3 x (count - 1): eighths of a unit from the one before]: a grappling hook's rope's corners (none: straight), for the beam of that entity and id; sent when they change (vr_ropesim.cpp, vr_rope.cpp); count ropeEnded: that beam's rope ended (its hook's rope is another beam's now)
+    QVR_SVC_SHOCK = 18,           // [byte kind][coord3 org][short radius][byte duration * 50]: the lightning gun in water (vr_shock.cpp): 0 the receiving player shocked (to that client only), 1 arcs on a liquid's surface, 2 a burst of arcs in it
+    QVR_SVC_FIRED = 19,           // [short entity][byte hand, 255 a monster's gun]: a weapon fired (vr_weaponfx.cpp: its drawn kick, its muzzle flash)
+    QVR_SVC_TRACER = 20,          // [short entity][byte hand, 255 a monster's][coord3 from][coord3 to]: a hitscan pellet's line, for a bullet tracer (vr_weaponfx.cpp)
+    QVR_SVC_WEAPONGONE = 21,      // [long weapon id]: that weapon is gone (its record freed: nothing has it any more): its blood forgotten (vr_wounds.cpp; reliable)
+};
+inline constexpr int ropeEnded = 255; // QVR_SVC_ROPE's count: the beam's rope ended (no corners follow)
+
+// Client -> server: clc_move VR block button bits.
+inline constexpr int QVR_BUTTON_OFFHANDATTACK = 1 << 0; // -> .button3
+inline constexpr int QVR_BUTTON_HANDSTRACKED = 1 << 1;  // hands come from real tracking
+inline constexpr int QVR_BUTTON_OFFHANDBUSY = 1 << 2;   // the hand holds the flashlight (client-side): no force grab
+inline constexpr int QVR_BUTTON_MAINHANDBUSY = 1 << 3;  // (-> QC QVR_VRBITS0_*HAND_BUSY)
+inline constexpr int QVR_BUTTON_OFFHANDSECONDARY = 1 << 4;  // the hand's upper face button (Y; B on the main hand) is held,
+inline constexpr int QVR_BUTTON_MAINHANDSECONDARY = 1 << 5; // in the game (-> QC QVR_VRBITS0_*HAND_SECONDARY: the grapple's reel)
+inline constexpr int QVR_BUTTON_OFFHANDPRIMARY = 1 << 6;  // the hand's lower face button (X; A on the main hand) is held,
+inline constexpr int QVR_BUTTON_MAINHANDPRIMARY = 1 << 7; // in the game (-> QC QVR_VRBITS0_*HAND_PRIMARY: the grapple's unreel)
+
+// VR stats (cl.stats / cl.statsf indices).
+enum Stat : int
+{
+    STAT_QVR_FIRST = 64,
+
+    STAT_QVR_WEAPON = STAT_QVR_FIRST, // main hand weapon id (.weapon)
+    STAT_QVR_WEAPON2,                 // off-hand weapon id
+    STAT_QVR_WEAPONMODEL2,            // model index
+    STAT_QVR_WEAPONFRAME2,
+    STAT_QVR_WEAPONFLAGS,
+    STAT_QVR_WEAPONFLAGS2,
+    STAT_QVR_AMMO2,                   // .currentammo2
+    STAT_QVR_AMMOCOUNTER,
+    STAT_QVR_AMMOCOUNTER2,
+    STAT_QVR_WEAPONCLIP,
+    STAT_QVR_WEAPONCLIP2,
+    STAT_QVR_WEAPONCLIPSIZE,
+    STAT_QVR_WEAPONCLIPSIZE2,
+    STAT_QVR_HOLSTERWEAPON0,          // 6 each: weapon id, model index, flags, clip
+    STAT_QVR_HOLSTERWEAPONMODEL0 = STAT_QVR_HOLSTERWEAPON0 + 6,
+    STAT_QVR_HOLSTERWEAPONFLAGS0 = STAT_QVR_HOLSTERWEAPONMODEL0 + 6,
+    STAT_QVR_HOLSTERWEAPONCLIP0 = STAT_QVR_HOLSTERWEAPONFLAGS0 + 6,
+
+    STAT_QVR_FGMAIN = STAT_QVR_HOLSTERWEAPONCLIP0 + 6, // force grab: entity * 4 + state (1 aimed, 2 locked, 3 pulled)
+    STAT_QVR_FGOFF,
+    STAT_QVR_CARRYMAIN, // the entity each hand carries (vr_carry.qc), 0 none: drawn in the hand (vr_held.cpp)
+    STAT_QVR_CARRYOFF,
+    STAT_QVR_CLIMB,     // the holding hands (vr_climb.cpp): bit 0 off, 1 main; bits 2-7, 8-13 their holds' serials;
+                        // bits 14-21, 22-29 their ways out (the yaw towards the drop, in 256ths of a turn)
+    STAT_QVR_CLIMBOFFX, // each hand's hold, in eighths of a unit: the drawn hand is put on it
+    STAT_QVR_CLIMBMAINX = STAT_QVR_CLIMBOFFX + 3,
+    STAT_QVR_MELEE = STAT_QVR_CLIMBMAINX + 3, // parry stamina and the counter's window (QC .vr_melee_hud; vr_meleehud.cpp)
+    STAT_QVR_WEAPONUID,  // the main hand's weapon's id (QC vr_weaponinst.qc: its record's; 0 none): its blood (vr_wounds.cpp)
+    STAT_QVR_WEAPONUID2, // the off hand's
+    STAT_QVR_HOLSTERWEAPONUID0, // 6: each holster's weapon's id (0 none): its blood goes with it, drawn holstered too
+    STAT_QVR_END = STAT_QVR_HOLSTERWEAPONUID0 + 6
+};
+
+inline constexpr int numHolsters = 6;
+
+} // namespace qvr::protocol

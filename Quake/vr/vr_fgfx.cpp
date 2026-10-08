@@ -1,0 +1,280 @@
+// vr_fgfx.cpp -- see vr_fgfx.hpp.
+
+#include "vr_fgfx.hpp"
+#include "vr_cvars.hpp"
+#include "vr_flashlight.hpp"
+#include "vr_held.hpp"
+#include "vr_hue.hpp"
+#include "vr_lines.hpp"
+#include "vr_meleehud.hpp"
+#include "vr_menu.hpp"
+#include "vr_particles.hpp"
+#include "vr_protocol.hpp"
+#include "vr_weapons.hpp"
+
+#include "Zancle/Container/AnkerlUnorderedDense.hpp"
+#include "Zancle/Math/Clamp.hpp"
+#include "Zancle/Math/Exp.hpp"
+#include "Zancle/Math/Fabs.hpp"
+#include "Zancle/Math/MinMax.hpp"
+#include "Zancle/Math/Sin.hpp"
+#include "Zancle/Math/Sqrt.hpp"
+
+
+namespace qvr::fgfx
+{
+namespace
+{
+
+enum State : int
+{
+    None,
+    Aimed,
+    Locked,
+    Flying
+};
+
+struct Target
+{
+    int ent{0};
+    int state{None};
+};
+
+ankerl::unordered_dense::map<int, float> glows; // entity -> current glow
+double lastTime = -1.0;
+
+[[nodiscard]] Target target(int stat)
+{
+    const int v = cl.stats[stat];
+    return {v >> 2, v & 3};
+}
+
+[[nodiscard]] bool valid(int ent)
+{
+    return ent > 0 && ent < cl.num_entities && cl_entities[ent].model;
+}
+
+// Where the force grab takes an entity, as the QC's forcegrabpoint: a weapon by its handle (its origin:
+// weapons::heldAtOrigin), anything else by its middle as drawn (its model's box, turned with it, with the networked
+// scale and offset: dropped backpacks are drawn well off their origin).
+[[nodiscard]] glm::vec3 centre(int ent)
+{
+    const entity_t& e = cl_entities[ent];
+    if(weapons::heldAtOrigin(e.model))
+    {
+        return {e.origin[0], e.origin[1], e.origin[2]};
+    }
+    return held::drawnCentre(ent);
+}
+
+// The effects' colours: the force grab's hue (vr_forcegrab_hue; by default the player's,
+// vr_player_hue: vr_hue.hpp) at each part's own saturation and brightness (made in blue, 215), the
+// saturation times vr_forcegrab_saturation (and vr_player_saturation while the hue is the
+// player's). Hues of the same brightness are not as bright to the eye (green far more than blue):
+// half the difference in luminance with the blue as made is taken back, so every hue, paler or
+// not, glows about as much.
+[[nodiscard]] glm::vec3 tint(float saturation, float value)
+{
+    const glm::vec3 c = hue::color(vr_forcegrab_hue, vr_forcegrab_saturation, saturation, value);
+    const glm::vec3 blue = hsv(215.f, saturation, value);
+    const glm::vec3 luma{0.2126f, 0.7152f, 0.0722f};
+    const float l = glm::dot(c, luma);
+    const float want = glm::dot(blue, luma);
+    return l > 1e-4f ? c * za::clamp(za::sqrt(want / l), 0.6f, 1.6f) : c;
+}
+
+[[nodiscard]] glm::vec4 tint(float saturation, float value, float alpha)
+{
+    return glm::vec4{tint(saturation, value), alpha};
+}
+
+// A small hash noise, -1..1 (unsigned arithmetic: the keys and the hash wrap).
+[[nodiscard]] float noise(unsigned a, unsigned b)
+{
+    unsigned h = a * 73856093u ^ b * 19349663u;
+    h = (h ^ (h >> 13)) * 1274126177u;
+    return static_cast<float>(h & 0xFFFF) / 32767.5f - 1.f;
+}
+
+// A crackling tendril from `a` to `b`: jittered segments, redrawn a few dozen times a second, a
+// bright core inside a wide soft glow, bulging in the middle.
+void tendril(const glm::vec3& a, const glm::vec3& b, float strength, int seed)
+{
+    const glm::vec3 d = b - a;
+    const float len = glm::length(d);
+    if(len < 1.f)
+    {
+        return;
+    }
+    const glm::vec3 dir = d / len;
+    const glm::vec3 side1 = glm::normalize(glm::cross(dir, za::fabs(dir.z) < 0.9f ? glm::vec3{0, 0, 1} : glm::vec3{1, 0, 0}));
+    const glm::vec3 side2 = glm::cross(dir, side1);
+    const glm::vec4 haloColor = tint(0.83f, 0.9f, 1.f);
+    const glm::vec4 coreColor = tint(0.3f, 1.f, 1.f);
+
+    const unsigned tick = static_cast<unsigned>(static_cast<int>(realtime * 24.0));
+    const unsigned key = static_cast<unsigned>(seed);
+    const int segments = za::clamp(static_cast<int>(len / 6.f), 6, 24);
+    const float amplitude = za::min(4.f, len * 0.06f);
+    for(int strand = 0; strand < 2; strand++)
+    {
+        glm::vec3 prev = a;
+        for(int i = 1; i <= segments; i++)
+        {
+            const float t = static_cast<float>(i) / segments;
+            const float bulge = za::sin(t * 3.14159265f) * amplitude * (strand == 0 ? 1.f : 0.6f);
+            glm::vec3 p = a + d * t;
+            if(i < segments)
+            {
+                const unsigned k = static_cast<unsigned>(strand), n = static_cast<unsigned>(i);
+                p += side1 * (noise(tick + key * 31u + k * 7u, n) * bulge) +
+                     side2 * (noise(tick + key * 17u + k * 3u, n + 97u) * bulge);
+            }
+            const float fade = strength * (strand == 0 ? 1.f : 0.5f);
+            const glm::vec4 halo = haloColor * (0.22f * fade);
+            const glm::vec4 core = coreColor * (0.9f * fade);
+            lines::glow(prev, p, 1.4f, halo, halo);
+            lines::glow(prev, p, 0.35f, core, core);
+            prev = p;
+        }
+    }
+    lines::glowPoint(a, 2.5f * strength, tint(0.6f, 1.f, 1.f) * (0.5f * strength));
+}
+
+// While the menu's colour settings that the force grab takes are selected: a tendril from the off
+// hand, to see the colour as it is set.
+void previewInMenu(const hands::State& s)
+{
+    const cvar_t* selected = menu::selectedSetting();
+    const bool colour = selected == &vr_player_hue || selected == &vr_player_saturation || selected == &vr_forcegrab_hue ||
+                        selected == &vr_forcegrab_saturation;
+    if(!s.valid || !colour)
+    {
+        return;
+    }
+    const int hand = 0; // the off hand (the main one points at the menu)
+    const glm::vec3 fwd = hands::forward(s.rot[hand]);
+    const glm::vec3 palm = s.pos[hand] + fwd * 2.f;
+    const float pulse = 0.85f + 0.15f * static_cast<float>(za::sin(realtime * 17.0));
+    tendril(palm, palm + fwd * 28.f, pulse, 4242);
+}
+
+} // namespace
+
+void queue(const hands::State& s)
+{
+    const double now = cl.time;
+    const float dt = lastTime < 0.0 ? 0.f : static_cast<float>(za::clamp(now - lastTime, 0.0, 0.1));
+    lastTime = now;
+
+    // The glows fade towards each hand's target: aimed at, softly; locked on or flying, fully.
+    Target targets[2] = {target(protocol::STAT_QVR_FGOFF), target(protocol::STAT_QVR_FGMAIN)};
+    // A hand holding the flashlight does not force grab (the server is told; this spares the
+    // round trip).
+    for(int hand = 0; hand < 2; hand++)
+    {
+        if(flashlight::holds(hand))
+        {
+            targets[hand] = Target{};
+        }
+    }
+    const auto wanted = [](const Target& t) { return t.state != None && valid(t.ent); };
+    const auto goalOf = [&](int ent) {
+        float goal = 0.f;
+        for(const Target& t : targets)
+        {
+            if(t.ent == ent && wanted(t))
+            {
+                goal = za::max(goal, t.state == Aimed ? 0.55f : 1.f);
+            }
+        }
+        return goal;
+    };
+    for(const Target& t : targets)
+    {
+        if(wanted(t))
+        {
+            glows.try_emplace(t.ent, 0.f);
+        }
+    }
+    const float k = 1.f - za::exp(-dt * 8.f);
+    for(auto it = glows.begin(); it != glows.end();)
+    {
+        const float goal = goalOf(it->first);
+        it->second += (goal - it->second) * k;
+        if(goal == 0.f && it->second < 0.01f)
+        {
+            it = glows.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    // The beams, from the palm.
+    if(!s.valid || !vr_forcegrab_fx.value)
+    {
+        return;
+    }
+    previewInMenu(s);
+    for(int hand = 0; hand < 2; hand++)
+    {
+        const Target& t = targets[hand];
+        if(!wanted(t))
+        {
+            continue;
+        }
+        const glm::vec3 palm = s.pos[hand] + hands::forward(s.rot[hand]) * 2.f;
+        const glm::vec3 to = centre(t.ent);
+        if(t.state == Aimed)
+        {
+            const glm::vec4 beam = tint(0.7f, 1.f, 1.f);
+            lines::glow(palm, to, 0.3f, beam * 0.18f, beam * 0.03f);
+            continue;
+        }
+        const float pulse = 0.85f + 0.15f * static_cast<float>(za::sin(realtime * 17.0));
+        tendril(palm, to, (t.state == Flying ? 1.f : 0.75f) * pulse, t.ent + hand * 1000);
+        if(t.state == Flying && dt > 0.f)
+        {
+            particles::spawn(to, glm::vec3{0.f}, particles::Preset::ForceGrabTrail, 2);
+        }
+    }
+}
+
+float entityGlow(const entity_t* e)
+{
+    if(!e || e < cl_entities || e >= cl_entities + cl.num_entities || glows.empty())
+    {
+        return 0.f;
+    }
+    const auto it = glows.find(static_cast<int>(e - cl_entities));
+    if(it == glows.end())
+    {
+        return 0.f;
+    }
+    const float breathe = 0.88f + 0.12f * static_cast<float>(za::sin(realtime * 4.0));
+    return za::clamp(it->second * breathe * vr_forcegrab_outline.value, 0.f, 1.f);
+}
+
+glm::vec3 glowColor()
+{
+    return tint(0.65f, 1.f);
+}
+
+} // namespace qvr::fgfx
+
+extern "C" float VR_EntityGlow(const entity_t* e)
+{
+    // The force grab's (in the player's hue, +), else the counter glow (gold, -: vr_meleehud.cpp).
+    const float g = qvr::fgfx::entityGlow(e);
+    return g > 0.f ? g : -qvr::meleehud::entityGlow(e);
+}
+
+extern "C" void VR_EntityGlowColor(float rgb[3])
+{
+    const glm::vec3 c = qvr::fgfx::glowColor();
+    rgb[0] = c.r;
+    rgb[1] = c.g;
+    rgb[2] = c.b;
+}

@@ -1,0 +1,2117 @@
+/* ALL LIGHTS SHOULD BE 0 1 0 IN COLOR ALL OTHER ITEMS SHOULD
+BE .8 .3 .4 IN COLOR */
+
+void(entity entPlayer) VRItemPickupHaptic =
+{
+    if(!entPlayer.ishuman)
+    {
+        return;
+    }
+
+    if(VRIsTouchingHandFake(entPlayer))
+    {
+        haptic(cVR_OffHand, 0.0, 0.3, 75, 1.0);
+        haptic(cVR_MainHand, 0.0, 0.3, 75, 1.0);
+        return;
+    }
+
+    haptic(VRGetTouchingHand(entPlayer), 0.0, 0.3, 75, 1.0);
+}
+
+void() SUB_regen =
+{
+    self.model = self.mdl;        // restore original model
+    self.solid = SOLID_TRIGGER;    // allow it to be touched again
+    sound(self, CHAN_VOICE, "items/itembk2.wav", 1, ATTN_NORM);    // play respawn sound
+    setorigin(self, self.origin);
+};
+
+
+
+/*QUAKED noclass (0 0 0) (-8 -8 -8) (8 8 8)
+prints a warning message when spawned
+*/
+void() noclass =
+{
+    dprint("noclass spawned at");
+    dprint(vtos(self.origin));
+    dprint("\n");
+    remove(self);
+};
+
+float(entity ent) IsAmmoBox =
+{
+    return ent.classname == ITEM_NAME_SHELLS ||
+           ent.classname == ITEM_NAME_SPIKES ||
+           ent.classname == ITEM_NAME_ROCKETS ||
+           ent.classname == ITEM_NAME_CELLS;
+}
+
+// TODO VR: (P1) move
+float(float xFactor, float xMult) ShouldDropImpl =
+{
+    float chance;
+    chance = (1.0 - xFactor) / xMult;
+
+    if(chance < 0.0)
+    {
+        chance = 0.0;
+    }
+
+    if(chance > 1.0)
+    {
+        chance = 1.0;
+    }
+
+    return random() > chance;
+}
+
+float(float xFactor) ShouldDropEnemyWpn =
+{
+    return ShouldDropImpl(xFactor, cvar_hget(cvarh_vr_enemy_drops_chance_mult));
+}
+
+float(float xFactor) ShouldDropAmmoBox =
+{
+    return ShouldDropImpl(xFactor, cvar_hget(cvarh_vr_ammobox_drops_chance_mult));
+}
+
+void(entity ent, entity entPlayer) SpawnAmmoBoxWeaponsImpl =
+{
+    if(!ShouldDropAmmoBox(0.45))
+    {
+        return;
+    }
+
+    if(ent.classname == ITEM_NAME_SHELLS)
+    {
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_AXE, 0.2))
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_SHOTGUN, 0.5))
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_SUPER_SHOTGUN, 0.7))
+        { /* Intentionally empty. */ }
+    }
+    else if(ent.classname == ITEM_NAME_SPIKES || ent.classname == ITEM_NAME_LAVA_SPIKES)
+    {
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_NAILGUN, 0.4))
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_SUPER_NAILGUN, 0.5))
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_AXE, 0.2))
+        { /* Intentionally empty. */ }
+    }
+    else if(ent.classname == ITEM_NAME_ROCKETS || ent.classname == ITEM_NAME_MULTI_ROCKETS)
+    {
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_GRENADE_LAUNCHER, 0.3))
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_PROXIMITY_GUN, 0.4))
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_ROCKET_LAUNCHER, 0.5))
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_AXE, 0.2))
+        { /* Intentionally empty. */ }
+    }
+    else if(ent.classname == ITEM_NAME_CELLS || ent.classname == ITEM_NAME_PLASMA)
+    {
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_LIGHTNING, 0.3))
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_LASER_CANNON, 0.4))
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_MJOLNIR, 0.4))
+        if(!TryAmmoBoxDrop(ent, entPlayer, WID_AXE, 0.2))
+        { /* Intentionally empty. */ }
+    }
+}
+
+void(entity ent) SpawnAmmoBoxWeapons =
+{
+    entity entPlayer;
+
+    entPlayer = find(world, classname, "player");
+
+    if(entPlayer == world)
+    {
+        bprint("`SpawnAmmoBoxWeapons`: player entity not found\n");
+        return;
+    }
+
+    SpawnAmmoBoxWeaponsImpl(ent, entPlayer);
+}
+
+
+/*
+============
+PlaceItem
+
+plants the object on the floor
+============
+*/
+// Pickups (weapons, armour, powerups, keys) drawn at vr_pickup_scale, resting on the floor, so that
+// the player crouches to reach them; their touch box is the model's own. Ammo and health boxes are
+// shrunk when they become grabbable (AfterPlacementAmmoBox, AfterPlacementHealthBox), pickups that
+// become objects by their own (VR_PickupObj_Place).
+void() VRScalePickup =
+{
+    float s = cvar_hget(cvarh_vr_pickup_scale);
+    if(s <= 0 || s == 1)
+    {
+        return;
+    }
+    if(self.think2 == AfterPlacementAmmoBox || self.think2 == AfterPlacementHealthBox || self.vr_pickup_obj)
+    {
+        return;
+    }
+
+    VR_ScaleUtil_SetScale(self, VR_ScaleUtil_GetUniformScaleVector(s));
+
+    // The model's bounds, square around the origin (items turn about it).
+    vector lo = modelbounds(self, 0) * s;
+    vector hi = modelbounds(self, 1) * s;
+    float r = max(max(fabs(lo_x), fabs(hi_x)), max(fabs(lo_y), fabs(hi_y)));
+    lo_x = -r;
+    lo_y = -r;
+    hi_x = r;
+    hi_y = r;
+    setsize(self, lo, hi);
+
+    if(self.movetype != MOVETYPE_NONE)
+    {
+        self.origin_z = self.origin_z + 2;
+        droptofloor();
+    }
+}
+
+// The map's weapons, armour, powerups and keys float at about torso height (vr_item_float_height),
+// easier to take by hand: they cannot be force-grabbed. Their box reaches down to the floor, so
+// walking over them still picks them up. Ammo and health boxes (physics objects) stay down; pickups
+// that become objects float by their own (VR_PickupObj_Place).
+void() VRFloatPickup =
+{
+    float h = cvar_hget(cvarh_vr_item_float_height);
+    if(h <= 0 || self.movetype == MOVETYPE_NONE || (self.flags & FL_FORCEGRABBABLE) ||
+       self.think2 == AfterPlacementAmmoBox || self.think2 == AfterPlacementHealthBox || self.vr_pickup_obj)
+    {
+        return;
+    }
+
+    self.movetype = MOVETYPE_NONE;
+    setsize(self, self.mins - '0 0 1' * h, self.maxs);
+    setorigin(self, self.origin + '0 0 1' * h);
+};
+
+void() PlaceItem =
+{
+    float oldz;
+
+    self.mdl = self.model;       // so it can be restored on respawn
+    self.flags = FL_ITEM;        // make extra wide
+    self.solid = SOLID_TRIGGER;
+    self.movetype = MOVETYPE_TOSS;
+    self.velocity = '0 0 0';
+
+    float enableHoneyExtensions = VR_GameUtil_EnableHoneyExtensions();
+
+    // HONEY
+    if(enableHoneyExtensions &&
+       (self.spawnflags & HONEY_SPAWNFLAG_ITEM_FLOATING))
+    {
+        self.movetype = MOVETYPE_NONE;
+        setorigin(self, self.origin);
+    }
+    else
+    {
+        self.origin_z += 6;
+        oldz = self.origin_z;
+
+        if(!droptofloor())
+        {
+            dprint("Bonus item fell out of level!\n");
+            dprint(self.classname);
+            dprint(" at ");
+            dprint(vtos(self.origin));
+            dprint("\n");
+
+            remove(self);
+            return;
+        }
+    }
+
+    // HONEY
+    if(enableHoneyExtensions &&
+        (self.spawnflags & HONEY_SPAWNFLAG_ITEM_SECRET))
+    {
+        total_secrets += 1;
+
+        if(!self.message)
+        {
+            self.message = "You found a secret item!";
+        }
+
+        if(skill == 0 || world.model == "maps/start.bsp")
+        {
+            ambient_secret_think();
+        }
+    }
+
+    // HONEY
+    self.th_die = self.handtouch; // Overriding self.touch and saving it to support items flagged as secret
+    self.handtouch = itemTouch;
+
+    // HONEY
+    if(self.spawnflags & SPAWNFLAG_TRIGGER_SPAWN)
+    {
+        item_unspawn();
+    }
+
+    SpawnAmmoBoxWeapons(self);
+    VRScalePickup();
+    VRFloatPickup();
+
+    self.nextthink = time + 0.2;
+    self.think = PlacedItem;
+
+    VRBoxObjectNow();
+};
+
+// Ammo and health boxes become objects (AfterPlacementAmmoBox, AfterPlacementHealthBox: MakeItemGrabbable) the frame
+// they are placed, not a moment later: drawn, touched and given their body at their final size from the first frame.
+// The map's are placed in the server's settle frames (StartItem), before a client sees them; those made later (a
+// crate's, a test spawn's) call PlaceItem at once (VRPlaceItemNow).
+void() VRBoxObjectNow =
+{
+    if(self.think2 != AfterPlacementAmmoBox && self.think2 != AfterPlacementHealthBox)
+    {
+        return;
+    }
+    if(self.think2 == AfterPlacementAmmoBox)
+    {
+        AfterPlacementAmmoBox();
+    }
+    else
+    {
+        AfterPlacementHealthBox();
+    }
+    self.think2 = SUB_Null;
+    self.nextthink2 = 0;
+};
+
+// An item made after the map loaded (by its spawn function, `self`), placed now instead of StartItem's 0.2 s later
+// (that wait is for the map's solids, there already): drawn at its final size and place from the first frame.
+// FALSE: it fell out of the level (removed: a freed entity's nextthink is -1).
+float() VRPlaceItemNow =
+{
+    if(self.think != PlaceItem)
+    {
+        return TRUE;
+    }
+    PlaceItem();
+    return self.nextthink >= 0;
+};
+
+/*
+============
+StartItem
+
+Sets the clipping size and plants the object on the floor
+============
+*/
+void() StartItem =
+{
+    self.nextthink = time + 0.2;    // items start after other solids
+    self.think = PlaceItem;
+};
+
+/*
+=========================================================================
+
+HEALTH BOX
+
+=========================================================================
+*/
+//
+// T_Heal: add health to an entity, limiting health to max_health
+// "ignore" will ignore max_health limit
+//
+float (entity e, float healamount, float ignore) T_Heal =
+{
+    if(e.health <= 0)
+        return 0;
+
+    if((!ignore) && (e.health >= other.max_health))
+        return 0;
+
+    healamount = ceil(healamount);
+
+    e.health = e.health + healamount;
+
+    if((!ignore) && (e.health >= other.max_health))
+        e.health = other.max_health;
+
+    if(e.health > 250)
+        e.health = 250;
+
+    return 1;
+};
+
+/*QUAKED item_health (.3 .3 1) (0 0 0) (32 32 32) rotten megahealth
+Health box. Normally gives 25 points.
+Rotten box heals 5-10 points,
+megahealth will add 100 health, then
+rot you down to your maximum health limit,
+one point per second.
+*/
+
+float    H_ROTTEN = 1;
+float    H_MEGA = 2;
+.float    healamount, healtype;
+
+void() item_health =
+{
+    self.handtouch = health_touch;
+
+    if(self.spawnflags & H_ROTTEN)
+    {
+        precache_model("maps/b_bh10.bsp");
+
+        precache_sound("items/r_item1.wav");
+        setmodel(self, "maps/b_bh10.bsp");
+        self.noise = "items/r_item1.wav";
+        self.healamount = 15;
+        self.healtype = 0;
+        setsize(self, '0 0 0', '32 32 16');
+        if(deathmatch) { self.wait = 20; }
+    }
+    else if(self.spawnflags & H_MEGA)
+    {
+        precache_model("maps/b_bh100.bsp");
+        precache_sound("items/r_item2.wav");
+        setmodel(self, "maps/b_bh100.bsp");
+        self.noise = "items/r_item2.wav";
+        self.healamount = 100;
+        self.healtype = 2;
+        setsize(self, '0 0 0', '32 32 32');
+        if(deathmatch) { self.wait = 35; }
+    }
+    else
+    {
+        precache_model("maps/b_bh25.bsp");
+        precache_sound("items/health1.wav");
+        setmodel(self, "maps/b_bh25.bsp");
+        self.noise = "items/health1.wav";
+        self.healamount = 25;
+        self.healtype = 1;
+        setsize(self, '0 0 0', '32 32 16');
+        if(deathmatch) { self.wait = 20; }
+    }
+
+    StartItem();
+
+    self.think2 = AfterPlacementHealthBox;
+    self.nextthink2 = time + 0.75;
+};
+
+
+void() health_touch =
+{
+    string    s;
+
+    if(self.healtype == 2) // Megahealth?  Ignore max_health...
+    {
+        if(other.health >= 250)
+            return;
+
+        if(!T_Heal(other, self.healamount, 1))
+            return;
+    }
+    else
+    {
+        if(!T_Heal(other, self.healamount, 0))
+            return;
+    }
+
+    VRItemPickupHaptic(other);
+
+    sprint(other, "You receive ");
+    s = ftos(self.healamount);
+    sprint(other, s);
+    sprint(other, " health\n");
+
+// health touch sound
+    sound(other, CHAN_ITEM, self.noise, 1, ATTN_NORM);
+
+    stuffcmd(other, "bf\n");
+
+    self.model = string_null;
+    self.solid = SOLID_NOT;
+
+    // Megahealth = rot down the player's super health
+    if(self.healtype == 2 && !RuneHasElder(other))
+    {
+        VR_ItemUtil_EntAddItem(other, IID_SUPERHEALTH);
+        self.nextthink = time + 5;
+        self.think = item_megahealth_rot;
+        self.owner = other;
+    }
+};
+
+void() item_megahealth_rot =
+{
+    other = self.owner;
+
+    if(other.health > other.max_health)
+    {
+        other.health = other.health - 1;
+        self.nextthink = time + 1;
+        return;
+    }
+
+    // it is possible for a player to die and respawn between rots, so don't
+    // just blindly subtract the flag off
+    VR_ItemUtil_EntDelItem(other, IID_SUPERHEALTH);
+};
+
+/*
+===============================================================================
+
+ARMOR
+
+===============================================================================
+*/
+
+void() armor_touch =
+{
+    float type, value, itemId;
+
+    if(self.classname == ITEM_NAME_ARMOR1)
+    {
+        type = 0.3;
+        value = 100;
+        itemId = IID_ARMOR1;
+    }
+    else if(self.classname == ITEM_NAME_ARMOR2)
+    {
+        type = 0.6;
+        value = 150;
+        itemId = IID_ARMOR2;
+    }
+    else
+    {
+        ASSERT(self.classname == ITEM_NAME_ARMORINV);
+
+        type = 0.8;
+        value = 200;
+        itemId = IID_ARMOR3;
+    }
+
+    if(other.armortype * other.armorvalue >= type * value)
+    {
+        return;
+    }
+
+    other.armortype = type;
+    other.armorvalue = value;
+
+    VR_ItemUtil_EntDelItem(other, IID_ARMOR1);
+    VR_ItemUtil_EntDelItem(other, IID_ARMOR2);
+    VR_ItemUtil_EntDelItem(other, IID_ARMOR3);
+
+    VR_ItemUtil_EntAddItem(other, itemId);
+
+    self.solid = SOLID_NOT;
+    self.model = string_null;
+
+    VRItemPickupHaptic(other);
+
+    sprint(other, "You got armor\n");
+// armor touch sound
+    sound(other, CHAN_ITEM, "items/armor1.wav", 1, ATTN_NORM);
+    stuffcmd(other, "bf\n");
+};
+
+void(string xModelName, float xWait) impl_equipment_item =
+{
+    precache_model(xModelName);
+    setmodel(self, xModelName);
+    if(deathmatch) { self.wait = xWait; }
+}
+
+// ----------------------------------------------------------------------------
+// Pickups as objects. The map's armour (vr_armor_wear 1), weapons, keys, runes, the biosuit, the
+// wetsuit and the horn (vr_item_objects 1) hang at vr_item_float_height, spinning as pickups do,
+// until a hand takes or knocks them or a force grab pulls them; from then on they are physics
+// objects (vr_carry.qc: carried, thrown, nudged, force-grabbed, rigid bodies, floating in water).
+// How each is taken (its own pickup, through itemTouch: its sound, message, flash and deathmatch
+// respawn):
+// - armour: carried and let go of over your torso (VR_Armor_LetGo): armor_touch's own rules (only if
+//   better than what you wear), else it drops;
+// - a weapon: gripped, it is the weapon in that hand at once (weapon_touch), as a thrown one is;
+//   touched without a grip it is knocked loose;
+// - the rest: carried and let go of at a holster (VR_PickupObj_Holster), never with the trigger.
+// Walking over them no longer takes them (for a player with tracked hands; weapons: as before with
+// vr_body_interactions); bots and flat-screen players still take them by touch. The powerups (quad,
+// pentagram, ring, the mission packs' shields, belt, sphere) are unchanged. Off (vr_armor_wear 0,
+// vr_item_objects 0 or vr_carry 0): touching takes them, as before (which kind: next map).
+
+float QVR_PICKUPOBJ_ARMOUR  = 1; // worn at the torso
+float QVR_PICKUPOBJ_WEAPON  = 2; // a grip takes it as the hand's weapon
+float QVR_PICKUPOBJ_HOLSTER = 3; // taken at a holster
+
+.float vr_pickup_obj;   // QVR_PICKUPOBJ_*: a pickup that becomes an object (0: a plain pickup)
+.float vr_wearable;     // armour to be worn by hand
+.float vr_wear_hover;   // carried over the torso last frame (for the hover haptic)
+.float vr_wear_floats;  // hangs in the air until taken or knocked (and again when it comes back in deathmatch)
+.float vr_pickup_sparkle; // a weapon's next sparkle (weapon_item_think's; not its think2, which forcegrabbable_item_reposition reads)
+
+// Whether pickups of its kind are objects now (their setting may have been turned off since the map
+// loaded: touching then takes them).
+float(entity xItem) VR_PickupObj_Enabled =
+{
+    if(!cvar_hget(cvarh_vr_carry))
+    {
+        return FALSE;
+    }
+    if(xItem.vr_pickup_obj == QVR_PICKUPOBJ_ARMOUR)
+    {
+        return cvar_hget(cvarh_vr_armor_wear) != 0;
+    }
+    return cvar_hget(cvarh_vr_item_objects) != 0;
+};
+
+// Its protection, armor_touch's measure: type times value.
+float(entity xArmor) VR_Armor_Protection =
+{
+    if(xArmor.classname == ITEM_NAME_ARMOR1)
+    {
+        return 0.3 * 100;
+    }
+    if(xArmor.classname == ITEM_NAME_ARMOR2)
+    {
+        return 0.6 * 150;
+    }
+    return 0.8 * 200;
+};
+
+// Whether `xPlayer` would put it on (armor_touch: only a better one).
+float(entity xPlayer, entity xArmor) VR_Armor_IsBetter =
+{
+    return xPlayer.armortype * xPlayer.armorvalue < VR_Armor_Protection(xArmor);
+};
+
+// Whether a point is at `xPlayer`'s torso: generously, from just below the neck to the belly, in
+// front of the spine to an arm's short reach (the chest's holsters are in it). By the head, which
+// leans with the body; turned with where the head faces.
+float(entity xPlayer, vector xPos) VR_Armor_PointAtTorso =
+{
+    float m2u = VRMetersToUnits();
+    vector head = VRGetHeadPos(xPlayer);
+    makevectors('0 1 0' * (xPlayer.headpos != '0 0 0' ? xPlayer.v_viewangle_y : xPlayer.v_angle_y));
+    vector d = xPos - (head + v_forward * (0.06 * m2u));
+    float drop = -d_z;
+    d_z = 0;
+    return drop >= 0.1 * m2u && drop <= 0.7 * m2u && vlen(d) <= 0.3 * m2u && d * v_forward >= -0.15 * m2u;
+};
+
+// Whether the hand carrying it, or the armour itself (its box's middle), is at the torso.
+float(entity xPlayer, float xHand, entity xArmor) VR_Armor_AtTorso =
+{
+    return VR_Armor_PointAtTorso(xPlayer, VRGetEntHandPos(xPlayer, xHand)) ||
+           VR_Armor_PointAtTorso(xPlayer, (xArmor.absmin + xArmor.absmax) * 0.5);
+};
+
+// Back where it was placed, as it was placed: hanging (or lying there), still, touchable, carried
+// by no one.
+void(entity xItem) VR_PickupObj_Return =
+{
+    xItem.carry_player = world;
+    xItem.carry_2h = FALSE;
+    xItem.solid = SOLID_NOT_BUT_TOUCHABLE;
+    xItem.angles = xItem.mangle;
+    xItem.velocity = '0 0 0';
+    xItem.avelocity = '0 0 0';
+    xItem.vr_spin = '0 0 0';
+    xItem.throwhit = QVR_THROWHIT_HIT;
+    xItem.owner = world;
+    xItem.movetype = xItem.vr_wear_floats ? MOVETYPE_NONE : MOVETYPE_TOSS;
+    xItem.vr_rigid = !xItem.vr_wear_floats;
+    xItem.flags = xItem.flags - (xItem.flags & FL_ONGROUND);
+    xItem.rad_time = -999;
+    setorigin(xItem, xItem.oldorigin);
+    dprint("pickup: "); dprint(xItem.classname); dprint(" back at "); dprint(vtos(xItem.origin)); dprint("\n");
+};
+
+// Taken again in deathmatch (itemTouch's SUB_regen, a powerup's): back where it was placed, as it
+// was placed.
+void() VR_PickupObj_Regen =
+{
+    SUB_regen();
+    VR_PickupObj_Return(self);
+    self.think = forcegrabbable_item_think;
+    self.nextthink = time + 0.02;
+};
+
+// After its pickup ran: if it was taken, it comes back in deathmatch as it was placed
+// (VR_PickupObj_Regen, not SUB_regen's trigger where it was taken).
+void(entity xItem) VR_PickupObj_Taken =
+{
+    if(xItem.model != string_null)
+    {
+        return;
+    }
+    if(xItem.think2 == SUB_regen)
+    {
+        xItem.think2 = VR_PickupObj_Regen;
+    }
+    if(xItem.think == SUB_regen) // (a powerup's own respawn: the biosuit's, the wetsuit's, the horn's)
+    {
+        xItem.think = VR_PickupObj_Regen;
+    }
+};
+
+// From VR_Carry_HandFrame (self is the player): the grip let go of it. Over the torso it is put
+// on (VR_Carry_Take: armor_touch through itemTouch, so its sound, message, the body's plating and
+// the deathmatch respawn are the pickup's own): TRUE. Not better than yours: a dull knock, a
+// buzz, and FALSE (it drops, VR_Carry_Release). Elsewhere FALSE.
+float(float xHand, entity xArmor) VR_Armor_LetGo =
+{
+    if(!cvar_hget(cvarh_vr_armor_wear) || !VR_Armor_AtTorso(self, xHand, xArmor))
+    {
+        return FALSE;
+    }
+
+    VR_Carry_Take(xHand, xArmor);
+    if(xArmor.model == string_null)
+    {
+        dprint("armour: worn ("); dprint(xArmor.classname); dprint("), armour ");
+        dprint(ftos(self.armorvalue)); dprint(" type "); dprint(ftos(self.armortype)); dprint("\n");
+        VR_PickupObj_Taken(xArmor);
+        return TRUE;
+    }
+
+    dprint("armour: not worn, yours is as good\n");
+    sprint(self, "Your armor is better\n");
+    sound(self, CHAN_ITEM, "player/land.wav", 0.6, ATTN_NORM);
+    if(self.ishuman)
+    {
+        haptic(xHand, 0.0, 0.06, 40, 0.8);
+        haptic(xHand, 0.12, 0.06, 40, 0.8);
+    }
+    return FALSE;
+};
+
+// From VR_Carry_HandFrame (self is the player): a key, a rune, a suit or the horn let go of at a
+// holster. Taken (its pickup through itemTouch): gone, or, a key in coop that stays for the others,
+// back at its place. Not taken (a key you have already): it drops there, with a dull knock and a
+// buzz. The hand lets go of it either way.
+void(float xHand, entity xItem) VR_PickupObj_Holster =
+{
+    float had = FALSE;
+    if(xItem.vr_itemId)
+    {
+        had = VR_ItemUtil_EntHasItem(self, xItem.vr_itemId);
+    }
+    VR_Carry_Take(xHand, xItem);
+    if(xItem.model == string_null)
+    {
+        dprint("pickup: "); dprint(xItem.netname); dprint(" taken at a holster\n");
+        VR_PickupObj_Taken(xItem);
+        return;
+    }
+
+    VR_Carry_SetHeld(self, xHand, world);
+    if(!had && xItem.vr_itemId && VR_ItemUtil_EntHasItem(self, xItem.vr_itemId))
+    {
+        dprint("pickup: "); dprint(xItem.netname); dprint(" taken at a holster, left for the others\n");
+        VR_PickupObj_Return(xItem);
+        return;
+    }
+
+    dprint("pickup: "); dprint(xItem.netname); dprint(" not taken (you have it)\n");
+    sound(self, CHAN_ITEM, "player/land.wav", 0.6, ATTN_NORM);
+    if(self.ishuman)
+    {
+        haptic(xHand, 0.0, 0.06, 40, 0.8);
+        haptic(xHand, 0.12, 0.06, 40, 0.8);
+    }
+    VR_Carry_Loose(xItem);
+    xItem.velocity = '0 0 0';
+};
+
+// From VR_Carry_HandFrame, each frame it is carried (self is the player): brought over the torso,
+// a buzz as a holster's (it can go on) or a faint double tap (yours is better).
+void(float xHand, entity xArmor) VR_Armor_HeldFrame =
+{
+    float at = cvar_hget(cvarh_vr_armor_wear) && VR_Armor_AtTorso(self, xHand, xArmor);
+    if(at && !xArmor.vr_wear_hover && self.ishuman)
+    {
+        dprint("armour: over the torso\n");
+        if(VR_Armor_IsBetter(self, xArmor))
+        {
+            float t = max(0.05, cvar_hget(cvarh_vr_holster_haptic_time));
+            haptic(xHand, 0.0, t * 0.45, 80, 0.65);
+            haptic(xHand, t * 0.4, t * 0.35, 80, 0.4);
+            haptic(xHand, t * 0.7, t * 0.3, 80, 0.2);
+        }
+        else
+        {
+            haptic(xHand, 0.0, 0.03, 40, 0.3);
+            haptic(xHand, 0.08, 0.03, 40, 0.3);
+        }
+    }
+    xArmor.vr_wear_hover = at;
+};
+
+// A hand on a weapon object (self): gripped (a press on it, as a thrown weapon's, or a force grab's
+// catch), it is that hand's weapon at once (weapon_touch through itemTouch: its ammo, message, sound
+// and deathmatch respawn); else the hand knocks it loose.
+void() VR_PickupObj_WeaponTouch =
+{
+    float hand = VRGetTouchingHand(other);
+    if((forcegrabCatching || (VR_Carry_GripPressed(other, hand) && !VR_Forcegrab_IsHandBusy(other, hand))) &&
+       VRIsHandEmpty(other, hand))
+    {
+        self.solid = SOLID_NOT_BUT_TOUCHABLE;
+        self.carry_use();
+        VR_PickupObj_Taken(self);
+        if(self.model != string_null)
+        {
+            // Left for the others (coop, deathmatch 2), or not taken: caught by a force grab, it goes
+            // back to where it was rather than stay in the air at the hand.
+            dprint("pickup: "); dprint(self.netname); dprint(" not taken away\n");
+            if(forcegrabCatching)
+            {
+                VR_PickupObj_Return(self);
+            }
+        }
+        else
+        {
+            dprint("pickup: "); dprint(self.netname); dprint(" taken as a weapon\n");
+        }
+        return;
+    }
+
+    VR_Carry_Nudge(other, hand, self);
+};
+
+// The hand touch of an object pickup (VR_Carry_Handtouch's, but for these).
+void() VR_PickupObj_Handtouch =
+{
+    if(!VR_PickupObj_Enabled(self))
+    {
+        self.carry_use(); // touching takes it
+        VR_PickupObj_Taken(self);
+        return;
+    }
+
+    // Hanging, it spins as a pickup: taken or knocked, it goes on from the turn it is drawn at.
+    if(!self.vr_rigid && self.carry_player == world)
+    {
+        self.angles_y = anglemod(100 * time);
+    }
+
+    if(other.classname == "player" && VRIsTouchingHandFake(other))
+    {
+        // Walking over it does not take it, but a weapon (with vr_body_interactions, as before);
+        // bots and flat-screen players still take them.
+        if(other.ishuman && VRHandsTracked(other) && self.vr_pickup_obj != QVR_PICKUPOBJ_WEAPON)
+        {
+            return;
+        }
+        self.carry_use();
+        VR_PickupObj_Taken(self);
+        return;
+    }
+
+    if(self.vr_pickup_obj == QVR_PICKUPOBJ_WEAPON && other.classname == "player")
+    {
+        VR_PickupObj_WeaponTouch();
+        return;
+    }
+
+    VR_Carry_Handtouch();
+    VR_PickupObj_Taken(self);
+    if(self.carry_player != world)
+    {
+        self.vr_rigid = 1; // held, it no longer spins as a pickup
+        self.vr_wear_hover = TRUE; // no buzz for where it was taken
+    }
+};
+
+// A map's pickup that becomes an object, from its spawn function (self), if its setting is on:
+// marked (PlaceItem neither scales nor floats it: VR_PickupObj_Place does), and made one just after
+// it is placed.
+void(float xKind) VR_PickupObj_Mark =
+{
+    if(xKind == QVR_PICKUPOBJ_ARMOUR ? !cvar_hget(cvarh_vr_armor_wear) : !cvar_hget(cvarh_vr_item_objects))
+    {
+        return;
+    }
+    self.vr_pickup_obj = xKind;
+    self.think2 = VR_PickupObj_Place;
+    self.nextthink2 = time + 0.3; // just after PlaceItem
+};
+
+// 0.3 s after it is placed (PlaceItem): the model's own box at its scale (vr_armor_scale for armour,
+// vr_pickup_scale for the rest), a physics object (MakeItemGrabbable's, but for an alias model: its
+// box, not centred on its origin, is what the rigid body collides with), hanging with its middle at
+// vr_item_float_height if the map's pickups float, else lying on the floor.
+void() VR_PickupObj_Place =
+{
+    if(self.model == string_null)
+    {
+        self.nextthink2 = time + 0.5; // not spawned yet (a trigger spawns it)
+        return;
+    }
+    if(self.think == PlaceItem)
+    {
+        // Not placed yet: as a map loads its frames are long, and this could come first. PlaceItem
+        // drops it to the floor and makes its touch itemTouch (the message's targets, the deathmatch
+        // respawn, its model kept for it); the armour's placement missed it.
+        self.nextthink2 = time + 0.05;
+        return;
+    }
+
+    float s = cvar_hget(self.vr_pickup_obj == QVR_PICKUPOBJ_ARMOUR ? cvarh_vr_armor_scale : cvarh_vr_pickup_scale);
+    if(s <= 0)
+    {
+        s = 1;
+    }
+    float floorZ = self.origin_z + self.mins_z; // PlaceItem dropped its box onto the floor
+    VR_ScaleUtil_SetScale(self, VR_ScaleUtil_GetUniformScaleVector(s));
+    self.model_scale_origin = '0 0 0';
+    self.model_offset = '0 0 0';
+    vector lo = modelbounds(self, 0) * s;
+    vector hi = modelbounds(self, 1) * s;
+    setsize(self, lo, hi);
+
+    // Hangs with its middle at the float height; a honey floating item where it is; else on the floor.
+    float h = cvar_hget(cvarh_vr_item_float_height);
+    // (Not `a || b` in an assignment: fteqcc's short circuit leaves the wrong value there.)
+    self.vr_wear_floats = FALSE;
+    if(self.movetype == MOVETYPE_NONE || h > 0)
+    {
+        self.vr_wear_floats = TRUE;
+    }
+    if(self.movetype != MOVETYPE_NONE)
+    {
+        vector o = self.origin;
+        o_z = h > 0 ? floorZ + h - (lo_z + hi_z) * 0.5 : floorZ - lo_z + 0.25;
+        setorigin(self, o);
+    }
+
+    self.oldorigin = self.origin;
+    self.mangle = self.angles;
+    self.rad_time = -999;
+
+    MakeGrabbable(self);
+    self.flags |= FL_FORCEGRABBABLE;
+    self.solid = SOLID_NOT_BUT_TOUCHABLE;
+    self.throwhit = QVR_THROWHIT_HIT;
+
+    SetThrownWeaponDealDamage(self, FALSE);
+    SetThrownWeaponDisappearOnHit(self, FALSE);
+
+    self.think = forcegrabbable_item_think;
+    self.nextthink = time + 0.02;
+
+    self.touch = forcegrabbable_touch;
+    self.owner = world;
+
+    VR_Carry_Setup(self);
+    self.handtouch = VR_PickupObj_Handtouch;
+    self.vr_wearable = self.vr_pickup_obj == QVR_PICKUPOBJ_ARMOUR;
+
+    if(self.vr_wear_floats)
+    {
+        self.movetype = MOVETYPE_NONE; // until a hand takes it or knocks it (VR_Carry_Loose)
+        self.vr_rigid = 0;             // spins as a pickup meanwhile
+    }
+    dprint("pickup: "); dprint(self.classname); dprint(" an object at "); dprint(vtos(self.origin));
+    dprint(", box "); dprint(vtos(self.mins)); dprint(" "); dprint(vtos(self.maxs)); dprint("\n");
+};
+
+void(float xSkin) impl_equipment_armor =
+{
+    impl_equipment_item("progs/armor.mdl", 20);
+
+    self.handtouch = armor_touch;
+    self.skin = xSkin;
+    setsize(self, '-11 -11 0', '11 11 31');
+    StartItem();
+    VR_PickupObj_Mark(QVR_PICKUPOBJ_ARMOUR);
+}
+
+/*QUAKED item_armor1 (0 .5 .8) (-16 -16 0) (16 16 32)
+*/
+void() item_armor1 =
+{
+    impl_equipment_armor(0);
+}
+
+/*QUAKED item_armor2 (0 .5 .8) (-16 -16 0) (16 16 32)
+*/
+void() item_armor2 =
+{
+    impl_equipment_armor(1);
+}
+
+/*QUAKED item_armorInv (0 .5 .8) (-16 -16 0) (16 16 32)
+*/
+void() item_armorInv =
+{
+    impl_equipment_armor(2);
+}
+
+void() item_armorinv =
+{
+    item_armorInv();
+}
+
+/*
+===============================================================================
+
+WEAPONS
+
+===============================================================================
+*/
+
+void() bound_other_ammo =
+{
+    if(other.ammo_shells > 100)
+        other.ammo_shells = 100;
+    if(other.ammo_nails > 200)
+        other.ammo_nails = 200;
+    if(other.ammo_rockets > 100)
+        other.ammo_rockets = 100;
+    if(other.ammo_cells > 100)
+        other.ammo_cells = 100;
+
+    // ROGUE
+    // PGM addition
+    if(other.ammo_lava_nails > 200)
+        other.ammo_lava_nails = 200;
+    if(other.ammo_multi_rockets > 100)
+        other.ammo_multi_rockets = 100;
+    if(other.ammo_plasma > 100)
+        other.ammo_plasma = 100;
+};
+
+
+/*
+=============
+weapon_touch
+=============
+*/
+void() weapon_touch =
+{
+    float  hadammo;
+    entity stemp;
+    float  leave;
+
+    float touchinghandIsBody;
+
+    // True if `other` has "VR body interactions" enabled.
+    touchinghandIsBody = VRIsTouchingHandFake(other);
+
+    // Do not pick up if the touching hand is not empty and grabbing (or carries a box).
+    if(other.ishuman && !touchinghandIsBody)
+    {
+        if(!VR_HandGrabUtil_IsHandGrabbing(other, VRGetTouchingHand(other)) ||
+            !VRIsHandEmpty(other, VRGetTouchingHand(other)))
+        {
+            return;
+        }
+    }
+
+    // Do not pick up the weapon if body interactions is enabled and no hands
+    // are free.
+    if(other.ishuman && touchinghandIsBody &&
+        !VRIsHandEmpty(other, cVR_MainHand) &&
+        !VRIsHandEmpty(other, cVR_OffHand))
+    {
+        // TODO VR: (P1) revisit this behavior, maybe put in holder or drop?
+        // or cvar?
+        return;
+    }
+
+    // If `other` is a bot, they will always drop their main hand weapon.
+
+    if(deathmatch == 2 || coop)
+        leave = 1;
+    else
+        leave = 0;
+
+    float weaponId;
+    weaponId = WeaponClassNameToWeaponId(self.classname);
+
+    if(weaponId == WID_FIST)
+    {
+        objerror("weapon_touch: unknown classname");
+    }
+
+    if(leave && VR_WeaponUtil_EntHasWeapon(other, weaponId))
+    {
+        return;
+    }
+
+    float ammoId;
+    ammoId = WeaponIdToAmmoId(weaponId, 0 /* weaponflags */);
+
+    hadammo = VR_AmmoUtil_GetAmmoCountByAmmoId(other, ammoId);
+
+    VR_AmmoUtil_SetAmmoCountByAmmoId(other, ammoId,
+        hadammo + WeaponIdToInitialAmmoCount(weaponId));
+
+    VRItemPickupHaptic(other);
+
+    sprint(other, "You got the ");
+    sprint(other, self.netname);
+    sprint(other, "\n");
+
+    // weapon touch sound
+    sound(other, CHAN_ITEM, "weapons/pkup.wav", 1, ATTN_NORM);
+    stuffcmd(other, "bf\n");
+
+    bound_other_ammo();
+
+    VR_WeaponUtil_EntAddWeapon(other, weaponId);
+
+    stemp = self;
+    self = other;
+
+    if(touchinghandIsBody)
+    {
+        if(other.ishuman)
+        {
+            if(VRIsHandEmpty(other, cVR_MainHand))
+            {
+                VRGiveEntWeapon(other, cVR_MainHand, weaponId, 0, 0); // (a new one, its magazine empty as ever)
+                W_SetCurrentAmmoFor(cVR_MainHand);
+            }
+            else if(VRIsHandEmpty(other, cVR_OffHand))
+            {
+                VRGiveEntWeapon(other, cVR_OffHand, weaponId, 0, 0);
+                W_SetCurrentAmmoFor(cVR_OffHand);
+            }
+            else
+            {
+                bprint("BUG: Attempting to pick weapon with no hands free.");
+            }
+        }
+        else
+        {
+            DropWeaponInHand(other, cVR_MainHand,
+                VRGetEntWeapon(other, cVR_MainHand),
+                VRGetEntWeaponFlags(other, cVR_MainHand));
+        }
+    }
+    else
+    {
+        float touchinghand;
+        touchinghand = VRGetTouchingHand(other);
+
+        if(!VRIsHandEmpty(other, touchinghand))
+        {
+            bprint("BUG: Attempting to pick weapon with full hand.");
+        }
+
+        VRGiveEntWeapon(other, touchinghand, weaponId, 0, 0);
+        W_SetCurrentAmmoFor(touchinghand);
+    }
+
+
+    self = stemp;
+
+    if(leave)
+        return;
+
+    // remove it in single player, or setup for respawning in deathmatch
+    self.model = string_null;
+    self.solid = SOLID_NOT;
+};
+
+void() weapon_item_think =
+{
+    if(self.model != string_null)
+    {
+        // A faint sparkle now and then, drifting up (Quake VR's was a busy fountain).
+        particle2(self.origin, '0 0 0', QVR_PARTICLE_PRESET_GUNPICKUP, 1);
+        self.nextthink2 = time + 0.25;
+    }
+}
+
+void(string xModelName, float xWeaponId) impl_weapon_item =
+{
+    precache_model(xModelName);
+    setmodel(self, xModelName);
+    self.weapon = xWeaponId;
+    self.vr_itemId = WeaponIdToItemId(self.weapon);
+    self.netname = WeaponIdToWeaponName(self.weapon);
+    self.handtouch = weapon_touch;
+    self.think2 = weapon_item_think;
+    self.nextthink2 = time + 0.05;
+    setsize(self, '-8 -8 -4', '8 8 38');
+    if(deathmatch) { self.wait = 30; }
+    StartItem();
+    VR_PickupObj_Mark(QVR_PICKUPOBJ_WEAPON);
+}
+
+/*QUAKED weapon_shotgun (0 .5 .8) (-16 -16 0) (16 16 32)
+*/
+void() weapon_shotgun =
+{
+    impl_weapon_item("progs/g_shot0.mdl", WID_SHOTGUN);
+}
+
+
+/*QUAKED weapon_supershotgun (0 .5 .8) (-16 -16 0) (16 16 32)
+*/
+void() weapon_supershotgun =
+{
+    impl_weapon_item("progs/g_shot.mdl", WID_SUPER_SHOTGUN);
+}
+
+/*QUAKED weapon_nailgun (0 .5 .8) (-16 -16 0) (16 16 32)
+*/
+void() weapon_nailgun =
+{
+    impl_weapon_item("progs/g_nail.mdl", WID_NAILGUN);
+}
+
+/*QUAKED weapon_supernailgun (0 .5 .8) (-16 -16 0) (16 16 32)
+*/
+void() weapon_supernailgun =
+{
+    impl_weapon_item("progs/g_nail2.mdl", WID_SUPER_NAILGUN);
+}
+
+/*QUAKED weapon_grenadelauncher (0 .5 .8) (-16 -16 0) (16 16 32)
+*/
+void() weapon_grenadelauncher =
+{
+    impl_weapon_item("progs/g_rock.mdl", WID_GRENADE_LAUNCHER);
+}
+
+/*QUAKED weapon_rocketlauncher (0 .5 .8) (-16 -16 0) (16 16 32)
+*/
+void() weapon_rocketlauncher =
+{
+    impl_weapon_item("progs/g_rock2.mdl", WID_ROCKET_LAUNCHER);
+}
+
+/*QUAKED weapon_lightning (0 .5 .8) (-16 -16 0) (16 16 32)
+*/
+void() weapon_lightning =
+{
+    impl_weapon_item("progs/g_light.mdl", WID_LIGHTNING);
+}
+
+
+/*
+===============================================================================
+
+AMMO
+
+===============================================================================
+*/
+
+void() ammo_touch =
+{
+    if (self.model == string_null || self.solid == SOLID_NOT)
+    {
+        return;
+    }
+
+    entity stemp;
+
+    if(self.weapon == AID_SHELLS)
+    {
+        if(other.ammo_shells >= 100) { return; }
+        other.ammo_shells = other.ammo_shells + self.aflag;
+    }
+    else if(self.weapon == AID_NAILS)
+    {
+        if(other.ammo_nails >= 200) { return; }
+        other.ammo_nails = other.ammo_nails + self.aflag;
+    }
+    else if(self.weapon == AID_ROCKETS)
+    {
+        if(other.ammo_rockets >= 100) { return; }
+        other.ammo_rockets = other.ammo_rockets + self.aflag;
+    }
+    else if(self.weapon == AID_CELLS)
+    {
+        if(other.ammo_cells >= 100) { return; }
+        other.ammo_cells = other.ammo_cells + self.aflag;
+    }
+    else if(self.weapon == AID_LAVA_NAILS)
+    {
+        if(other.ammo_lava_nails >= 200) { return; }
+        other.ammo_lava_nails = other.ammo_lava_nails + self.aflag;
+    }
+    else if(self.weapon == AID_MULTI_ROCKETS)
+    {
+        if(other.ammo_multi_rockets >= 100) { return; }
+        other.ammo_multi_rockets = other.ammo_multi_rockets + self.aflag;
+    }
+    else if(self.weapon == AID_PLASMA)
+    {
+        if(other.ammo_plasma >= 100) { return; }
+        other.ammo_plasma = other.ammo_plasma + self.aflag;
+    }
+
+    bound_other_ammo();
+
+    VRItemPickupHaptic(other);
+
+    sprint(other, "You got the ");
+    sprint(other, self.netname);
+    sprint(other, "\n");
+
+    // ammo touch sound
+    sound(other, CHAN_ITEM, "weapons/lock4.wav", 1, ATTN_NORM);
+    stuffcmd(other, "bf\n");
+
+    // if changed current ammo, update it
+    stemp = self;
+    self = other;
+    W_SetCurrentAmmo();
+    self = stemp;
+
+    // remove it in single player, or setup for respawning in deathmatch
+    self.model = string_null;
+    self.solid = SOLID_NOT;
+};
+
+
+
+
+float WEAPON_BIG2 = 1;
+
+
+void() PlacedItem =
+{
+}
+
+void(float xTime) forcegrabbable_item_reposition =
+{
+    vector o0 = self.origin;
+    o0.z = 0;
+
+    vector o1 = self.oldorigin;
+    o1.z = 0;
+
+    float origDiff = vlen(o1 - o0);
+
+    if(origDiff > 1 || (time < self.nextthink2))
+    {
+        if(self.rad_time == -999)
+        {
+            self.rad_time = time + xTime;
+        }
+        else if(time >= self.rad_time || self.solid == SOLID_NOT)
+        {
+            setorigin(self, self.oldorigin);
+            self.rad_time = -999;
+
+            if(self.solid != SOLID_NOT)
+            {
+                sound(self, CHAN_AUTO, "misc/r_tele4.wav", 0.25, ATTN_NORM);
+            }
+        }
+    }
+}
+
+void() forcegrabbable_item_think =
+{
+    // Carried (vr_carry.qc): the hand moves it, nothing else.
+    if(self.carry_player != world)
+    {
+        self.nextthink = time + 0.02;
+        return;
+    }
+
+    vector wasAt = self.origin;
+    if(vr_forcegrabbable_return > 0) // (vr_cvars.qc, once a frame)
+    {
+        forcegrabbable_item_reposition(vr_forcegrabbable_return);
+    }
+
+    // Pickups as objects (armour, weapons, keys...): hanging still it spins as a pickup, and its turn
+    // here follows the drawn one (the physics shape, a hand's reach, and where it starts from when it is
+    // knocked loose or taken); moving, it is a rigid body; brought back to its place (deathmatch), it
+    // hangs there again.
+    if(self.vr_pickup_obj)
+    {
+        if(self.vr_wear_floats && self.origin != wasAt && self.origin == self.oldorigin)
+        {
+            self.movetype = MOVETYPE_NONE;
+            self.velocity = '0 0 0';
+            self.vr_spin = '0 0 0';
+            self.angles = self.mangle;
+            self.vr_rigid = 0;
+        }
+        else if(!self.vr_rigid && self.movetype != MOVETYPE_NONE)
+        {
+            self.vr_rigid = 1;
+        }
+        if(!self.vr_rigid && self.movetype == MOVETYPE_NONE)
+        {
+            self.angles_y = anglemod(100 * time);
+        }
+        if(self.vr_pickup_obj == QVR_PICKUPOBJ_WEAPON && time >= self.vr_pickup_sparkle && self.model != string_null)
+        {
+            // A faint sparkle now and then, drifting up (the map's weapons').
+            particle2(self.origin, '0 0 0', QVR_PARTICLE_PRESET_GUNPICKUP, 1);
+            self.vr_pickup_sparkle = time + 0.25;
+        }
+    }
+
+    forcegrabbable_think_impl();
+    self.nextthink = time + 0.02;
+}
+
+// Ammo and health boxes as objects: drawn at vr_forcegrabbable_box_scale (brush models too),
+// centred on the origin, their touch box the drawn box, resting where the box stood.
+void() MakeItemGrabbable =
+{
+    float scaleFactor = cvar_hget(cvarh_vr_forcegrabbable_box_scale);
+    if(scaleFactor <= 0)
+    {
+        scaleFactor = 1;
+    }
+
+    vector lo = modelbounds(self, 0);
+    vector hi = modelbounds(self, 1);
+    vector centre = (lo + hi) * 0.5;
+    vector half = (hi - lo) * (0.5 * scaleFactor);
+
+    VR_ScaleUtil_SetScale(self, VR_ScaleUtil_GetUniformScaleVector(scaleFactor));
+    self.model_scale_origin = '0 0 0';
+    self.model_offset = -centre; // model units, before the scale
+
+    vector o = self.origin + centre;
+    o_z = self.origin_z + lo_z + half_z + 0.25;
+    setsize(self, -half, half);
+    setorigin(self, o);
+
+    self.oldorigin = self.origin;
+    self.rad_time = -999;
+
+    MakeGrabbable(self);
+    self.flags |= FL_FORCEGRABBABLE;
+    self.solid = SOLID_NOT_BUT_TOUCHABLE;
+
+    SetThrownWeaponDealDamage(self, FALSE);
+    SetThrownWeaponDisappearOnHit(self, FALSE);
+
+    self.think = forcegrabbable_item_think;
+    self.nextthink = time + 0.02;
+
+    self.touch = forcegrabbable_touch;
+    self.owner = world;
+
+    VR_Carry_Setup(self);
+}
+
+void() AfterPlacementAmmoBox =
+{
+    if(cvar_hget(cvarh_vr_forcegrabbable_ammo_boxes))
+    {
+        MakeItemGrabbable();
+    }
+}
+
+void() AfterPlacementHealthBox =
+{
+    if(cvar_hget(cvarh_vr_forcegrabbable_health_boxes))
+    {
+        MakeItemGrabbable();
+    }
+}
+
+void(string xModelNameSmall, string xModelNameBig,
+     float xAmmoCountSmall, float xAmmoCountBig,
+     float xAmmoId, vector xSize)
+impl_item_ammo_pickup =
+{
+    self.handtouch = ammo_touch;
+
+    if(self.spawnflags & WEAPON_BIG2)
+    {
+        precache_model(xModelNameBig);
+        setmodel(self, xModelNameBig);
+        self.aflag = xAmmoCountBig;
+    }
+    else
+    {
+        precache_model(xModelNameSmall);
+        setmodel(self, xModelNameSmall);
+        self.aflag = xAmmoCountSmall;
+    }
+
+    self.weapon = xAmmoId;
+    self.netname = VR_AmmoUtil_AmmoIdToNetname(xAmmoId);
+    self.classname = VR_AmmoUtil_AmmoIdToItemName(xAmmoId);
+
+    setsize(self, '0 0 0', xSize);
+    if(deathmatch) { self.wait = 30; }
+    StartItem();
+
+    self.think2 = AfterPlacementAmmoBox;
+    self.nextthink2 = time + 0.75;
+}
+
+/*QUAKED item_shells (0 .5 .8) (0 0 0) (32 32 32) big
+Small box is 20, Big box is 40.
+*/
+
+void() item_shells =
+{
+    impl_item_ammo_pickup(
+        "maps/b_shell0.bsp", "maps/b_shell1.bsp",
+        20, 40,
+        AID_SHELLS, '24 24 24');
+};
+
+
+/*QUAKED item_spikes (0 .5 .8) (0 0 0) (32 32 32) big
+Small box is 25, Big box is 50.
+*/
+
+void() item_spikes =
+{
+    impl_item_ammo_pickup(
+        "maps/b_nail0.bsp", "maps/b_nail1.bsp",
+        25, 50,
+        AID_NAILS, '24 24 24');
+};
+
+/*QUAKED item_lava_spikes (0 .5 .8) (0 0 0) (32 32 32) big
+Small box is 25, Big box is 50.
+*/
+
+void() item_lava_spikes =
+{
+    impl_item_ammo_pickup(
+        "maps/b_lnail0.bsp", "maps/b_lnail1.bsp",
+        25, 50,
+        AID_LAVA_NAILS, '24 24 24');
+};
+
+
+/*QUAKED item_rockets (0 .5 .8) (0 0 0) (32 32 32) big
+Small box is 5, Big box is 10.
+*/
+
+void() item_rockets =
+{
+    impl_item_ammo_pickup(
+        "maps/b_rock0.bsp", "maps/b_rock1.bsp",
+        5, 10,
+        AID_ROCKETS, '16 16 32');
+};
+
+/*QUAKED item_multi_rockets (0 .5 .8) (0 0 0) (32 32 32) big
+Small box is 5, Big box is 10.
+*/
+
+void() item_multi_rockets =
+{
+    impl_item_ammo_pickup(
+        "maps/b_mrock1.bsp", "maps/b_mrock0.bsp",
+        5, 10,
+        AID_MULTI_ROCKETS, '24 24 24');
+};
+
+/*QUAKED item_cells (0 .5 .8) (0 0 0) (32 32 32) big
+Small box is 6, Big box is 12.
+*/
+
+void() item_cells =
+{
+    impl_item_ammo_pickup(
+        "maps/b_batt1.bsp", "maps/b_batt0.bsp",
+        6, 12,
+        AID_CELLS, '24 24 24');
+};
+
+/*QUAKED item_plasma (0 .5 .8) (0 0 0) (32 32 32) big
+Small box is 6, Big box is 12.
+*/
+void() item_plasma =
+{
+    impl_item_ammo_pickup(
+        "maps/b_plas1.bsp", "maps/b_plas0.bsp",
+        6, 12,
+        AID_PLASMA, '24 24 24');
+};
+
+/*
+===============================================================================
+
+KEYS
+
+===============================================================================
+*/
+
+void() key_touch =
+{
+    if(VR_ItemUtil_EntHasItem(other, self.vr_itemId))
+        return;
+
+    VRItemPickupHaptic(other);
+
+    sprint(other, "You got the ");
+    sprint(other, self.netname);
+    sprint(other,"\n");
+
+    sound(other, CHAN_ITEM, self.noise, 1, ATTN_NORM);
+    stuffcmd(other, "bf\n");
+
+    VR_ItemUtil_EntAddItem(other, self.vr_itemId);
+
+    if(!coop)
+    {
+        self.solid = SOLID_NOT;
+        self.model = string_null;
+    }
+};
+
+
+void() key_setsounds =
+{
+    if(world.worldtype == 0)
+    {
+        precache_sound("misc/medkey.wav");
+        self.noise = "misc/medkey.wav";
+    }
+    else if(world.worldtype == 1)
+    {
+        precache_sound("misc/runekey.wav");
+        self.noise = "misc/runekey.wav";
+    }
+    else if(world.worldtype == 2)
+    {
+        precache_sound2("misc/basekey.wav");
+        self.noise = "misc/basekey.wav";
+    }
+};
+
+/*QUAKED item_key1 (0 .5 .8) (-16 -16 -24) (16 16 32)
+SILVER key
+In order for keys to work
+you MUST set your maps
+worldtype to one of the
+following:
+0: medieval
+1: metal
+2: base
+*/
+
+void() item_key1 =
+{
+    if(world.worldtype == 0)
+    {
+        precache_model("progs/w_s_key.mdl");
+        setmodel(self, "progs/w_s_key.mdl");
+        self.netname = "silver key";
+    }
+    else if(world.worldtype == 1)
+    {
+        precache_model("progs/m_s_key.mdl");
+        setmodel(self, "progs/m_s_key.mdl");
+        self.netname = "silver runekey";
+    }
+    else if(world.worldtype == 2)
+    {
+        precache_model2("progs/b_s_key.mdl");
+        setmodel(self, "progs/b_s_key.mdl");
+        self.netname = "silver keycard";
+    }
+
+    key_setsounds();
+    self.handtouch = key_touch;
+    self.vr_itemId = IID_KEY1;
+
+    setsize(self, '-8 -8 -24', '8 8 32');
+
+    StartItem();
+    VR_PickupObj_Mark(QVR_PICKUPOBJ_HOLSTER);
+};
+
+/*QUAKED item_key2 (0 .5 .8) (-16 -16 -24) (16 16 32)
+GOLD key
+In order for keys to work
+you MUST set your maps
+worldtype to one of the
+following:
+0: medieval
+1: metal
+2: base
+*/
+
+void() item_key2 =
+{
+    if(world.worldtype == 0)
+    {
+        precache_model("progs/w_g_key.mdl");
+        setmodel(self, "progs/w_g_key.mdl");
+        self.netname = "gold key";
+    }
+    else if(world.worldtype == 1)
+    {
+        precache_model("progs/m_g_key.mdl");
+        setmodel(self, "progs/m_g_key.mdl");
+        self.netname = "gold runekey";
+    }
+    else if(world.worldtype == 2)
+    {
+        precache_model2("progs/b_g_key.mdl");
+        setmodel(self, "progs/b_g_key.mdl");
+        self.netname = "gold keycard";
+    }
+
+    key_setsounds();
+    self.handtouch = key_touch;
+    self.vr_itemId = IID_KEY2;
+
+    setsize(self, '-8 -8 -24', '8 8 32');
+
+    StartItem();
+    VR_PickupObj_Mark(QVR_PICKUPOBJ_HOLSTER);
+};
+
+
+
+/*
+===============================================================================
+
+END OF LEVEL RUNES
+
+===============================================================================
+*/
+
+void() sigil_touch =
+{
+    centerprint(other, "You got the rune!");
+
+    sound(other, CHAN_ITEM, self.noise, 1, ATTN_NORM);
+    stuffcmd(other, "bf\n");
+    self.solid = SOLID_NOT;
+    self.model = string_null;
+    serverflags = serverflags | (self.spawnflags & 15);
+    self.classname = "";        // so rune doors won't find it
+};
+
+
+/*QUAKED item_sigil (0 .5 .8) (-16 -16 -24) (16 16 32) E1 E2 E3 E4
+End of level sigil, pick up to end episode and return to jrstart.
+*/
+
+void() item_sigil =
+{
+    if(!self.spawnflags)
+        objerror ("no spawnflags");
+
+    precache_sound("misc/runekey.wav");
+    self.noise = "misc/runekey.wav";
+
+    if(self.spawnflags & 1)
+    {
+        precache_model("progs/end1.mdl");
+        setmodel(self, "progs/end1.mdl");
+    }
+
+    if(self.spawnflags & 2)
+    {
+        precache_model2("progs/end2.mdl");
+        setmodel(self, "progs/end2.mdl");
+    }
+
+    if(self.spawnflags & 4)
+    {
+        precache_model2("progs/end3.mdl");
+        setmodel(self, "progs/end3.mdl");
+    }
+
+    if(self.spawnflags & 8)
+    {
+        precache_model2("progs/end4.mdl");
+        setmodel(self, "progs/end4.mdl");
+    }
+
+    self.handtouch = sigil_touch;
+    self.netname = "rune";
+
+    setsize(self, '-16 -16 -24', '16 16 32');
+    StartItem();
+    VR_PickupObj_Mark(QVR_PICKUPOBJ_HOLSTER);
+};
+
+/*
+===============================================================================
+
+POWERUPS
+
+===============================================================================
+*/
+
+void() powerup_touch =
+{
+    VRItemPickupHaptic(other);
+
+    sprint(other, "You got the ");
+    sprint(other, self.netname);
+    sprint(other,"\n");
+
+    if(deathmatch)
+    {
+        self.mdl = self.model;
+
+        if(self.classname == "item_random_powerup")
+        {
+            self.nextthink = time + 30;
+            self.think = random_regen;
+        }
+        else
+        {
+            if((self.classname == "item_artifact_invulnerability") ||
+                (self.classname == "item_artifact_invisibility"))
+                self.nextthink = time + 60*5;
+            else
+                self.nextthink = time + 60;
+
+            self.think = SUB_regen;
+        }
+    }
+
+    sound(other, CHAN_VOICE, self.noise, 1, ATTN_NORM);
+    stuffcmd(other, "bf\n");
+    self.solid = SOLID_NOT;
+    VR_ItemUtil_EntAddItem(other, self.vr_itemId);
+    self.model = string_null;
+
+// do the apropriate action
+    if(self.classname == "item_artifact_envirosuit")
+    {
+        other.rad_time = 1;
+        other.radsuit_finished = time + 30;
+    }
+
+    if(self.classname == "item_artifact_invulnerability")
+    {
+        other.invincible_time = 1;
+        other.invincible_finished = time + 30;
+    }
+
+    if(self.classname == "item_artifact_invisibility")
+    {
+        other.invisible_time = 1;
+        other.invisible_finished = time + 30;
+    }
+
+    if(self.classname == "item_artifact_super_damage")
+    {
+        other.super_time = 1;
+        other.super_damage_finished = time + 30;
+    }
+};
+
+
+
+/*QUAKED item_artifact_invulnerability (0 .5 .8) (-16 -16 -24) (16 16 32)
+Player is invulnerable for 30 seconds
+*/
+void() item_artifact_invulnerability =
+{
+    self.handtouch = powerup_touch;
+
+    precache_model("progs/invulner.mdl");
+    precache_sound("items/protect.wav");
+    precache_sound("items/protect2.wav");
+    precache_sound("items/protect3.wav");
+    self.noise = "items/protect.wav";
+    setmodel(self, "progs/invulner.mdl");
+    self.classname = "item_artifact_invulnerability";
+    self.netname = "Pentagram of Protection";
+    self.vr_itemId = IID_INVULNERABILITY;
+    setsize(self, '-8 -8 -24', '8 8 32');
+    if(deathmatch) { self.wait = 60*5; }
+    StartItem();
+};
+
+/*QUAKED item_artifact_envirosuit (0 .5 .8) (-16 -16 -24) (16 16 32)
+Player takes no damage from water or slime for 30 seconds
+*/
+
+void() item_artifact_envirosuit =
+{
+    self.handtouch = powerup_touch;
+
+    precache_model("progs/suit.mdl");
+    precache_sound("items/suit.wav");
+    precache_sound("items/suit2.wav");
+    self.noise = "items/suit.wav";
+    setmodel(self, "progs/suit.mdl");
+    self.classname = "item_artifact_envirosuit";
+    self.netname = "Biosuit";
+    self.vr_itemId = IID_SUIT;
+    setsize(self, '-8 -8 -24', '8 8 32');
+    if(deathmatch) { self.wait = 60; }
+    StartItem();
+    VR_PickupObj_Mark(QVR_PICKUPOBJ_HOLSTER);
+};
+
+
+/*QUAKED item_artifact_invisibility (0 .5 .8) (-16 -16 -24) (16 16 32)
+Player is invisible for 30 seconds
+*/
+void() item_artifact_invisibility =
+{
+    self.handtouch = powerup_touch;
+
+    precache_model("progs/invisibl.mdl");
+    precache_sound("items/inv1.wav");
+    precache_sound("items/inv2.wav");
+    precache_sound("items/inv3.wav");
+    self.noise = "items/inv1.wav";
+    setmodel(self, "progs/invisibl.mdl");
+    self.classname = "item_artifact_invisibility";
+    self.netname = "Ring of Shadows";
+    self.vr_itemId = IID_INVISIBILITY;
+    setsize(self, '-8 -8 -24', '8 8 32');
+    if(deathmatch) { self.wait = 60*5; }
+    StartItem();
+};
+
+
+/*QUAKED item_artifact_super_damage (0 .5 .8) (-16 -16 -24) (16 16 32)
+The next attack from the player will do 4x damage
+*/
+void() item_artifact_super_damage =
+{
+    self.handtouch = powerup_touch;
+
+    precache_model("progs/quaddama.mdl");
+    precache_sound("items/damage.wav");
+    precache_sound("items/damage2.wav");
+    precache_sound("items/damage3.wav");
+    self.noise = "items/damage.wav";
+    setmodel(self, "progs/quaddama.mdl");
+    self.classname = "item_artifact_super_damage";
+    self.netname = "Quad Damage";
+    self.vr_itemId = IID_QUAD;
+    setsize(self, '-8 -8 -24', '8 8 32');
+    if(deathmatch) { self.wait = 60; }
+    StartItem();
+};
+
+
+
+/*
+===============================================================================
+
+PLAYER BACKPACKS
+
+===============================================================================
+*/
+
+void() BackpackTouch =
+{
+    string s;
+    float acount;
+
+    if(other.classname != "player")
+    {
+        return;
+    }
+
+    if(other.health <= 0)
+    {
+        return;
+    }
+
+    //ZOID--
+    // Don't let the owner pick up his own backpack for a second.
+    if((other == self.owner) && ((self.nextthink - time) > 119))
+        return;
+    //--ZOID
+
+    VRItemPickupHaptic(other);
+
+    acount = 0;
+    sprint(other, "You get ");
+
+    other.ammo_shells += self.ammo_shells;
+    other.ammo_nails += self.ammo_nails;
+    other.ammo_rockets += self.ammo_rockets;
+    other.ammo_cells += self.ammo_cells;
+
+    other.ammo_lava_nails += self.ammo_lava_nails;
+    other.ammo_multi_rockets += self.ammo_multi_rockets;
+    other.ammo_plasma += self.ammo_plasma;
+
+    bound_other_ammo();
+
+    if(self.ammo_shells)
+    {
+        if(acount)
+            sprint(other, ", ");
+        acount = 1;
+        s = ftos(self.ammo_shells);
+        sprint(other, s);
+        sprint(other, " shells");
+    }
+
+    if(self.ammo_nails)
+    {
+        if(acount)
+            sprint(other, ", ");
+        acount = 1;
+        s = ftos(self.ammo_nails);
+        sprint(other, s);
+        sprint(other, " nails");
+    }
+
+    if(self.ammo_rockets)
+    {
+        if(acount)
+            sprint(other, ", ");
+        acount = 1;
+        s = ftos(self.ammo_rockets);
+        sprint(other, s);
+        sprint(other, " rockets");
+    }
+
+    if(self.ammo_cells)
+    {
+        if(acount)
+            sprint(other, ", ");
+        acount = 1;
+        s = ftos(self.ammo_cells);
+        sprint(other, s);
+        sprint(other, " cells");
+    }
+
+    if(self.ammo_lava_nails)
+    {
+        if(acount)
+            sprint(other, ", ");
+        acount = 1;
+        s = ftos(self.ammo_lava_nails);
+        sprint(other, s);
+        sprint(other, " lava nails");
+    }
+
+    if(self.ammo_multi_rockets)
+    {
+        if(acount)
+            sprint(other, ", ");
+        acount = 1;
+        s = ftos(self.ammo_multi_rockets);
+        sprint(other, s);
+        sprint(other, " multi rockets");
+    }
+
+    if(self.ammo_plasma)
+    {
+        if(acount)
+            sprint(other, ", ");
+        acount = 1;
+        s = ftos(self.ammo_plasma);
+        sprint(other, s);
+        sprint(other, " plasma balls");
+    }
+
+    sprint(other, "\n");
+
+    // backpack touch sound
+    sound(other, CHAN_ITEM, "weapons/lock4.wav", 1, ATTN_NORM);
+    stuffcmd(other, "bf\n");
+
+    // remove the backpack, change self to the player
+    remove(self);
+    self = other;
+
+    W_SetCurrentAmmo();
+};
+
+// A backpack's think: as a dropped weapon's, but carried (vr_carry.qc) the hand moves it, nothing
+// else.
+void() backpack_think =
+{
+    self.nextthink = time + 0.02;
+    if(self.carry_player != world)
+    {
+        return;
+    }
+    forcegrabbable_think_impl();
+}
+
+/*
+===============
+DropBackpack
+===============
+*/
+void() DropBackpack =
+{
+    if(!(self.ammo_shells + self.ammo_nails + self.ammo_rockets + self.ammo_cells
+    + self.ammo_lava_nails + self.ammo_multi_rockets + self.ammo_plasma))
+    {
+        return;    // nothing in it
+    }
+
+    entity item = spawn();
+    item.origin = self.origin - '0 0 24';
+    if((self.flags & FL_MONSTER) || self.vr_was_monster) // (a gibbed one's head: SoldierDrop after ThrowHead)
+    {
+        item.vr_monster_drop = time; // it can't hurt players just yet (vr_prop_drop_grace: vr_carry.qc VR_Prop_Flung)
+    }
+
+    item.ammo_shells = self.ammo_shells;
+    item.ammo_nails = self.ammo_nails;
+    item.ammo_rockets = self.ammo_rockets;
+    item.ammo_cells = self.ammo_cells;
+
+    item.velocity_z = 300;
+    item.velocity_x = -100 + (random() * 200);
+    item.velocity_y = -100 + (random() * 200);
+
+    item.angles_z = 90;
+    item.angles_y = random() * 360;
+
+    item.flags = FL_ITEM;
+    item.solid = SOLID_NOT_BUT_TOUCHABLE;
+    item.movetype = MOVETYPE_TOSS;
+    setmodel(item, "progs/backpack.mdl");
+
+    float scaleFactor = 0.75;
+    vector factorVector = VR_ScaleUtil_GetUniformScaleVector(scaleFactor);
+    VR_ScaleUtil_SetScale(item, factorVector);
+
+    setsize(item, '-10 -10 0' * scaleFactor, '10 10 18' * scaleFactor);
+    item.model_offset = '0 120 0';
+    item.handtouch = BackpackTouch;
+
+    MakeGrabbable(item);
+    item.solid = SOLID_NOT_BUT_TOUCHABLE;
+
+    item.flags |= FL_FORCEGRABBABLE;
+
+    SetThrownWeaponDealDamage(item, FALSE);
+    SetThrownWeaponDisappearOnHit(item, FALSE);
+
+    item.think = backpack_think; // no deathmatch return: it has no place of its own
+    item.nextthink = time + 0.02;
+
+    item.touch = forcegrabbable_touch;
+    item.owner = world;
+
+    item.throwhit = QVR_THROWHIT_HIT;
+
+    // A physical object (engine: vr_rigid.cpp): tumbles a little as it flies, bounces, and comes
+    // to rest on a side instead of spinning in place.
+    item.vr_rigid = 1;
+    item.vr_spin_x = crandom() * 2;
+    item.vr_spin_y = crandom() * 2;
+    item.vr_spin_z = crandom() * 4;
+
+    item.nextthink2 = time + 120;    // remove after 2 minutes
+    item.think2 = SUB_Remove;
+
+    // Carried like the ammo and health boxes (vr_carry.qc): gripped (or caught from a force grab)
+    // it is held, and let go of at a holster it is taken (vr_carry_take), not taken at a touch.
+    VR_Carry_Setup(item);
+};

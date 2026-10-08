@@ -1,3 +1,20 @@
-id1/pak0.pak
-id1/auto0.sav
-id1/auto0.sav
+Windows/VisualStudio/.vs/
+Windows/VisualStudio/Build-*/
+Windows/VisualStudio/ironwail.vcxproj.user
+Quake/*.o
+Quake/*.d
+Quake/*.res
+Quake/*.exe
+Quake/ironwail
+build/
+/.vs
+/out/
+
+# QVR: Quake VR's build and packaging output (quakevr/ and Quake/vr/ have their own .gitignore)
+/build-cmake/
+/dist/
+__pycache__/
+/build.log
+
+/build-ad/
+/build-ad-rigs/

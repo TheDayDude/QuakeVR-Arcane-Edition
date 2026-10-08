@@ -1,0 +1,93 @@
+// vr_carry2h.hpp -- a prop held in both hands (vr_carry.qc: a box, backpack, gib, head or armour gripped by the
+// second hand while the first carries it; vr_carry_two_hands).
+//
+// When the second hand takes hold, each hand's grip is kept in the object's frame, with the object's turn in each
+// hand. From then on the object follows both hands rigidly, as if held at both grips:
+//
+// - Its turn: each hand alone would carry the object turned so (its turn in that hand); the two are averaged (a
+//   quaternion mean, never degenerate: the halves are on the same side), and that is then swung the least way that
+//   lines up its grip-to-grip axis with the line between the hands. So rotating both hands together rotates it
+//   exactly; moving one hand swings it about the other; twisting both hands about the line between them rolls it
+//   (one hand alone: half as much).
+// - Its place: the middle of its grips on the middle of the hands. Pulling the hands apart (or together) never
+//   stretches it: each hand is then off its grip along the line by half the change.
+// - Hands (almost) on the same spot, or gripped there: no line to follow, the average turn alone (as one hand).
+//
+// When every hand moves as one rigid body, the solve gives back that motion exactly. The server places the object so
+// (QC's carry2h); the local client draws it so from the hands of this frame (vr_held.cpp), and draws each hand on its
+// grip (a few centimetres off the controller at most, vr_carry_two_hands_drift).
+
+#pragma once
+
+#include "vr_engine.hpp"
+
+namespace qvr::carry2h
+{
+
+// A pose: a place in the world and a turn (the axes forward, left, up as columns: held::axesFromAngles's).
+struct Frame
+{
+    glm::vec3 pos{0.f};
+    glm::quat rot{1.f, 0.f, 0.f, 0.f};
+};
+
+// What was kept when the second hand took hold. Hands: [0] off, [1] main (as hands::State).
+struct Hold
+{
+    glm::quat inHand[2]{glm::quat{1.f, 0.f, 0.f, 0.f}, glm::quat{1.f, 0.f, 0.f, 0.f}}; // the object's turn in each hand
+    glm::vec3 grip[2]{glm::vec3{0.f}, glm::vec3{0.f}}; // each hand's grip, in the object's frame (from its origin)
+    glm::vec3 axis{1.f, 0.f, 0.f}; // from the off hand's grip to the main hand's, in the object's frame (unit)
+    float span{0.f};               // the grips' distance (world units)
+};
+
+[[nodiscard]] Hold record(const Frame& object, const Frame hands[2]);
+
+// The object's pose for the hands at `hands`.
+[[nodiscard]] Frame solve(const Hold& hold, const Frame hands[2]);
+
+// Where hand `hand` would be, held on its grip on the object at `object` (its controller's pose: the pose `hands`
+// has in record and solve).
+[[nodiscard]] Frame onGrip(const Hold& hold, const Frame& object, int hand);
+
+// A turn from angles (held::axesFromAngles's conventions) and back.
+[[nodiscard]] glm::quat fromAngles(const float* angles, bool brush);
+void toAngles(const glm::quat& q, float* out, bool brush);
+
+// Server side (QC's carry2h): the object `ent` the player `player` holds in both hands. `grab`: the second hand has
+// just taken hold (the grips are kept; the result is where it is). Else the place it should go to (its angles are
+// set now); kept first if nothing was (a saved game, a new server). Its hands are the player's fields.
+[[nodiscard]] glm::vec3 serverPlace(edict_t* ent, edict_t* player, bool grab);
+
+// Entity `num`, held in both hands, moved from `from` to `to` (its origin and turn): `to` kept out of the level's solids
+// (box3d::holdClear: its box stops at a wall and slides along it; its turn kept if the new one would put it in), however
+// far the hands push (vr_carry_two_hands_solid). Server side (serverPlace) and a listen server's client (vr_held.cpp).
+// True if the level stopped it.
+bool clear(int num, const Frame& from, Frame& to);
+
+// Server side (QC's carryreach): whether `player`'s `hand` (0 off, 1 main) can take hold of `ent`: its fist touches the
+// thing's drawn surface, as a hand touching it can (held::grabTouch); vr_debug_carry draws the test.
+[[nodiscard]] bool reaches(edict_t* ent, edict_t* player, int hand);
+
+// Server side (QC's carry2hoff): which hands have been pulled off `ent`, held in both of `player`'s: bit 1 the off
+// hand, 2 the main hand. A hand is off it when it is further from its grip on it (where the drawn hand is held) than
+// Two-Handed Hand Drift (vr_carry_two_hands_drift) plus vr_carry_two_hands_detach, and its fist no longer touches it
+// (held::grabTouch, with a tolerance of detachTouch): pulled away, not sliding along its surface.
+[[nodiscard]] int detached(edict_t* ent, edict_t* player);
+
+// Server side (QC's carry2hkeep; detached for a hand pulled off): `ent`, held in both of `player`'s hands, is held by
+// `hand` (0 off, 1 main) alone from now on: moved onto that hand's grip (turned as it is) and its hold forgotten. The
+// drawn hand, eased back from its grip onto the controller, then still holds it where it did (round 21, "Held props:
+// no gap after two hands").
+void keep(edict_t* ent, edict_t* player, int hand);
+
+// The hold the server keeps for entity `num` (a listen server's client draws it with the same hold: vr_held.cpp).
+// False: none.
+[[nodiscard]] bool serverHold(int num, Hold& out);
+
+// Forgets the kept holds (a new server).
+void resetServer();
+
+// Forgets entity `num`'s hold (it was removed: physics::forgetEntity).
+void forgetEntity(int num);
+
+} // namespace qvr::carry2h

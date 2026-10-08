@@ -1,0 +1,302 @@
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Entity (visual) scale fields
+// ----------------------------------------------------------------------------
+
+.vector model_scale;
+.vector model_scale_origin;
+.vector model_offset;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// New item management fields
+// ----------------------------------------------------------------------------
+
+.float vr_itemId;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Hand and weapon touching callback fields
+// ----------------------------------------------------------------------------
+
+.void() handtouch;        // touched by VR hand
+.void() vr_wpntouch;      // touched by VR weapon
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Off-hand think callback fields
+// ----------------------------------------------------------------------------
+
+.void() think2;
+.float  nextthink2;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Main hand weapon fields
+// ----------------------------------------------------------------------------
+
+.float weaponflags;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Off-hand weapon fields
+// ----------------------------------------------------------------------------
+
+.float  weapon2;            // WID
+.string weaponmodel2;
+.float  weaponframe2;
+.float  weaponflags2;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Weapon reloading fields
+// ----------------------------------------------------------------------------
+
+// Weapon instances (vr_weaponinst.qc): each weapon is one record entity (classname "weapon_inst": its id and its
+// magazine), which the hand holding it, the holster keeping it or the prop it lies as refers to. Moving a weapon moves
+// the reference; the engine frees a record nothing refers to any more (and tells the clients its id is gone).
+.entity weaponinst;  // Main hand; a weapon prop's (thrown, dropped, lying)
+.entity weaponinst2; // Off-hand
+.entity holsterweaponinst0;
+.entity holsterweaponinst1;
+.entity holsterweaponinst2;
+.entity holsterweaponinst3;
+.entity holsterweaponinst4;
+.entity holsterweaponinst5;
+.float wi_uid;  // A record's: its id (> 0, unique on the server; kept through saves, loads and map changes)
+.float wi_clip; // A record's: its magazine (rounds; a chainsaw's fuel)
+.float weaponclipsize;  // Main hand
+.float weaponclipsize2; // Off-hand
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Holster weapon ID fields
+// ----------------------------------------------------------------------------
+
+.float holsterweapon0; // Hotspot: `QVR_HS_LEFT_SHOULDER_HOLSTER`.
+.float holsterweapon1; // Hotspot: `QVR_HS_RIGHT_SHOULDER_HOLSTER`.
+.float holsterweapon2; // Hotspot: `QVR_HS_LEFT_HIP_HOLSTER`.
+.float holsterweapon3; // Hotspot: `QVR_HS_RIGHT_HIP_HOLSTER`.
+.float holsterweapon4; // Hotspot: `QVR_HS_LEFT_UPPER_HOLSTER`.
+.float holsterweapon5; // Hotspot: `QVR_HS_RIGHT_UPPER_HOLSTER`.
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Holster weapon model fields
+// ----------------------------------------------------------------------------
+
+// TODO VR: (P2) these are needed because they are read in C++ as 'STAT_XXX'
+// variables to determine the weapon. This should be changed to use WIDs.
+.string holsterweaponmodel0;
+.string holsterweaponmodel1;
+.string holsterweaponmodel2;
+.string holsterweaponmodel3;
+.string holsterweaponmodel4;
+.string holsterweaponmodel5;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Holster weapon flags fields
+// ----------------------------------------------------------------------------
+
+.float holsterweaponflags0; // Hotspot: `QVR_HS_LEFT_SHOULDER_HOLSTER`.
+.float holsterweaponflags1; // Hotspot: `QVR_HS_RIGHT_SHOULDER_HOLSTER`.
+.float holsterweaponflags2; // Hotspot: `QVR_HS_LEFT_HIP_HOLSTER`.
+.float holsterweaponflags3; // Hotspot: `QVR_HS_RIGHT_HIP_HOLSTER`.
+.float holsterweaponflags4; // Hotspot: `QVR_HS_LEFT_UPPER_HOLSTER`.
+.float holsterweaponflags5; // Hotspot: `QVR_HS_RIGHT_UPPER_HOLSTER`.
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Hotspot fields
+// ----------------------------------------------------------------------------
+
+.float offhand_hotspot;
+.float sawcord; // the chainsaws' starter cords (vr_chainsaw.qc VR_SAWCORD_*: which hand holds one, a pull)
+.float handdrop; // a heavy weapon wrenched out of a hand (the engine's vr_weight_drop: VR_HANDDROP_*, weapons.qc)
+.float mainhand_hotspot;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Off-hand ammunition fields
+// ----------------------------------------------------------------------------
+
+.float currentammo2;  // off-hand
+.float ammocounter2;  // off-hand
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Off-hand firing button field
+// ----------------------------------------------------------------------------
+
+.float button3;        // off-hand fire
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// VR Yaw Angle (Thumbstick-Controlled Turn Angle)
+// ----------------------------------------------------------------------------
+
+.float vryaw;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Main hand physics fields
+// ----------------------------------------------------------------------------
+
+.vector handpos;
+.vector handrot;
+.vector handvel;
+.vector handthrowvel;
+.float  handvelmag;
+.vector handavel;
+.vector handthrowpos;  // where the thrown object left the hand (world)
+.float  handthrowage;  // seconds since
+.vector handthrowflick; // m/s: the part of handthrowvel the wrist's flick gives (a heavy thing keeps less: throwvelocity)
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Off-hand physics fields
+// ----------------------------------------------------------------------------
+
+.vector offhandpos;
+.vector offhandrot;
+.vector offhandvel;
+.vector offhandthrowvel;
+.float  offhandvelmag;
+.vector offhandavel;
+.vector offhandthrowpos;
+.float  offhandthrowage;
+.vector offhandthrowflick;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Head physics fields
+// ----------------------------------------------------------------------------
+
+.vector headvel;
+.vector headpos; // the head (between the eyes): with a lean it is not above the origin
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Weapon muzzle fields
+// ----------------------------------------------------------------------------
+
+.vector muzzlepos;
+.vector offmuzzlepos;
+.vector shotrot;    // where the hand's shots go (angles): its aim turned by the weapon's Shot Pitch/Yaw (the engine)
+.vector offshotrot;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// VR-related bits
+// ----------------------------------------------------------------------------
+
+.float vrbits0;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Teleportation fields
+// ----------------------------------------------------------------------------
+
+.vector teleport_target;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Roomscale movement fields
+// ----------------------------------------------------------------------------
+
+.vector roomscalemove;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Handtouch-related fields
+// ----------------------------------------------------------------------------
+
+.float  touchinghand;
+.float  handtouch_hand;
+.entity handtouch_ent;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Bot-related fields
+// ----------------------------------------------------------------------------
+
+.float ishuman;
+
+//
+//
+//
+// ----------------------------------------------------------------------------
+// Rigid-body flight (engine: Box3D, vr_box3d.cpp)
+// ----------------------------------------------------------------------------
+
+.float  vr_rigid; // MOVETYPE_TOSS/BOUNCE entities that spin, bounce and settle as rigid bodies
+.float  vr_hitclass; // precise hits (vr_hitmodel.cpp): a missile's class for its tolerance (HITCLASS_*: 0 a gun's, 1 the grappling hook's); -1: Quake's boxes
+.vector vr_spin;  // their angular velocity, radians per second, world axes
+                  // (.vr_rigid 2: a solid one, SOLID_BBOX, its box kept round its drawn shape as it turns: an explosive box)
+// A thrown axe stuck in something by its blade (engine: vr_axestick.cpp, which sticks it and moves it with what it is in;
+// QC/vr_axestick.qc).
+.float  vr_stick_kind;   // 0 not stuck; 1 the level or a brush entity; 2 a prop; 3 a monster's model; 4 a monster's box;
+                         // -1 it came out (it never sticks again)
+.entity vr_stick_ent;    // what it is in (world: the level)
+.vector vr_stick_ofs;    // its origin in that thing's frame (the engine's)
+.vector vr_stick_ang;    // its turn in that frame (the engine's)
+.vector vr_stick_anchor; // kind 3: the model's triangle and where on it (the engine's)
+.float  vr_stick_edge;   // which blade (the engine's)
+.vector vr_stick_at;     // the middle of the blade's edge in the world (the engine's, each frame)
+.vector vr_stick_dir;    // the way the blade faces, into what it is in (the engine's, each frame)
+.float  vr_stick_wiggle; // degrees the axe is rocked about its edge (a force grab's tug)
+.vector vr_stick_vel;    // in flight: its velocity and spin at the last step (the engine's: one that changes has hit
+.vector vr_stick_spin;   // something, and it never sticks after: a handle-first throw bounces)
+.void(float xSpeed) vr_impact; // a rigid body hitting something (the world, a prop, a monster) at xSpeed m/s (at least
+                               // 2): self the body, other what it hit (world for the level). Box3D's hits, after its step.
+.float vr_blocksight; // a solid prop monsters can't see through while it lies about (a crate, an explosive box: sightblocked)
+.float vr_shot_radius;  // a grenade shots set off (vr_grenade.qc, "Shooting grenades"; engine: vr_hitmodel.cpp VR_ShotTargetClip): shots
+                        // and missiles meet a cube this half size round its middle (0: Quake's rules); with takedamage
+.float vr_shot_ownfrom; // its owner's own shots meet it from then (not as it leaves his launcher or hand)

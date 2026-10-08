@@ -1,0 +1,448 @@
+// vr_voicenotes.cpp -- see vr_voicenotes.hpp.
+
+#include "vr_voicenotes.hpp"
+#include "vr_engine.hpp"
+#include "vr_cvars.hpp"
+#include "vr_hands.hpp"
+#include "vr_jobs.hpp"
+#include "vr_main.hpp"
+#include "vr_protocol.hpp"
+#include "vr_text3d.hpp"
+#include "vr_units.hpp"
+
+#if defined(SDL_FRAMEWORK) || defined(NO_SDL_CONFIG)
+#include <SDL2/SDL.h>
+#else
+#include "SDL.h"
+
+#include "Zancle/Base/IntTypes.hpp"
+#include "Zancle/Base/Macros.hpp"
+#include "Zancle/Base/SizeT.hpp"
+#include "Zancle/Container/Vector.hpp"
+#include "Zancle/String/String.hpp"
+#include "Zancle/String/StringView.hpp"
+
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+extern "C" qboolean Image_WritePNGPath(const char* pathname, byte* data, int width, int height, int bpp, qboolean upsidedown); // image.c
+
+namespace qvr::voicenotes
+{
+namespace
+{
+
+constexpr int wantedRate = 16000;      // Whisper's own rate
+constexpr double maxSeconds = 180.0;   // a note longer than this is cut there
+constexpr float mouthReach = 0.30f;    // metres from the mouth that count as "at the mouth"
+constexpr double minSeconds = 0.8;     // a shorter note is taken for an accidental press, and dropped
+
+SDL_AudioDeviceID device = 0;
+int rate = wantedRate;
+bool audioInit = false;
+bool recording = false;
+bool byButton = false;
+double startTime = 0.0;
+za::Vector<za::I16> samples;
+za::String baseName;                 // notes/<map>_<date>_<time>, without the extension
+
+[[nodiscard]] bool ensureAudio()
+{
+    if(!audioInit)
+    {
+        if(SDL_InitSubSystem(SDL_INIT_AUDIO) < 0)
+        {
+            Con_Printf("VR notes: no audio (%s)\n", SDL_GetError());
+            return false;
+        }
+        audioInit = true;
+    }
+    return true;
+}
+
+// The capture device vr_note_device names (a part of its name), or null for the default.
+[[nodiscard]] const char* deviceName()
+{
+    const char* wanted = vr_note_device.string;
+    if(!wanted || !wanted[0])
+    {
+        return nullptr;
+    }
+    const int count = SDL_GetNumAudioDevices(1);
+    for(int i = 0; i < count; i++)
+    {
+        const char* name = SDL_GetAudioDeviceName(i, 1);
+        if(name && q_strcasestr(name, wanted))
+        {
+            return name;
+        }
+    }
+    Con_Printf("VR notes: no microphone named like \"%s\"; using the default (vr_note_devices lists them)\n", wanted);
+    return nullptr;
+}
+
+void haptic(float seconds, float amplitude)
+{
+    if(Backend* be = backend(); be && !vr_disablehaptics.value)
+    {
+        be->haptic(HAND_OFF, seconds, 120.f, amplitude);
+    }
+}
+
+void writeLE(FILE* f, za::U32 v, int bytes)
+{
+    for(int i = 0; i < bytes; i++)
+    {
+        fputc(static_cast<int>((v >> (8 * i)) & 0xff), f);
+    }
+}
+
+// (Any thread: a note's sound is saved on the game's thread pool, see saveFile.)
+[[nodiscard]] bool writeWav(const za::String& path, const za::Vector<za::I16>& samples, int rate)
+{
+    FILE* f = fopen(path.cStr(), "wb");
+    if(!f)
+    {
+        return false;
+    }
+    const za::U32 bytes = static_cast<za::U32>(samples.size() * sizeof(za::I16));
+    fwrite("RIFF", 1, 4, f);
+    writeLE(f, 36 + bytes, 4);
+    fwrite("WAVEfmt ", 1, 8, f);
+    writeLE(f, 16, 4);
+    writeLE(f, 1, 2); // PCM
+    writeLE(f, 1, 2); // mono
+    writeLE(f, static_cast<za::U32>(rate), 4);
+    writeLE(f, static_cast<za::U32>(rate * 2), 4);
+    writeLE(f, 2, 2);
+    writeLE(f, 16, 2);
+    fwrite("data", 1, 4, f);
+    writeLE(f, bytes, 4);
+    fwrite(samples.data(), 1, bytes, f);
+    fclose(f);
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+// Files saved on the game's thread pool: a note's sound, and screenshots (the screenshot command's PNG: a voice note
+// takes one as it starts; SCR_ScreenShot_f). Their encoding and writing (a screenshot's PNG: about 13 ms at 960x540,
+// over 100 at 3440x1440) was a hitch on the main thread. Each is written under a temporary name (a "~" before its
+// file name) and renamed once complete: its own name never holds part of a file. While it is written its name is
+// kept (VR_ScreenshotPending: the next screenshot takes another), and shutdown waits for every one.
+
+struct PendingFile
+{
+    za::String path;    // the file's (full) path
+    za::String name;    // the screenshot's name in the game folder (VR_ScreenshotPending), or empty
+    za::String saved;   // printed when it is written (empty: nothing)
+    jobs::Future<bool> done;
+};
+za::Vector<PendingFile> pendingFiles;
+
+// The files written since: their messages (or their failures). wait: every one, written or not yet.
+void pollFiles(bool wait)
+{
+    for(auto it = pendingFiles.begin(); it != pendingFiles.end();)
+    {
+        if(!wait && !it->done.ready())
+        {
+            ++it;
+            continue;
+        }
+        const bool ok = it->done.get();
+        if(!ok)
+        {
+            Con_Printf("Couldn't write %s\n", it->path.cStr());
+        }
+        else if(!it->saved.empty())
+        {
+            Con_Printf("%s", it->saved.cStr());
+        }
+        it = pendingFiles.erase(it);
+    }
+}
+
+// The temporary name a file is written under (a "~" before its file name, in its folder).
+[[nodiscard]] za::String partPath(const za::String& path)
+{
+    const za::SizeT slash = path.findLastOf("/\\");
+    return slash == za::StringView::nPos ? "~" + path : path.substrByPosLen(0, slash + 1) + "~" + path.substrByPosLen(slash + 1);
+}
+
+// write(temporary path) on the pool, then the file renamed to path.
+template <typename Write>
+void saveFile(const za::String& path, const za::String& name, const za::String& saved, Write&& write)
+{
+    pollFiles(false);
+    PendingFile f;
+    f.path = path;
+    f.name = name;
+    f.saved = saved;
+    f.done = jobs::async(
+        [path, write = ZA_FORWARD(write)]() mutable
+        {
+            const za::String part = partPath(path);
+            if(!write(part))
+            {
+                remove(part.cStr()); // (<stdio.h>'s)
+                return false;
+            }
+            return rename(part.cStr(), path.cStr()) == 0; // (<stdio.h>'s)
+        });
+    pendingFiles.pushBack(ZA_MOVE(f));
+}
+
+[[nodiscard]] const char* modelName(int index)
+{
+    return index > 0 && index < MAX_MODELS && cl.model_precache[index] ? cl.model_precache[index]->name : "-";
+}
+
+// The moment's context, as the note starts.
+void writeContext(const za::String& path, const za::String& when)
+{
+    FILE* f = fopen(path.cStr(), "w");
+    if(!f)
+    {
+        return;
+    }
+    const entity_t& player = cl_entities[cl.viewentity];
+    const hands::State& s = hands::current();
+    fprintf(f, "time: %s\n", when.cStr());
+    fprintf(f, "map: %s (%s)\n", cl.mapname, cl.levelname);
+    fprintf(f, "game time: %.1f s\n", cl.time);
+    fprintf(f, "position: %.0f %.0f %.0f\n", player.origin[0], player.origin[1], player.origin[2]);
+    fprintf(f, "view: pitch %.0f yaw %.0f\n", s.headAngles.x, s.headAngles.y);
+    fprintf(f, "health: %d  armour: %d  ammo: %d\n", cl.stats[STAT_HEALTH], cl.stats[STAT_ARMOR], cl.stats[STAT_AMMO]);
+    fprintf(f, "main hand: weapon %d, %s\n", cl.stats[protocol::STAT_QVR_WEAPON], modelName(cl.stats[STAT_WEAPON]));
+    fprintf(f, "off hand: weapon %d, %s\n", cl.stats[protocol::STAT_QVR_WEAPON2],
+        modelName(cl.stats[protocol::STAT_QVR_WEAPONMODEL2]));
+    fprintf(f, "skill: %.0f  graphics preset: %s  vr: %s\n", Cvar_VariableValue("skill"), vr_graphics_preset.string,
+        vrActive() ? "on" : "off");
+    fclose(f);
+}
+
+void start(bool fromButton)
+{
+    if(recording || !ensureAudio())
+    {
+        return;
+    }
+
+    SDL_AudioSpec want{}, have{};
+    want.freq = wantedRate;
+    want.format = AUDIO_S16SYS;
+    want.channels = 1;
+    want.samples = 1024;
+    const char* name = deviceName();
+    device = SDL_OpenAudioDevice(name, 1, &want, &have, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
+    if(!device)
+    {
+        Con_Printf("VR notes: can't open the microphone (%s)\n", SDL_GetError());
+        return;
+    }
+    rate = have.freq;
+    samples.clear();
+    SDL_PauseAudioDevice(device, 0);
+
+    // notes/<map>_<date>_<time>, as Ironwail names screenshots.
+    const time_t now = time(nullptr);
+    char stamp[64];
+    strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H-%M-%S", localtime(&now));
+    const za::String dir = za::String{com_gamedir} + "/notes";
+    Sys_mkdir(dir.cStr());
+    baseName = dir + "/" + (cl.mapname[0] ? cl.mapname : "menu") + "_" + stamp;
+    char when[64];
+    strftime(when, sizeof(when), "%Y-%m-%d %H:%M:%S", localtime(&now));
+    writeContext(baseName + ".txt", when);
+
+    recording = true;
+    byButton = fromButton;
+    startTime = realtime;
+    Cbuf_InsertText("screenshot\n"); // (next: a test script's commands wait behind it; its PNG saved on the pool)
+    haptic(0.08f, 0.6f);
+    Con_Printf("VR notes: recording from %s\n", name ? name : "the default microphone");
+}
+
+void take()
+{
+    if(!device)
+    {
+        return;
+    }
+    za::I16 buffer[4096];
+    for(Uint32 got; (got = SDL_DequeueAudio(device, buffer, sizeof(buffer))) > 0;)
+    {
+        samples.emplaceBackRange(buffer, got / sizeof(za::I16));
+    }
+}
+
+void stop()
+{
+    if(!recording)
+    {
+        return;
+    }
+    take();
+    SDL_CloseAudioDevice(device);
+    device = 0;
+    recording = false;
+
+    const double seconds = static_cast<double>(samples.size()) / rate;
+    if(seconds < minSeconds)
+    {
+        remove((baseName + ".txt").cStr());
+        Con_Printf("VR notes: too short, dropped\n");
+        haptic(0.03f, 0.3f);
+        return;
+    }
+    // Saved on the pool (a 3-minute note is 5.8 MB): its message when written (pollFiles).
+    saveFile(baseName + ".wav", {}, va("VR notes: saved %s.wav (%.1f s)\n", baseName.cStr(), seconds),
+        [take = ZA_MOVE(samples), rate = rate](const za::String& part) { return writeWav(part, take, rate); });
+    samples = {};
+    haptic(0.05f, 0.5f);
+}
+
+// Whether the off hand is at the mouth: within reach of a point a little below and in front of
+// the eyes.
+[[nodiscard]] bool offhandAtMouth()
+{
+    const hands::State& s = hands::current();
+    if(!s.valid)
+    {
+        return false;
+    }
+    const float m2u = units::metresToUnits();
+    const glm::vec3 fwd = hands::forward(glm::vec3{0.f, s.headAngles.y, 0.f});
+    const glm::vec3 mouth = s.head + fwd * (0.06f * m2u) - glm::vec3{0.f, 0.f, 0.09f * m2u};
+    return glm::distance(s.pos[HAND_OFF], mouth) < mouthReach * m2u;
+}
+
+void noteDown_f()
+{
+    start(false);
+}
+
+void noteUp_f()
+{
+    if(!byButton)
+    {
+        stop();
+    }
+}
+
+void devices_f()
+{
+    if(!ensureAudio())
+    {
+        return;
+    }
+    const int count = SDL_GetNumAudioDevices(1);
+    Con_Printf("%d microphone%s:\n", count, count == 1 ? "" : "s");
+    for(int i = 0; i < count; i++)
+    {
+        Con_Printf("  %s\n", SDL_GetAudioDeviceName(i, 1));
+    }
+    Con_Printf("vr_note_device \"<part of a name>\" picks one (empty: the default)\n");
+}
+
+} // namespace
+
+void init()
+{
+    Cmd_AddCommand("+vr_note", noteDown_f);
+    Cmd_AddCommand("-vr_note", noteUp_f);
+    Cmd_AddCommand("vr_note_devices", devices_f);
+}
+
+void frame()
+{
+    pollFiles(false);
+    if(!recording)
+    {
+        return;
+    }
+    take();
+    const double seconds = realtime - startTime;
+    if(seconds > maxSeconds)
+    {
+        stop();
+        return;
+    }
+
+    // "REC 0:12", small and low in the view (the hand is at the mouth, right before the eyes).
+    const hands::State& s = hands::current();
+    if(s.valid)
+    {
+        char text[32];
+        q_snprintf(text, sizeof(text), "REC %d:%02d", static_cast<int>(seconds) / 60, static_cast<int>(seconds) % 60);
+        const float m2u = units::metresToUnits();
+        const glm::vec3 fwd = hands::forward(glm::vec3{0.f, s.headAngles.y, 0.f});
+        const glm::vec3 at = s.head + fwd * (0.7f * m2u) - glm::vec3{0.f, 0.f, 0.28f * m2u};
+        text3d::queue(text, at, glm::vec3{0.f, s.headAngles.y, 0.f}, text3d::Align::Centre, 0.07f);
+    }
+}
+
+bool offhandButton(bool pressed)
+{
+    if(!vr_notes.value || key_dest != key_game)
+    {
+        return false;
+    }
+    if(pressed && !recording && offhandAtMouth())
+    {
+        start(true);
+        return recording;
+    }
+    if(!pressed && recording && byButton)
+    {
+        stop();
+        return true;
+    }
+    return false;
+}
+
+void shutdown()
+{
+    stop();
+}
+
+void finishWrites()
+{
+    pollFiles(true);
+}
+
+} // namespace qvr::voicenotes
+
+extern "C" int VR_ScreenshotWrite(const char* name, unsigned char* rgb, int width, int height)
+{
+    using namespace qvr::voicenotes;
+    if(!qvr::jobs::pool())
+    {
+        return 0; // (written as before, on this thread)
+    }
+    saveFile(za::String{com_gamedir} + "/" + name, name, {},
+        [rgb, width, height](const za::String& part)
+        {
+            const bool ok = Image_WritePNGPath(part.cStr(), rgb, width, height, 24, false);
+            free(rgb);
+            return ok != 0;
+        });
+    return 1;
+}
+
+extern "C" int VR_ScreenshotPending(const char* name)
+{
+    using namespace qvr::voicenotes;
+    pollFiles(false);
+    for(const PendingFile& f : pendingFiles)
+    {
+        if(f.name == name)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}

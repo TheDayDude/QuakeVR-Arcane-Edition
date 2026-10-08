@@ -1,0 +1,6 @@
+progs.dat
+advr-progs.dat
+**/progdefs.h
+**/files.dat
+**/*.log
+**/qc_highlight.xml

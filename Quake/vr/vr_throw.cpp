@@ -1,0 +1,418 @@
+// vr_throw.cpp -- see vr_throw.hpp, and docs/vr-port/THROWING.md for the research behind it.
+//
+// Why not the hand's current velocity: a throw is released by opening the hand, which lags the
+// moment of release by tens of milliseconds, and the hand is already slowing down by then. The
+// old engine averaged the last 15 frames, which lagged even more (and depended on the frame
+// rate): throws came out weak and aimed where the hand was going several frames earlier.
+//
+// Half-Life: Alyx's approach: the release velocity is the controller's
+// own velocity where it was fastest in a window around the moment of release, averaged over a
+// few samples around that peak to reject noise. It is computed once, when the hand lets go, from
+// samples timed on the runtime's clock, so neither the network rate nor the time the release
+// takes to arrive moves the window. The held object's centre sits vr_throw_lever_arm metres along
+// the hand: a clear wrist flick (above vr_throw_ang_threshold) adds some of its spin's velocity
+// there. The samples are the controller's own (its grip's velocity, the lever along a fixed frame on
+// it: hands::throwFrame), so the hand calibration doesn't change a throw; vr_throw_pitch tilts it.
+// The release itself (filterGrips) comes from the analog grip easing off during a throw, earlier
+// than the runtime's grip button.
+
+#include "vr_throw.hpp"
+#include "vr_cvars.hpp"
+#include "vr_engine.hpp"
+#include "vr_units.hpp"
+
+#include "Zancle/Container/Array.hpp"
+#include "Zancle/Math/Abs.hpp"
+#include "Zancle/Math/Atan2.hpp"
+#include "Zancle/Math/Clamp.hpp"
+#include "Zancle/Math/Cos.hpp"
+#include "Zancle/Math/MinMax.hpp"
+#include "Zancle/Math/Sin.hpp"
+#include "vr_zancle.hpp"
+
+
+namespace qvr::throwing
+{
+namespace
+{
+
+struct Sample
+{
+    double time{0.0};
+    glm::vec3 pos{0.f};    // world units
+    glm::vec3 vel{0.f};    // controller point
+    glm::vec3 angVel{0.f};
+    glm::vec3 forward{1.f, 0.f, 0.f};
+};
+
+// A third of a second at 144 Hz.
+constexpr int capacity = 128;
+
+struct History
+{
+    za::Array<Sample, capacity> samples;
+    int count{0};
+    int next{0};
+
+    // i = 0 is the newest sample.
+    [[nodiscard]] const Sample& at(int i) const
+    {
+        return samples[(next - 1 - i + capacity * 2) % capacity];
+    }
+};
+
+History histories[2];
+History bothHistory; // estimateBothAt's samples (scratch: 7 kB, off the stack)
+
+// The peak of a quadratic fitted (least squares) to the speeds within peakFit seconds of `peakTime`
+// (the fastest sample, `bestSpeed`), kept within 20% of it; 0 when it doesn't fit (fewer than three
+// samples, or not a peak).
+constexpr double peakFit = 0.03;
+
+[[nodiscard]] float peakSpeedFit(const History& h, double peakTime, float bestSpeed)
+{
+    // Sums for s = a + b x + c x^2, x in seconds from the peak sample.
+    double sx[5]{}, sy[3]{};
+    int n = 0;
+    for(int i = 0; i < h.count; i++)
+    {
+        const double x = h.at(i).time - peakTime;
+        if(za::abs(x) > peakFit)
+        {
+            continue;
+        }
+        const double y = glm::length(h.at(i).vel);
+        double p = 1.0;
+        for(int k = 0; k < 5; k++)
+        {
+            sx[k] += p;
+            if(k < 3)
+            {
+                sy[k] += p * y;
+            }
+            p *= x;
+        }
+        n++;
+    }
+    if(n < 3)
+    {
+        return 0.f;
+    }
+
+    // The normal equations (3x3), by Cramer's rule.
+    const double m[3][3] = {{sx[0], sx[1], sx[2]}, {sx[1], sx[2], sx[3]}, {sx[2], sx[3], sx[4]}};
+    const auto det3 = [](const double a[3][3]) {
+        return a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) +
+               a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]);
+    };
+    const double d = det3(m);
+    if(za::abs(d) < 1e-18)
+    {
+        return 0.f;
+    }
+    double coef[3];
+    for(int c = 0; c < 3; c++)
+    {
+        double mc[3][3];
+        for(int r = 0; r < 3; r++)
+        {
+            for(int k = 0; k < 3; k++)
+            {
+                mc[r][k] = k == c ? sy[r] : m[r][k];
+            }
+        }
+        coef[c] = det3(mc) / d;
+    }
+    const double a = coef[0], b = coef[1], c = coef[2];
+    if(c >= 0.0)
+    {
+        return 0.f; // not a peak
+    }
+    const double x = za::clamp(-b / (2.0 * c), -peakFit, peakFit);
+    const double top = a + b * x + c * x * x;
+    return static_cast<float>(za::clamp(top, 0.8 * bestSpeed, 1.2 * bestSpeed));
+}
+
+// vr_throw_pitch: `vel` tilted up (down if negative) by that many degrees, about the level line square to it, its speed
+// kept; not past straight up or down, and a throw with no level part (straight up or down) is left as it is.
+[[nodiscard]] glm::vec3 pitched(const glm::vec3& vel)
+{
+    const float level = glm::length(glm::vec2{vel.x, vel.y});
+    if(vr_throw_pitch.value == 0.f || level < 1e-4f)
+    {
+        return vel;
+    }
+    const float most = glm::radians(89.9f);
+    const float up = CLAMP(-most, za::atan2(vel.z, level) + glm::radians(vr_throw_pitch.value), most);
+    const float speed = glm::length(vel);
+    const glm::vec2 way = glm::vec2{vel.x, vel.y} / level;
+    return glm::vec3{way * (speed * za::cos(up)), speed * za::sin(up)};
+}
+
+// The peak of the controller's speed around the release.
+// `lever`: metres along the hand's forward to the held object's centre (vr_throw_lever_arm): a clear wrist flick adds
+// its spin's velocity there (none for two hands: their samples are the object's own). `wrist`: the estimate's flick, the
+// part of it the hand's turn gives (none for two hands).
+[[nodiscard]] Estimate releasePeak(const History& h, double releaseTime, float leverArm, bool wrist)
+{
+    const double from = releaseTime - za::max(vr_throw_window.value, 0.f);
+    const double to = releaseTime + za::max(vr_throw_lookahead.value, 0.f);
+    const double span = za::max(vr_throw_peak_span.value, 0.f);
+
+    int best = -1;
+    float bestSpeed = -1.f;
+    for(int i = 0; i < h.count; i++)
+    {
+        const Sample& s = h.at(i);
+        if(s.time < from || s.time > to)
+        {
+            continue;
+        }
+        if(const float speed = glm::length(s.vel); speed > bestSpeed)
+        {
+            bestSpeed = speed;
+            best = i;
+        }
+    }
+    if(best < 0)
+    {
+        best = 0; // nothing in the window (a very late release): the newest sample
+    }
+
+    // The velocity over the samples within the span of the peak, the (noisier) spin over twice it.
+    const Sample& peak = h.at(best);
+    glm::vec3 vel{0.f}, angVel{0.f};
+    int nVel = 0, nAng = 0;
+    for(int i = 0; i < h.count; i++)
+    {
+        const double dt = za::abs(h.at(i).time - peak.time);
+        if(dt <= span)
+        {
+            vel += h.at(i).vel;
+            nVel++;
+        }
+        if(dt <= span * 2.0)
+        {
+            angVel += h.at(i).angVel;
+            nAng++;
+        }
+    }
+    vel /= static_cast<float>(nVel);
+    angVel /= static_cast<float>(nAng);
+
+    // The speed at the true peak, between the samples: a quadratic fitted to the speeds within
+    // peakFit of the fastest sample. At a low frame rate the samples are far apart and the fastest
+    // one can be well off the peak (throws came out up to 8% slower at 45 fps than at 72).
+    if(const float fitted = peakSpeedFit(h, peak.time, bestSpeed); fitted > 0.f && glm::length(vel) > 1e-4f)
+    {
+        vel = glm::normalize(vel) * za::max(glm::length(vel), fitted);
+    }
+
+    // The direction from the samples leading up to the peak: at the peak itself an overarm throw
+    // is already curving down, and throws went lower than meant.
+    if(const float lookback = vr_throw_dir_lookback.value; lookback > 0.f)
+    {
+        glm::vec3 dir{0.f};
+        for(int i = 0; i < h.count; i++)
+        {
+            const Sample& s = h.at(i);
+            if(s.time <= peak.time && s.time >= peak.time - lookback)
+            {
+                dir += s.vel;
+            }
+        }
+        if(glm::length(dir) > 1e-4f && glm::length(vel) > 1e-4f)
+        {
+            vel = glm::normalize(dir) * glm::length(vel);
+        }
+    }
+
+    // The object's centre, and the velocity a clear wrist flick adds there.
+    const glm::vec3 lever = peak.forward * leverArm; // metres
+    glm::vec3 flick{0.f};
+    if(glm::length(angVel) > vr_throw_ang_threshold.value)
+    {
+        flick = glm::cross(angVel, lever) * vr_throw_ang_factor.value;
+        vel += flick;
+    }
+    // The part of it the hand's turn about the wrist gives (vr_throw_wrist_dist behind the controller's point): a heavy
+    // thing keeps less of it (weight::throwVelocity), the wrist being too weak to flick it. Not pitched (vr_throw_pitch
+    // turns the whole throw a little).
+    if(wrist)
+    {
+        flick += glm::cross(angVel, peak.forward * za::max(vr_throw_wrist_dist.value, 0.f));
+    }
+    else
+    {
+        flick = glm::vec3{0.f};
+    }
+
+    return {pitched(vel), angVel, flick, peak.pos + lever * units::metresToUnits(), peak.time};
+}
+
+// Grip state per hand, for the release detection.
+struct Grip
+{
+    bool held{false};
+    float peak{0.f};
+    double released{-1.0};
+};
+
+Grip grips[2];
+
+} // namespace
+
+void sample(int hand, double time, const glm::vec3& pos, const glm::vec3& vel, const glm::vec3& angVel,
+    const glm::vec3& forward)
+{
+    History& h = histories[hand];
+    const Sample s{time, pos, vel, angVel, forward};
+
+    if(h.count > 0 && h.at(0).time == time)
+    {
+        // Resampled within the same frame (the hands were recomputed): replace.
+        h.samples[(h.next - 1 + capacity) % capacity] = s;
+        return;
+    }
+
+    if(h.count > 0 && time < h.at(0).time)
+    {
+        h = History{}; // time went backwards (new map, demo, another runtime clock): start over
+    }
+
+    h.samples[h.next] = s;
+    h.next = (h.next + 1) % capacity;
+    h.count = za::min(h.count + 1, capacity);
+}
+
+Estimate estimate(int hand)
+{
+    return estimateAt(hand, latestTime(hand));
+}
+
+Estimate estimateAt(int hand, double releaseTime)
+{
+    const History& h = histories[hand];
+    if(h.count == 0)
+    {
+        return {};
+    }
+
+    return releasePeak(h, releaseTime, vr_throw_lever_arm.value, true);
+}
+
+Estimate estimateBothAt(double releaseTime, const glm::vec3& centre)
+{
+    // The hands' samples of the same frames, as the held object's: its centre's velocity (the middle's, and its spin
+    // about the middle) and its spin (the hands' own about the line between them, and the line's turn: a rigid
+    // body's). Not across a hand's gap (a frame one hand missed).
+    History& both = bothHistory;
+    both = History{};
+    const History &h0 = histories[0], &h1 = histories[1];
+    const float m2u = units::metresToUnits();
+    int j = h1.count - 1;
+    for(int i = h0.count - 1; i >= 0; i--) // oldest first
+    {
+        const Sample& a = h0.at(i);
+        while(j >= 0 && h1.at(j).time < a.time)
+        {
+            j--;
+        }
+        if(j < 0 || h1.at(j).time != a.time)
+        {
+            continue;
+        }
+        const Sample& b = h1.at(j);
+        const glm::vec3 line = (b.pos - a.pos) / m2u; // metres, from the off hand to the main
+        const float d = glm::length(line);
+        glm::vec3 spin = (a.angVel + b.angVel) * 0.5f;
+        if(d > 0.03f)
+        {
+            const glm::vec3 u = line / d;
+            const glm::vec3 dv = b.vel - a.vel;
+            const glm::vec3 across = dv - u * glm::dot(dv, u);
+            const glm::vec3 rigid = u * glm::dot(spin, u) + glm::cross(u, across) / d;
+            spin = glm::mix(spin, rigid, glm::clamp((d - 0.03f) / 0.03f, 0.f, 1.f));
+        }
+        Sample s;
+        s.time = a.time;
+        s.pos = (a.pos + b.pos) * 0.5f + centre * m2u;
+        s.vel = (a.vel + b.vel) * 0.5f + glm::cross(spin, centre);
+        s.angVel = spin;
+        s.forward = (a.forward + b.forward) * 0.5f;
+        both.samples[both.next] = s;
+        both.next = (both.next + 1) % capacity;
+        both.count = za::min(both.count + 1, capacity);
+    }
+    if(both.count == 0)
+    {
+        return {};
+    }
+    return releasePeak(both, releaseTime, 0.f, false);
+}
+
+double latestTime(int hand)
+{
+    const History& h = histories[hand];
+    return h.count > 0 ? h.at(0).time : 0.0;
+}
+
+void filterGrips(TrackingState& t)
+{
+    for(int hand = 0; hand < HAND_COUNT; hand++)
+    {
+        HandInput& in = t.input.hands[hand];
+        Grip& g = grips[hand];
+        const double now = t.time >= 0.0 ? t.time : realtime;
+        const bool wasHeld = g.held;
+
+        // Controllers whose grip is only a button report no value while it is pressed.
+        const bool analog = in.gripValue > 0.01f || !in.grip;
+        if(!vr_throw_release.value || !analog)
+        {
+            g.held = in.grip;
+        }
+        else if(!g.held)
+        {
+            g.held = in.gripValue >= vr_throw_grab_press.value;
+            g.peak = in.gripValue;
+        }
+        else
+        {
+            g.peak = za::max(g.peak, in.gripValue);
+
+            const Pose& pose = t.hands[hand];
+            const bool throwing = pose.velocityValid && glm::length(pose.linearVelocity) > vr_throw_release_speed.value;
+            const bool eased = in.gripValue < g.peak * (1.f - CLAMP(0.f, vr_throw_release_drop.value, 1.f));
+            if(in.gripValue < vr_throw_release_floor.value || (throwing && eased))
+            {
+                g.held = false;
+            }
+        }
+
+        if(wasHeld && !g.held)
+        {
+            g.released = now;
+        }
+        in.grip = g.held;
+    }
+}
+
+double releaseTime(int hand)
+{
+    return grips[hand].released;
+}
+
+void reset()
+{
+    for(History& h : histories)
+    {
+        h = History{};
+    }
+    for(Grip& g : grips)
+    {
+        g = Grip{};
+    }
+}
+
+} // namespace qvr::throwing

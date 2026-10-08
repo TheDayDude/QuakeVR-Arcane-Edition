@@ -1,0 +1,27 @@
+# Quake VR's build output and the files the game writes in its folder
+/progs.dat
+/progs.lno
+/*.cfg
+!/quakevr.cfg
+!/default.cfg
+!/vr_bindings.cfg
+!/vr_defaults.cfg
+/*.sav
+/*.dem
+/autosave/
+/screenshots/
+/notes/
+/motions/*
+!/motions/expect.cfg
+!/motions/suspects.cfg
+/profile/
+/sound_tests/
+/cache/
+/bodycal/
+/eyeshots/
+/relit/
+/envmap.tga
+/checklist_ticks.txt
+/textures_ext/
+/retro_overrides.txt
+/imagehash.txt

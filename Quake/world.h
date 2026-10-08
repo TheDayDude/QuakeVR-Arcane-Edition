@@ -1,0 +1,96 @@
+/*
+Copyright (C) 1996-2001 Id Software, Inc.
+Copyright (C) 2002-2009 John Fitzgibbons and others
+Copyright (C) 2010-2014 QuakeSpasm developers
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+
+*/
+
+#ifndef _QUAKE_WORLD_H
+#define _QUAKE_WORLD_H
+
+typedef struct
+{
+	vec3_t	normal;
+	float	dist;
+} plane_t;
+
+typedef struct
+{
+	qboolean	allsolid;	// if true, plane is not valid
+	qboolean	startsolid;	// if true, the initial point was in a solid area
+	qboolean	inopen, inwater;
+	float	fraction;		// time completed, 1.0 = didn't hit anything
+	vec3_t	endpos;			// final position
+	plane_t	plane;			// surface normal at impact
+	edict_t	*ent;			// entity the surface is on
+} trace_t;
+
+
+#define	MOVE_NORMAL		0
+#define	MOVE_NOMONSTERS	1
+#define	MOVE_MISSILE	2
+#define	MOVE_HITGIBS	256	// QVR, added to a type: also hit gibs and heads (touchable non-solids that take damage), as missiles do
+#define	MOVE_HITMODEL	512	// QVR, added to a type: monsters' models, not their boxes (vr_hit_precise; vr/vr_hitmodel.cpp)
+#define	MOVE_HITMODEL_CLASS_SHIFT	10	// QVR: and its class (the tolerance) in the two bits above: guns, grapple, melee, thrown
+#define	MOVE_HITMODEL_CLASS	(3 << MOVE_HITMODEL_CLASS_SHIFT)
+#define	MOVE_PORTALS	4096	// QVR, traceline: on through the slipgates it crosses (vr/vr_portals.cpp, vr_portals_walk)
+#define	MOVE_HITMODEL_REACH	96	// QVR: units a model is found out of its box (an ogre's chainsaw: 33; a walking monster drawn behind it: a dog's step, 64)
+
+
+void SV_ClearWorld (void);
+// called after the world model has been loaded, before linking any entities
+
+void SV_UnlinkEdict (edict_t *ent);
+// call before removing an entity, and before trying to move one,
+// so it doesn't clip against itself
+// flags ent->v.modified
+
+void SV_LinkEdict (edict_t *ent, qboolean touch_triggers);
+// Needs to be called any time an entity changes origin, mins, maxs, or solid
+// flags ent->v.modified
+// sets ent->v.absmin and ent->v.absmax
+// if touchtriggers, calls prog functions for the intersected triggers
+
+int SV_PointContents (vec3_t p);
+int SV_TruePointContents (vec3_t p);
+// returns the CONTENTS_* value from the world at the given point.
+// does not check any entities at all
+// the non-true version remaps the water current contents to content_water
+
+edict_t	*SV_TestEntityPosition (edict_t *ent);
+
+trace_t SV_Move (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, int type, edict_t *passedict);
+// mins and maxs are reletive
+
+// if the entire move stays in a solid volume, trace.allsolid will be set
+
+// if the starting point is in a solid, it will be allowed to move out
+// to an open area
+
+// nomonsters is used for line of sight or edge testing, where mosnters
+// shouldn't be considered solid objects
+
+// passedict is explicitly excluded from clipping checks (normally NULL)
+
+trace_t SV_MovePortalHalf (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, int type,
+    edict_t *passedict, const float plane[4]);
+
+qboolean SV_RecursiveHullCheck (hull_t *hull, int num, float p1f, float p2f, vec3_t p1, vec3_t p2, trace_t *trace);
+
+#endif	/* _QUAKE_WORLD_H */
+

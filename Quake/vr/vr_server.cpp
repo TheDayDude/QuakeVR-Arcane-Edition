@@ -1,0 +1,1127 @@
+// vr_server.cpp -- server side of the Quake VR protocol extensions (see vr_protocol.hpp).
+
+#include "vr_fatigue.hpp"
+#include "vr_axestick.hpp"
+#include "vr_box3d.hpp"
+#include "vr_hitmodel.hpp"
+#include "vr_climb.hpp"
+#include "vr_cvars.hpp"
+#include "vr_ledges.hpp"
+#include "vr_move.hpp"
+#include "vr_motion.hpp"
+#include "vr_engine.hpp"
+#include "vr_progs.hpp"
+#include "vr_protocol.hpp"
+#include "vr_server.hpp"
+#include "vr_worldtext.hpp"
+#include "vr_weapons.hpp"
+
+#include "Zancle/Base/GetArraySize.hpp"
+#include "Zancle/Container/Vector.hpp"
+#include "Zancle/Vocabulary/Optional.hpp"
+
+
+using namespace qvr;
+using namespace qvr::progs;
+using namespace qvr::protocol;
+
+namespace
+{
+
+// Per client: the VR bits in effect during the previous server frame, and those received
+// in moves this frame (current state only; see VrBits0 in vr_client.cpp).
+struct ClientBits
+{
+    int previousFrame{0};
+    int received{0};
+};
+
+za::Vector<ClientBits> clientBits;
+
+// Per client: the latest VR move (see server::clientMove).
+struct ClientMove
+{
+    bool valid{false};
+    VrMove move;
+    glm::vec3 base{0.f}; // the player origin the hand fields are placed from (see rebaseHands)
+};
+za::Vector<ClientMove> clientMoves;
+
+[[nodiscard]] ClientMove* clientMoveOf(edict_t* player)
+{
+    const int client = NUM_FOR_EDICT(player) - 1;
+    if(client < 0 || client >= svs.maxclients || client >= static_cast<int>(clientMoves.size()))
+    {
+        return nullptr;
+    }
+    ClientMove& m = clientMoves[client];
+    return m.valid ? &m : nullptr;
+}
+
+// The reliable message buffer of the client `player` is, or nullptr for an inactive one.
+[[nodiscard]] sizebuf_t* clientMessage(edict_t* player)
+{
+    const int client = NUM_FOR_EDICT(player) - 1;
+    if(client < 0 || client >= svs.maxclients || !svs.clients[client].active)
+    {
+        return nullptr;
+    }
+    return &svs.clients[client].message;
+}
+
+// vrbits0 pairs a "current" bit with the "previous" bit just above it.
+constexpr int currentBitsMask = (1 << 1) | (1 << 3) | (1 << 6) | (1 << 8) | (1 << 10) | (1 << 12);
+
+[[nodiscard]] int withPreviousBits(int current, int previousFrame)
+{
+    return current | ((previousFrame & currentBitsMask) << 1);
+}
+
+// Precaches the clients already know about (from serverinfo or a previous broadcast).
+int broadcastModelCount = 0;
+int broadcastSoundCount = 0;
+
+template <int N>
+[[nodiscard]] int precacheCount(const char* const (&list)[N])
+{
+    int count = 0;
+    while(count < N && list[count])
+    {
+        count++;
+    }
+    return count;
+}
+
+template <int N>
+void broadcastNewPrecaches(const char* const (&list)[N], int& known, int subcmd)
+{
+    const int count = precacheCount(list);
+    for(; known < count; known++)
+    {
+        MSG_WriteByte(&sv.reliable_datagram, svc_quakevr);
+        MSG_WriteByte(&sv.reliable_datagram, subcmd);
+        MSG_WriteShort(&sv.reliable_datagram, known);
+        MSG_WriteString(&sv.reliable_datagram, list[known]);
+    }
+}
+
+[[nodiscard]] bool vrProtocol()
+{
+    return (sv.protocolflags & PRFL_QUAKEVR) != 0;
+}
+
+[[nodiscard]] int modelIndexOfField(edict_t* ent, int ofs)
+{
+    if(ofs < 0 || !fieldInt(ent, ofs))
+    {
+        return 0;
+    }
+
+    return SV_ModelIndex(PR_GetString(fieldInt(ent, ofs)));
+}
+
+// ----------------------------------------------------------------------------
+// The weapons' records (QC vr_weaponinst.qc): each weapon is an entity of its own (no model) with its id (.wi_uid) and
+// its magazine (.wi_clip), which the hand, the holster or the prop that has the weapon refers to (.weaponinst,
+// .weaponinst2, .holsterweaponinst0..5). Moving a weapon moves the reference; a record nothing refers to at the end of a
+// frame (the weapon gone: discarded, replaced, its prop removed) is freed here, and the clients told its id is gone
+// (QVR_SVC_WEAPONGONE: its blood forgotten, vr_wounds.cpp).
+
+za::Vector<unsigned char> instReferenced; // per edict, this frame's sweep: something refers to it
+
+// The record `ent`'s field `refOfs` refers to, or null.
+[[nodiscard]] edict_t* weaponInst(edict_t* ent, int refOfs)
+{
+    if(refOfs < 0 || fields().wi_uid < 0)
+    {
+        return nullptr;
+    }
+    const int v = fieldInt(ent, refOfs);
+    if(v <= 0)
+    {
+        return nullptr;
+    }
+    edict_t* r = PROG_TO_EDICT(v);
+    return r->free ? nullptr : r;
+}
+
+[[nodiscard]] int weaponUid(edict_t* inst)
+{
+    return inst ? static_cast<int>(fieldFloat(inst, fields().wi_uid)) : 0;
+}
+
+void sweepWeaponInsts()
+{
+    const FieldOffsets& f = fields();
+    if(!bindings().isVrProgs || f.wi_uid < 0 || f.weaponinst < 0 || !sv.active)
+    {
+        return;
+    }
+    const int refs[] = {f.weaponinst, f.weaponinst2, f.holsterweaponinst0, f.holsterweaponinst1, f.holsterweaponinst2,
+        f.holsterweaponinst3, f.holsterweaponinst4, f.holsterweaponinst5};
+    const int count = qcvm->num_edicts;
+    instReferenced.clear();
+    instReferenced.resize(static_cast<za::SizeT>(count), 0);
+    for(int i = 1; i < count; i++)
+    {
+        edict_t* e = EDICT_NUM(i);
+        if(e->free)
+        {
+            continue;
+        }
+        for(const int ofs : refs)
+        {
+            if(edict_t* r = weaponInst(e, ofs))
+            {
+                const int n = NUM_FOR_EDICT(r);
+                if(n > 0 && n < count)
+                {
+                    instReferenced[static_cast<za::SizeT>(n)] = 1;
+                }
+            }
+        }
+    }
+    for(int i = 1; i < count; i++)
+    {
+        edict_t* e = EDICT_NUM(i);
+        const float uid = e->free ? 0.f : fieldFloat(e, f.wi_uid);
+        if(uid <= 0.f || instReferenced[static_cast<za::SizeT>(i)])
+        {
+            continue;
+        }
+        Con_DPrintf("weapon #%d gone (its record %d freed: nothing has it)\n", static_cast<int>(uid), i);
+        ED_Free(e);
+        if(vrProtocol() && sv.reliable_datagram.cursize + 6 <= sv.reliable_datagram.maxsize)
+        {
+            MSG_WriteByte(&sv.reliable_datagram, svc_quakevr);
+            MSG_WriteByte(&sv.reliable_datagram, QVR_SVC_WEAPONGONE);
+            MSG_WriteLong(&sv.reliable_datagram, static_cast<int>(uid));
+        }
+    }
+}
+
+// The unreliable broadcast's room (sv.datagram; ROUND21.md, "A full broadcast drops whole messages").
+//
+// sv.datagram (particles, sounds, temp entities, QuakeC's MSG_BROADCAST writes, the VR events) goes to each client
+// after its entities. The engine's writers check its room and skip a message that does not fit; QuakeC's writes could
+// not, and a frame of many shotgun pellets (TE_GUNSHOT each) overflowed it into a Host_Error. A message cut short
+// garbles the rest of the stream, so its message boundaries are kept: the start of each QuakeC run from the engine (not
+// one nested in a builtin), each point where QuakeC writes after the engine has (the engine writes whole messages, and
+// only between QuakeC's: one in the middle of QuakeC's would garble it anyway), and the end of each temp entity QuakeC
+// writes from a boundary (their lengths are the client's, CL_ParseTEnt; a run of TE_GUNSHOTs has no other boundaries;
+// another message QuakeC writes leaves the next boundary to the others). A QuakeC write that does not fit
+// takes the buffer back to the last boundary, and QuakeC's broadcast writes then go nowhere until the next one. A
+// client's datagram takes the longest part of it that ends on a boundary and fits after its entities (it was all of it
+// or none).
+struct BroadcastRoom
+{
+    static constexpr int maxMarks = 1024; // full: every other one is dropped (spread evenly, the last kept)
+
+    int marks[maxMarks]; // ascending boundaries past 0 (0 and the end at sending are boundaries too)
+    int numMarks;
+    int qcEnd;  // where QuakeC's last write ended (-1: none since the last boundary QuakeC's run made)
+    int dropAt; // >= 0: QuakeC's writes go to the sink while sv.datagram stays this long (-1: they go to it)
+    int msgAt;  // where QuakeC's message being written began, at a boundary (-1: not known)
+
+    sizebuf_t sink; // a dropped write's bytes (cleared before each)
+    byte sinkBuf[MAX_DATAGRAM];
+
+    // vr_debug_net: this frame's
+    int qcDropped; // bytes QuakeC wrote that went nowhere (and those taken back)
+    int qcDrops;   // times QuakeC's writes overflowed
+    int unsent;    // bytes a client's datagram had no room for (each client's)
+    int entities;  // the most a client's datagram had before it (svc_time, the client's data, the entities)
+    // ... and the most in the second
+    double since;
+    int peakSize, peakReliable, peakEntities;
+};
+
+BroadcastRoom broadcastRoom{};
+
+// The length of the temp entity QuakeC began at `at`, as CL_ParseTEnt reads it (0: not one, not known, or its type not
+// written yet).
+[[nodiscard]] int tempEntityLength(int at)
+{
+    if(sv.datagram.cursize - at < 2 || sv.datagram.data[at] != svc_temp_entity)
+    {
+        return 0;
+    }
+    int coord = 0; // a coordinate's bytes in the protocol
+    {
+        byte bytes[8];
+        sizebuf_t probe{};
+        probe.data = bytes;
+        probe.maxsize = sizeof(bytes);
+        MSG_WriteCoord(&probe, 0.f, sv.protocolflags);
+        coord = probe.cursize;
+    }
+    switch(sv.datagram.data[at + 1])
+    {
+        case TE_SPIKE:
+        case TE_SUPERSPIKE:
+        case TE_GUNSHOT:
+        case TE_EXPLOSION:
+        case TE_TAREXPLOSION:
+        case TE_WIZSPIKE:
+        case TE_KNIGHTSPIKE:
+        case TE_LAVASPLASH:
+        case TE_TELEPORT: return 2 + 3 * coord;              // where
+        case TE_EXPLOSION2: return 2 + 3 * coord + 2;        // where, the colours
+        case TE_LIGHTNING1:
+        case TE_LIGHTNING2:
+        case TE_LIGHTNING3:
+        case TE_BEAM: return 2 + 2 + 6 * coord;              // the entity, from, to
+        default: return 0;
+    }
+}
+
+void broadcastMark(int at)
+{
+    BroadcastRoom& b = broadcastRoom;
+    b.msgAt = at;
+    if(at <= 0 || (b.numMarks > 0 && b.marks[b.numMarks - 1] >= at))
+    {
+        return;
+    }
+    if(b.numMarks == BroadcastRoom::maxMarks)
+    {
+        for(int i = 0; i < BroadcastRoom::maxMarks / 2; i++)
+        {
+            b.marks[i] = b.marks[2 * i + 1];
+        }
+        b.numMarks = BroadcastRoom::maxMarks / 2;
+    }
+    b.marks[b.numMarks++] = at;
+}
+
+} // namespace
+
+// SV_ClearDatagram: the frame's broadcast starts empty (vr_debug_net: the last frame's numbers).
+extern "C" void VR_BroadcastClear()
+{
+    BroadcastRoom& b = broadcastRoom;
+    if(qvr::vr_debug_net.value && (b.qcDrops || b.unsent))
+    {
+        Con_Printf("vr_debug_net: broadcast full (%d bytes, %d boundaries): QuakeC's writes dropped %d times, %d bytes; "
+                   "%d not sent (%d before it)\n",
+            sv.datagram.cursize, b.numMarks, b.qcDrops, b.qcDropped, b.unsent, b.entities);
+    }
+    if(qvr::vr_debug_net.value >= 2.f)
+    {
+        b.peakSize = q_max(b.peakSize, sv.datagram.cursize);
+        b.peakEntities = q_max(b.peakEntities, b.entities);
+        if(realtime - b.since >= 1.0)
+        {
+            Con_Printf("vr_debug_net: the second's most: broadcast %d, reliable %d, a client's datagram before it %d (of %d)\n",
+                b.peakSize, b.peakReliable, b.peakEntities, MAX_DATAGRAM);
+            b.since = realtime;
+            b.peakSize = b.peakReliable = b.peakEntities = 0;
+        }
+    }
+
+    b.numMarks = 0;
+    b.qcEnd = -1;
+    b.dropAt = -1;
+    b.msgAt = 0;
+    b.qcDropped = b.qcDrops = b.unsent = b.entities = 0;
+    SZ_Clear(&sv.datagram);
+}
+
+// PR_ExecuteProgram, a run of the server's QuakeC from the engine (not nested in a builtin): QuakeC is between messages.
+extern "C" void VR_BroadcastQCRun()
+{
+    broadcastRoom.dropAt = -1;
+    broadcastMark(sv.datagram.cursize);
+}
+
+// WriteDest's MSG_BROADCAST (pr_cmds.c, vr_builtins.cpp): where a QuakeC write of at most `len` bytes goes, sv.datagram
+// or the sink. VR_BroadcastWritten after it.
+extern "C" sizebuf_t* VR_BroadcastDest(int len)
+{
+    BroadcastRoom& b = broadcastRoom;
+    sizebuf_t& dg = sv.datagram;
+    if(b.dropAt >= 0)
+    {
+        if(dg.cursize == b.dropAt)
+        {
+            b.qcDropped += len;
+            b.sink.data = b.sinkBuf;
+            b.sink.maxsize = sizeof(b.sinkBuf);
+            SZ_Clear(&b.sink);
+            return &b.sink;
+        }
+        b.dropAt = -1; // the engine wrote since: QuakeC is between messages
+    }
+    if(dg.cursize != b.qcEnd)
+    {
+        broadcastMark(dg.cursize); // the engine wrote since QuakeC's last write (or this run's first)
+    }
+    if(dg.cursize + len > dg.maxsize)
+    {
+        const int back = b.numMarks > 0 ? b.marks[b.numMarks - 1] : 0;
+        b.qcDropped += dg.cursize - back + len;
+        b.qcDrops++;
+        dg.cursize = back;
+        b.dropAt = back;
+        b.qcEnd = -1;
+        b.msgAt = -1;
+        b.sink.data = b.sinkBuf;
+        b.sink.maxsize = sizeof(b.sinkBuf);
+        SZ_Clear(&b.sink);
+        return &b.sink;
+    }
+    return &dg;
+}
+
+extern "C" void VR_BroadcastWritten(sizebuf_t* dest)
+{
+    BroadcastRoom& b = broadcastRoom;
+    if(dest != &sv.datagram)
+    {
+        return;
+    }
+    b.qcEnd = sv.datagram.cursize;
+    if(b.msgAt >= 0)
+    {
+        const int len = tempEntityLength(b.msgAt);
+        if(len > 0 && b.qcEnd - b.msgAt == len)
+        {
+            broadcastMark(b.qcEnd); // a whole temp entity: the next message begins here
+        }
+        else if((len > 0 && b.qcEnd - b.msgAt > len) || (len == 0 && b.qcEnd - b.msgAt >= 2))
+        {
+            b.msgAt = -1; // not a temp entity known (or not as known): the next boundary is the others'
+        }
+    }
+}
+
+extern "C" void VR_BroadcastMessageEnd()
+{
+    broadcastMark(sv.datagram.cursize);
+}
+
+// SV_SendClientDatagram: how much of sv.datagram goes into a client's datagram with `room` bytes left (`before`: its
+// bytes so far): all of it, or the longest part ending on a boundary.
+extern "C" int VR_BroadcastSendable(int before, int room)
+{
+    BroadcastRoom& b = broadcastRoom;
+    const int size = sv.datagram.cursize;
+    b.entities = q_max(b.entities, before);
+    if(size <= room)
+    {
+        return size;
+    }
+    // the last mark <= room
+    int lo = 0;
+    int hi = b.numMarks; // marks[lo..hi) unsearched; the answer is marks[lo - 1]
+    while(lo < hi)
+    {
+        const int mid = (lo + hi) / 2;
+        if(b.marks[mid] <= room)
+        {
+            lo = mid + 1;
+        }
+        else
+        {
+            hi = mid;
+        }
+    }
+    const int sendable = lo > 0 ? b.marks[lo - 1] : 0;
+    b.unsent += size - sendable;
+    return sendable;
+}
+
+// SV_SendClientMessages, before sv.reliable_datagram is copied to the clients (vr_debug_net 2).
+extern "C" void VR_ReliableSent()
+{
+    broadcastRoom.peakReliable = q_max(broadcastRoom.peakReliable, sv.reliable_datagram.cursize);
+}
+
+extern "C" void VR_ReadMoveExtras(client_t* client)
+{
+    if(!vrProtocol())
+    {
+        return;
+    }
+
+    const za::Optional<VrMove> read = readVrMove();
+    const int clientNum = static_cast<int>(client - svs.clients);
+    if(!read)
+    {
+        Con_DPrintf("VR: client %d sent a move that is not finite: dropped\n", clientNum);
+        return;
+    }
+    const VrMove& move = *read;
+
+    edict_t* ent = client->edict;
+    if(clientNum >= static_cast<int>(clientMoves.size()))
+    {
+        clientMoves.resize(clientNum + 1);
+    }
+    clientMoves[clientNum] = {true, move, move.origin};
+
+    const FieldOffsets& f = fields();
+
+    setFieldVec(ent, f.v_viewangle, move.headAngles);
+    setFieldFloat(ent, f.vryaw, move.vrYaw);
+
+    const auto setHand = [&](const VrHandMove& hand, int pos, int rot, int vel,
+                             int throwVel, int velMag, int angVel, int throwPos, int throwAge, int throwFlick) {
+        setFieldVec(ent, pos, hand.pos);
+        setFieldVec(ent, rot, hand.rot);
+        setFieldVec(ent, vel, hand.vel);
+        setFieldVec(ent, throwVel, hand.throwVel);
+        setFieldFloat(ent, velMag, hand.velMag);
+        setFieldVec(ent, angVel, hand.angVel);
+        setFieldVec(ent, throwPos, hand.throwPos);
+        setFieldFloat(ent, throwAge, hand.throwAge);
+        setFieldVec(ent, throwFlick, hand.throwFlick);
+    };
+
+    setHand(move.hands[0], f.offhandpos, f.offhandrot, f.offhandvel,
+        f.offhandthrowvel, f.offhandvelmag, f.offhandavel, f.offhandthrowpos, f.offhandthrowage, f.offhandthrowflick);
+    setHand(move.hands[1], f.handpos, f.handrot, f.handvel, f.handthrowvel,
+        f.handvelmag, f.handavel, f.handthrowpos, f.handthrowage, f.handthrowflick);
+
+    setFieldVec(ent, f.headvel, move.headVel);
+    setFieldVec(ent, f.headpos, move.headPos);
+    setFieldVec(ent, f.offmuzzlepos, move.muzzlePos[0]);
+    setFieldVec(ent, f.muzzlepos, move.muzzlePos[1]);
+    setFieldVec(ent, f.offshotrot, move.shotRot[0]);
+    setFieldVec(ent, f.shotrot, move.shotRot[1]);
+    if(clientNum >= static_cast<int>(clientBits.size()))
+    {
+        clientBits.resize(clientNum + 1);
+    }
+    ClientBits& bits = clientBits[clientNum];
+    bits.received = move.vrBits0;
+    // Bit 14 (QC QVR_VRBITS0_HANDSTRACKED): this client's hands come from real tracking, so the QC
+    // can tell a VR player from a flat-screen one (and from a bot).
+    const int tracked = (move.buttons & QVR_BUTTON_HANDSTRACKED) ? (1 << 14) : 0;
+    // Bits 17 and 18 (QVR_VRBITS0_OFFHAND_BUSY, _MAINHAND_BUSY): the hand holds the flashlight.
+    const int busy = ((move.buttons & QVR_BUTTON_OFFHANDBUSY) ? (1 << 17) : 0) |
+                     ((move.buttons & QVR_BUTTON_MAINHANDBUSY) ? (1 << 18) : 0);
+    // Bits 19 and 20 (QVR_VRBITS0_OFFHAND_SECONDARY, _MAINHAND_SECONDARY): the hand's B/Y held (the grapple's reel).
+    const int secondary = ((move.buttons & QVR_BUTTON_OFFHANDSECONDARY) ? (1 << 19) : 0) |
+                          ((move.buttons & QVR_BUTTON_MAINHANDSECONDARY) ? (1 << 20) : 0);
+    // Bits 21 and 22 (QVR_VRBITS0_OFFHAND_PRIMARY, _MAINHAND_PRIMARY): the hand's A/X held (the grapple's unreel).
+    const int primary = ((move.buttons & QVR_BUTTON_OFFHANDPRIMARY) ? (1 << 21) : 0) |
+                        ((move.buttons & QVR_BUTTON_MAINHANDPRIMARY) ? (1 << 22) : 0);
+    setFieldFloat(ent, f.vrbits0,
+        static_cast<float>(withPreviousBits(bits.received, bits.previousFrame) | tracked | busy | secondary | primary));
+    setFieldVec(ent, f.teleport_target, move.teleportTarget);
+    setFieldFloat(ent, f.offhand_hotspot, move.hotspots[0]);
+    setFieldFloat(ent, f.sawcord, move.sawCord);
+    setFieldFloat(ent, f.handdrop, move.handDrop);
+    setFieldFloat(ent, f.mainhand_hotspot, move.hotspots[1]);
+    setFieldVec(ent, f.roomscalemove, move.roomscaleMove);
+    setFieldFloat(ent, f.button3, (move.buttons & QVR_BUTTON_OFFHANDATTACK) ? 1.f : 0.f);
+}
+
+// The status bar highlights the active weapon by its item bit; with the Quake VR progs .weapon
+// holds a weapon ID (QC WID_*). Weapons without a classic slot highlight nothing.
+extern "C" int VR_ActiveWeaponStat(edict_t* ent)
+{
+    if(!bindings().isVrProgs || bindings().isAdVrProgs)
+    {
+        return static_cast<int>(ent->v.weapon);
+    }
+
+    static constexpr int itemBits[] = {
+        0,                   // fist
+        0,                   // grappling hook
+        IT_AXE,              // axe
+        0,                   // Mjolnir
+        IT_SHOTGUN,          // shotgun
+        IT_SUPER_SHOTGUN,    // super shotgun
+        IT_NAILGUN,          // nailgun
+        IT_SUPER_NAILGUN,    // super nailgun
+        IT_GRENADE_LAUNCHER, // grenade launcher
+        IT_GRENADE_LAUNCHER, // proximity gun
+        IT_ROCKET_LAUNCHER,  // rocket launcher
+        IT_LIGHTNING,        // lightning gun
+        0,                   // laser cannon
+    };
+    const int wid = static_cast<int>(ent->v.weapon);
+    return wid >= 0 && wid < static_cast<int>(za::getArraySize(itemBits)) ? itemBits[wid] : 0;
+}
+
+// AD uses original inventory bits internally; only the VR wire stats use WID_*.
+static float adWeaponId(float bits)
+{
+    switch (static_cast<int>(bits))
+    {
+        case IT_AXE: return 2.f;
+        case IT_SHOTGUN: return 4.f;
+        case IT_SUPER_SHOTGUN: return 5.f;
+        case IT_NAILGUN: return 6.f;
+        case IT_SUPER_NAILGUN: return 7.f;
+        case IT_GRENADE_LAUNCHER: return 8.f;
+        case IT_ROCKET_LAUNCHER: return 10.f;
+        case IT_LIGHTNING: return 11.f;
+        default: return 0.f;
+    }
+}
+
+extern "C" void VR_CalcStats(client_t* client, int* statsi, float* statsf)
+{
+    climb::calcStats(client->edict, statsi); // any progs
+    if(!bindings().isVrProgs)
+    {
+        return;
+    }
+
+    edict_t* ent = client->edict;
+    const FieldOffsets& f = fields();
+
+    const auto stat = [&](int index, int ofs) { statsf[index] = fieldFloatOr(ent, ofs, 0.f); };
+    // A weapon's record (QC vr_weaponinst.qc), from the field referring to it: its magazine, its id.
+    const auto inst = [&](int refOfs) -> edict_t* { return weaponInst(ent, refOfs); };
+    const auto clip = [&](int refOfs) { edict_t* r = inst(refOfs); return r ? fieldFloatOr(r, f.wi_clip, 0.f) : 0.f; };
+
+    statsf[STAT_QVR_WEAPON] = bindings().isAdVrProgs ? adWeaponId(ent->v.weapon) : ent->v.weapon;
+
+    // The VR progs keep the main hand's ammo type (AID_*) in .currentammo; the classic status bar
+    // shows STAT_AMMO as a count.
+    statsf[STAT_AMMO] = bindings().isAdVrProgs ? ent->v.currentammo : fieldFloatOr(ent, f.ammocounter, ent->v.currentammo);
+
+    statsf[STAT_ACTIVEWEAPON] = static_cast<float>(VR_ActiveWeaponStat(ent));
+    stat(STAT_QVR_WEAPON2, f.weapon2);
+    if (bindings().isAdVrProgs) { statsf[STAT_QVR_WEAPON2] = adWeaponId(statsf[STAT_QVR_WEAPON2]); }
+    statsi[STAT_QVR_WEAPONMODEL2] = modelIndexOfField(ent, f.weaponmodel2);
+    stat(STAT_QVR_WEAPONFRAME2, f.weaponframe2);
+    stat(STAT_QVR_WEAPONFLAGS, f.weaponflags);
+    stat(STAT_QVR_WEAPONFLAGS2, f.weaponflags2);
+    stat(STAT_QVR_AMMO2, f.currentammo2);
+    stat(STAT_QVR_AMMOCOUNTER, f.ammocounter);
+    stat(STAT_QVR_AMMOCOUNTER2, f.ammocounter2);
+    statsf[STAT_QVR_WEAPONCLIP] = clip(f.weaponinst);
+    statsf[STAT_QVR_WEAPONCLIP2] = clip(f.weaponinst2);
+    statsi[STAT_QVR_WEAPONUID] = weaponUid(inst(f.weaponinst));
+    statsi[STAT_QVR_WEAPONUID2] = weaponUid(inst(f.weaponinst2));
+    stat(STAT_QVR_WEAPONCLIPSIZE, f.weaponclipsize);
+    stat(STAT_QVR_WEAPONCLIPSIZE2, f.weaponclipsize2);
+    stat(STAT_QVR_MELEE, f.vr_melee_hud);
+
+    const int holsterWeapon[numHolsters] = {f.holsterweapon0, f.holsterweapon1,
+        f.holsterweapon2, f.holsterweapon3, f.holsterweapon4, f.holsterweapon5};
+    const int holsterModel[numHolsters] = {f.holsterweaponmodel0,
+        f.holsterweaponmodel1, f.holsterweaponmodel2, f.holsterweaponmodel3,
+        f.holsterweaponmodel4, f.holsterweaponmodel5};
+    const int holsterFlags[numHolsters] = {f.holsterweaponflags0,
+        f.holsterweaponflags1, f.holsterweaponflags2, f.holsterweaponflags3,
+        f.holsterweaponflags4, f.holsterweaponflags5};
+    const int holsterInst[numHolsters] = {f.holsterweaponinst0, f.holsterweaponinst1,
+        f.holsterweaponinst2, f.holsterweaponinst3, f.holsterweaponinst4,
+        f.holsterweaponinst5};
+
+    // Force grab, per hand: what it points at (1), is locked on to (2), or pulls in flight (3).
+    const auto entityField = [&](edict_t* e, int ofs) -> edict_t* {
+        const int v = ofs >= 0 ? fieldInt(e, ofs) : 0;
+        return v ? PROG_TO_EDICT(v) : nullptr;
+    };
+    const auto forcegrab = [&](int targetOfs, int lockedOfs, int pulledOfs, float hand) {
+        if(edict_t* p = entityField(ent, pulledOfs); p && !p->free && fieldFloatOr(p, f.fg_state, 0.f) == 1.f &&
+                                                      entityField(p, f.fg_player) == ent &&
+                                                      fieldFloatOr(p, f.fg_hand, -1.f) == hand)
+        {
+            return NUM_FOR_EDICT(p) * 4 + 3;
+        }
+        if(edict_t* t = entityField(ent, targetOfs); t && !t->free)
+        {
+            return NUM_FOR_EDICT(t) * 4 + (fieldFloatOr(ent, lockedOfs, 0.f) != 0.f ? 2 : 1);
+        }
+        return 0;
+    };
+    statsi[STAT_QVR_FGMAIN] = forcegrab(f.mainhand_fgtarget, f.mainhand_fglocked, f.mainhand_fgpulled, 1.f);
+    statsi[STAT_QVR_FGOFF] = forcegrab(f.offhand_fgtarget, f.offhand_fglocked, f.offhand_fgpulled, 0.f);
+
+    // Carrying, per hand: the object (the client draws it in the hand, vr_held.cpp).
+    const auto carried = [&](int ofs) {
+        edict_t* e = entityField(ent, ofs);
+        return e && !e->free && !box3d::isRagdoll(NUM_FOR_EDICT(e)) ? NUM_FOR_EDICT(e) : 0; // (a ragdoll's limb: not drawn in the hand)
+    };
+    statsi[STAT_QVR_CARRYMAIN] = carried(f.mainhand_held);
+    statsi[STAT_QVR_CARRYOFF] = carried(f.offhand_held);
+
+    for(int i = 0; i < numHolsters; i++)
+    {
+        stat(STAT_QVR_HOLSTERWEAPON0 + i, holsterWeapon[i]);
+        if (bindings().isAdVrProgs) { statsf[STAT_QVR_HOLSTERWEAPON0 + i] = adWeaponId(statsf[STAT_QVR_HOLSTERWEAPON0 + i]); }
+        statsi[STAT_QVR_HOLSTERWEAPONMODEL0 + i] = modelIndexOfField(ent, holsterModel[i]);
+        stat(STAT_QVR_HOLSTERWEAPONFLAGS0 + i, holsterFlags[i]);
+        statsf[STAT_QVR_HOLSTERWEAPONCLIP0 + i] = clip(holsterInst[i]);
+        statsi[STAT_QVR_HOLSTERWEAPONUID0 + i] = weaponUid(inst(holsterInst[i])); // (its blood drawn holstered: vr_wounds.cpp)
+    }
+}
+
+extern "C" int VR_EntityUpdateBits(edict_t* ent)
+{
+    if(!vrProtocol())
+    {
+        return 0;
+    }
+
+    // Baselines don't carry these (they are zero), so any non-zero value is sent.
+    const FieldOffsets& f = fields();
+    int bits = 0;
+    if(fieldVec(ent, f.model_scale) != glm::vec3{0.f})
+    {
+        bits |= U_QVR_SCALE;
+    }
+    if(fieldVec(ent, f.model_scale_origin) != glm::vec3{0.f})
+    {
+        bits |= U_QVR_SCALEORIGIN;
+    }
+    if(fieldVec(ent, f.model_offset) != glm::vec3{0.f})
+    {
+        bits |= U_QVR_OFFSET;
+    }
+    if(fieldFloatOr(ent, f.vr_rigid, 0.f) != 0.f)
+    {
+        bits |= U_QVR_NOROTATE;
+    }
+    if(NUM_FOR_EDICT(ent) > svs.maxclients && weaponUid(weaponInst(ent, f.weaponinst)) != 0)
+    {
+        bits |= U_QVR_WEAPONUID; // a weapon prop (not a player: his .weaponinst is his main hand's, sent as a stat)
+    }
+    return bits;
+}
+
+extern "C" void VR_WriteEntityUpdate(sizebuf_t* msg, edict_t* ent, int bits)
+{
+    const FieldOffsets& f = fields();
+
+    if(bits & U_QVR_SCALE)
+    {
+        const glm::vec3 v = fieldVec(ent, f.model_scale);
+        for(int i = 0; i < 3; i++)
+        {
+            MSG_WriteFloat(msg, v[i]);
+        }
+    }
+
+    const auto writeCoords = [&](int ofs) {
+        const glm::vec3 v = fieldVec(ent, ofs);
+        for(int i = 0; i < 3; i++)
+        {
+            MSG_WriteCoord(msg, v[i], sv.protocolflags);
+        }
+    };
+
+    if(bits & U_QVR_SCALEORIGIN)
+    {
+        writeCoords(f.model_scale_origin);
+    }
+    if(bits & U_QVR_OFFSET)
+    {
+        writeCoords(f.model_offset);
+    }
+    if(bits & U_QVR_WEAPONUID)
+    {
+        MSG_WriteLong(msg, weaponUid(weaponInst(ent, f.weaponinst)));
+    }
+}
+
+extern "C" void VR_WriteClientSpawnState(sizebuf_t* msg)
+{
+    if(vrProtocol())
+    {
+        worldtext::serverWriteAll(msg);
+    }
+}
+
+extern "C" void VR_ServerFrameEnd()
+{
+    sweepWeaponInsts(); // the weapons' records nothing has any more: freed, their ids gone
+
+    qvr::hitmodel::serverFrame(); // precise hits: the client's lerp of the monsters' poses and steps, kept
+    qvr::axestick::serverFrame(); // thrown axes stuck in things go with them (after the poses above)
+
+    if(!vrProtocol())
+    {
+        return;
+    }
+
+    // This frame's VR bits become next frame's "previous" bits.
+    for(ClientBits& bits : clientBits)
+    {
+        bits.previousFrame = bits.received;
+    }
+
+    // Late precaches (setmodel on an unprecached model, precache_* after load).
+    broadcastNewPrecaches(sv.model_precache, broadcastModelCount, QVR_SVC_PRECACHE_MODEL);
+    broadcastNewPrecaches(sv.sound_precache, broadcastSoundCount, QVR_SVC_PRECACHE_SOUND);
+
+    qvr::motion::serverFrame(); // the motion recorder's sample of this server frame
+    qvr::fatigue::serverFrame(); // vr_debug_stamina_hold
+}
+
+namespace qvr::server
+{
+
+// vr_dumpplayer: prints the local player's VR fields as the server sees them.
+void dumpPlayer_f()
+{
+    if(!sv.active || !bindings().isVrProgs)
+    {
+        Con_Printf("vr_dumpplayer: no server running Quake VR progs\n");
+        return;
+    }
+
+    // vr_dumpplayer [client]: 1 (the default) is the first client (a listen server's own player).
+    const int client = Cmd_Argc() > 1 ? Q_atoi(Cmd_Argv(1)) : 1;
+    if(client < 1 || client > svs.maxclients || !svs.clients[client - 1].active)
+    {
+        Con_Printf("vr_dumpplayer: no active client %d\n", client);
+        return;
+    }
+    edict_t* ent = svs.clients[client - 1].edict;
+    const FieldOffsets& f = fields();
+    const auto vec = [&](const char* name, int ofs) {
+        const glm::vec3 v = fieldVec(ent, ofs);
+        Con_Printf("  %-14s %8.2f %8.2f %8.2f\n", name, v.x, v.y, v.z);
+    };
+
+    Con_Printf("origin         %8.2f %8.2f %8.2f\n", ent->v.origin[0], ent->v.origin[1],
+        ent->v.origin[2]);
+    vec("v_viewangle", f.v_viewangle);
+    vec("handpos", f.handpos);
+    vec("handrot", f.handrot);
+    vec("handvel", f.handvel);
+    vec("headpos", f.headpos);
+    vec("muzzlepos", f.muzzlepos);
+    vec("offhandpos", f.offhandpos);
+    vec("offmuzzlepos", f.offmuzzlepos);
+    Con_Printf("  vrbits0 %d  button3 %g  weapon %g  weapon2 %g\n",
+        static_cast<int>(fieldFloatOr(ent, f.vrbits0, 0.f)), fieldFloatOr(ent, f.button3, 0.f),
+        ent->v.weapon, fieldFloatOr(ent, f.weapon2, 0.f));
+}
+
+void resetClients()
+{
+    clientMoves.clear();
+}
+
+const VrMove* clientMove(edict_t* player)
+{
+    const ClientMove* m = clientMoveOf(player);
+    return m ? &m->move : nullptr;
+}
+
+void rebaseHands(edict_t* player)
+{
+    ClientMove* m = clientMoveOf(player);
+    if(!m || m->base == glm::vec3{0.f})
+    {
+        return;
+    }
+    const glm::vec3 origin{player->v.origin[0], player->v.origin[1], player->v.origin[2]};
+    const glm::vec3 delta = origin - m->base;
+    if(delta == glm::vec3{0.f})
+    {
+        return;
+    }
+    m->base = origin;
+
+    VrMove& move = m->move;
+    const FieldOffsets& f = fields();
+    for(const int ofs : {f.handpos, f.offhandpos, f.muzzlepos, f.offmuzzlepos, f.handthrowpos, f.offhandthrowpos, f.headpos})
+    {
+        setFieldVec(player, ofs, fieldVec(player, ofs) + delta);
+    }
+    for(VrHandMove& hand : move.hands)
+    {
+        hand.pos += delta;
+        hand.tracked += delta;
+        hand.throwPos += delta;
+    }
+    move.muzzlePos[0] += delta;
+    move.muzzlePos[1] += delta;
+    move.headPos += delta;
+}
+
+float* clientHeadAngles(edict_t* player)
+{
+    ClientMove* m = clientMoveOf(player);
+    return m ? &m->move.headAngles.x : nullptr;
+}
+
+void sendHaptic(edict_t* player, int hand, float delay, float duration, float frequency, float amplitude)
+{
+    sizebuf_t* msg = clientMessage(player);
+    if(!msg)
+    {
+        return;
+    }
+
+    MSG_WriteByte(msg, svc_quakevr);
+    MSG_WriteByte(msg, QVR_SVC_HAPTIC);
+    MSG_WriteByte(msg, hand);
+    MSG_WriteFloat(msg, delay);
+    MSG_WriteFloat(msg, duration);
+    MSG_WriteFloat(msg, frequency);
+    MSG_WriteFloat(msg, amplitude);
+}
+
+// A knock on a player's drawn hand (a parried blow): `strength` units along `dir`, dying out.
+void sendHandImpact(edict_t* player, int hand, float strength, const float dir[3])
+{
+    sizebuf_t* msg = clientMessage(player);
+    if(!msg)
+    {
+        return;
+    }
+
+    MSG_WriteByte(msg, svc_quakevr);
+    MSG_WriteByte(msg, QVR_SVC_HANDIMPACT);
+    MSG_WriteByte(msg, hand);
+    MSG_WriteFloat(msg, strength);
+    for(int i = 0; i < 3; i++)
+    {
+        MSG_WriteFloat(msg, dir[i]);
+    }
+}
+
+// A weapon a player's hand caught from a force grab, and where it was (vr_drawblend.cpp eases it into the hand).
+void sendCatchBlend(edict_t* player, int hand, int ent, const float origin[3], const float angles[3])
+{
+    sizebuf_t* msg = clientMessage(player);
+    if(!msg)
+    {
+        return;
+    }
+
+    MSG_WriteByte(msg, svc_quakevr);
+    MSG_WriteByte(msg, QVR_SVC_CATCHBLEND);
+    MSG_WriteByte(msg, hand);
+    MSG_WriteShort(msg, ent);
+    for(int i = 0; i < 3; i++)
+    {
+        MSG_WriteFloat(msg, origin[i]);
+    }
+    for(int i = 0; i < 3; i++)
+    {
+        MSG_WriteFloat(msg, angles[i]);
+    }
+}
+
+// Spent casings out of the weapon in a player's hand (vr_shells.cpp): only that player's client
+// draws them, from its own weapon model.
+void sendEject(edict_t* player, int hand, int kind, int count, int flags, float delay)
+{
+    sizebuf_t* msg = clientMessage(player);
+    if(!msg || count <= 0)
+    {
+        return;
+    }
+
+    MSG_WriteByte(msg, svc_quakevr);
+    MSG_WriteByte(msg, QVR_SVC_EJECT);
+    MSG_WriteByte(msg, hand);
+    MSG_WriteByte(msg, kind);
+    MSG_WriteByte(msg, CLAMP(0, count, 255));
+    MSG_WriteByte(msg, flags);
+    MSG_WriteByte(msg, CLAMP(0, static_cast<int>(delay * 100.f + 0.5f), 255));
+}
+
+void sendShock(edict_t* player, int kind, const float org[3], float radius, float duration)
+{
+    sizebuf_t* msg = nullptr;
+    if(kind == 0)
+    {
+        msg = clientMessage(player);
+    }
+    else if(sv.datagram.cursize <= MAX_DATAGRAM - 24)
+    {
+        msg = &sv.datagram;
+    }
+    if(!msg)
+    {
+        return;
+    }
+
+    MSG_WriteByte(msg, svc_quakevr);
+    MSG_WriteByte(msg, QVR_SVC_SHOCK);
+    MSG_WriteByte(msg, CLAMP(0, kind, 255));
+    for(int i = 0; i < 3; i++)
+    {
+        MSG_WriteCoord(msg, org[i], sv.protocolflags);
+    }
+    MSG_WriteShort(msg, CLAMP(0, static_cast<int>(radius), 32767));
+    MSG_WriteByte(msg, CLAMP(0, static_cast<int>(duration * 50.f + 0.5f), 255));
+    if(msg == &sv.datagram)
+    {
+        VR_BroadcastMessageEnd(); // a boundary
+    }
+}
+
+void sendFired(edict_t* shooter, int hand)
+{
+    if(sv.datagram.cursize > MAX_DATAGRAM - 8)
+    {
+        return;
+    }
+    MSG_WriteByte(&sv.datagram, svc_quakevr);
+    MSG_WriteByte(&sv.datagram, QVR_SVC_FIRED);
+    MSG_WriteShort(&sv.datagram, NUM_FOR_EDICT(shooter));
+    MSG_WriteByte(&sv.datagram, hand == 0 || hand == 1 ? hand : 255); // (HAND_OFF, HAND_MAIN)
+    VR_BroadcastMessageEnd(); // a boundary
+}
+
+void sendTracer(edict_t* shooter, int hand, const float from[3], const float to[3])
+{
+    // A shotgun's 14 pellets are 14 of these: a full datagram keeps its room for the rest.
+    if(sv.datagram.cursize > MAX_DATAGRAM - 64)
+    {
+        return;
+    }
+    MSG_WriteByte(&sv.datagram, svc_quakevr);
+    MSG_WriteByte(&sv.datagram, QVR_SVC_TRACER);
+    MSG_WriteShort(&sv.datagram, NUM_FOR_EDICT(shooter));
+    MSG_WriteByte(&sv.datagram, hand == 0 || hand == 1 ? hand : 255); // (HAND_OFF, HAND_MAIN)
+    for(int i = 0; i < 3; i++)
+    {
+        MSG_WriteCoord(&sv.datagram, from[i], sv.protocolflags);
+    }
+    for(int i = 0; i < 3; i++)
+    {
+        MSG_WriteCoord(&sv.datagram, to[i], sv.protocolflags);
+    }
+    VR_BroadcastMessageEnd(); // a boundary
+}
+
+// Local development check for the AD adapter. Never callable by a remote client.
+void adTest_f()
+{
+    if (cmd_source != src_command || !developer.value || !sv.active ||
+        !bindings().isAdVrProgs || !svs.clients[0].active)
+    {
+        Con_Printf("advr_selftest requires a local AD VR game and developer 1\n");
+        return;
+    }
+    PR_SwitchQCVM(&sv.qcvm);
+    const char* fixture = "ADVR_Test";
+    if(Cmd_Argc() > 1)
+    {
+        if(!strcmp(Cmd_Argv(1), "state")) fixture = "ADVR_CheckState";
+        else if(!strcmp(Cmd_Argv(1), "upgrades")) fixture = "ADVR_TestUpgrades";
+        else if(!strcmp(Cmd_Argv(1), "plasma")) fixture = "ADVR_TestPlasma";
+        else if(!strcmp(Cmd_Argv(1), "combat")) fixture = "ADVR_TestCombat";
+        else if(!strcmp(Cmd_Argv(1), "impacts")) fixture = "ADVR_TestImpacts";
+        else if(!strcmp(Cmd_Argv(1), "throwflight")) fixture = "ADVR_TestThrowFlight";
+        else if(!strcmp(Cmd_Argv(1), "throwstate")) fixture = "ADVR_TestThrowState";
+        else if(!strcmp(Cmd_Argv(1), "swordgrip")) fixture = "ADVR_TestSwordGrip";
+        else if(!strcmp(Cmd_Argv(1), "swordgripstate")) fixture = "ADVR_TestSwordGripState";
+        else if(!strcmp(Cmd_Argv(1), "swordhandoff")) fixture = "ADVR_TestSwordHandoff";
+        else if(!strcmp(Cmd_Argv(1), "drops")) fixture = "ADVR_TestDrops";
+        else if(!strcmp(Cmd_Argv(1), "dropsload")) fixture = "ADVR_TestDropsLoad";
+        else if(!strcmp(Cmd_Argv(1), "parry")) fixture = "ADVR_TestParry";
+        else if(!strcmp(Cmd_Argv(1), "parrysave")) fixture = "ADVR_TestParrySave";
+        else if(!strcmp(Cmd_Argv(1), "parryload")) fixture = "ADVR_TestParryLoad";
+        else if(!strcmp(Cmd_Argv(1), "combatstate")) fixture = "ADVR_TestCombatState";
+        else if(!strcmp(Cmd_Argv(1), "ragdolls")) fixture = "ADVR_TestRagdolls";
+        else if(!strcmp(Cmd_Argv(1), "ragdollstate")) fixture = "ADVR_TestRagdollState";
+        else if(!strcmp(Cmd_Argv(1), "ragdolldeath")) fixture = "ADVR_TestRagdollDeath";
+        else if(!strcmp(Cmd_Argv(1), "ragdolldeathstate")) fixture = "ADVR_TestRagdollDeathState";
+        else if(!strcmp(Cmd_Argv(1), "ragdollgib")) fixture = "ADVR_TestRagdollGib";
+        else if(!strcmp(Cmd_Argv(1), "ragdollgibstate")) fixture = "ADVR_TestRagdollGibState";
+        else if(!strcmp(Cmd_Argv(1), "ragdollcap")) fixture = "ADVR_TestRagdollCap";
+        else if(!strcmp(Cmd_Argv(1), "ragdollcapstate")) fixture = "ADVR_TestRagdollCapState";
+        else if(!strcmp(Cmd_Argv(1), "input")) fixture = "ADVR_TestInput";
+        else if(!strcmp(Cmd_Argv(1), "inputstate")) fixture = "ADVR_TestInputState";
+    }
+    const func_t fn = progs::findFunction(fixture);
+    if (fn)
+    {
+        pr_global_struct->time = qcvm->time;
+        pr_global_struct->self = EDICT_TO_PROG(svs.clients[0].edict);
+        pr_global_struct->other = EDICT_TO_PROG(qcvm->edicts);
+        PR_ExecuteProgram(fn);
+    }
+    PR_SwitchQCVM(nullptr);
+}
+
+// Applied once after the AD config loads, so later menu customizations persist.
+cvar_t adSettingsVersion{"advr_settings_version", "0", CVAR_ARCHIVE};
+cvar_t adPlasmaModelVersion{"advr_plasma_model_version", "0", CVAR_ARCHIVE};
+void adPlasmaDefaults()
+{
+    if(adPlasmaModelVersion.value >= 1.f) return;
+    using weapons::Key;
+    // Keep effective recoil, reload and weight settings, but detach the new mesh
+    // from the lightning gun's geometry calibration. Later manual tuning persists.
+    weapons::stopInheriting(26);
+#define AD_PLASMA_SETTING(key, value) Cvar_SetValueQuick(weapons::cvar(26, Key::key), value);
+#include "vr_ad_plasma.inc"
+#undef AD_PLASMA_SETTING
+    Cvar_SetValueQuick(&adPlasmaModelVersion, 1.f);
+    weapons::resetCaches();
+    Con_Printf("AD VR: AD Plasma Gun model calibration installed\n");
+}
+cvar_t adRagdollTest{"advr_ragdoll_test", "0"}; // developer fixture assets only
+void adDefaults_f()
+{
+    if(cmd_source != src_command) return;
+    if(adSettingsVersion.value >= 2.f) { adPlasmaDefaults(); return; }
+    if(adSettingsVersion.value >= 1.f)
+    {
+        Cvar_SetValueQuick(&vr_parry, 1.f);
+        Cvar_SetValueQuick(&vr_deflect, 1.f);
+        Cvar_SetValueQuick(&vr_parry_stamina, 1.f);
+        Cvar_SetValueQuick(&adSettingsVersion, 2.f);
+        Con_Printf("AD VR: weapon parries, projectile batting and stamina enabled\n");
+        adPlasmaDefaults();
+        return;
+    }
+    using weapons::Key;
+    const int bases[] = {0, 2, 15};
+    const char* models[] = {"progs/advr_shadowaxe.mdl", "progs/advr_widowmaker.mdl", "progs/advr_plasma.mdl"};
+    for(int v = 0; v < 3; ++v)
+    {
+        for(int k = 0; k < static_cast<int>(Key::Count); ++k)
+        {
+            const Key key = static_cast<Key>(k);
+            Cvar_SetQuick(weapons::cvar(24 + v, key), weapons::cvar(bases[v], key)->string);
+        }
+        Cvar_SetQuick(weapons::cvar(24 + v, Key::ID), models[v]);
+    }
+    const int slots[] = {1, 2, 3, 4, 5, 6, 7, 15, 25, 26};
+    const float strengths[] = {0.9f, 1.4f, 0.25f, 0.4f, 0.8f, 1.1f, 0.15f, 0.25f, 1.7f, 0.25f};
+    for(int i = 0; i < 10; ++i)
+    {
+        Cvar_SetValueQuick(weapons::cvar(slots[i], Key::Recoil), 1.f);
+        Cvar_SetValueQuick(weapons::cvar(slots[i], Key::RecoilStrength), strengths[i]);
+        Cvar_SetValueQuick(weapons::cvar(slots[i], Key::RecoilTime), 0.18f);
+    }
+    Cvar_SetValueQuick(&vr_weapon_recoil, 1.f);
+    Cvar_SetValueQuick(&vr_reload_mode, 2.f);
+    Cvar_SetValueQuick(&vr_parry, 1.f);
+    Cvar_SetValueQuick(&vr_deflect, 1.f);
+    Cvar_SetValueQuick(&vr_parry_stamina, 1.f);
+    Cvar_SetValueQuick(&adSettingsVersion, 2.f);
+    weapons::resetCaches();
+    Con_Printf("AD VR: recoil, reload and distinct upgrade model settings installed\n");
+    adPlasmaDefaults();
+}
+
+void init()
+{
+    Cvar_RegisterVariable(&adSettingsVersion);
+    Cvar_RegisterVariable(&adPlasmaModelVersion);
+    Cvar_RegisterVariable(&adRagdollTest);
+    Cmd_AddCommand("advr_defaults", adDefaults_f);
+    Cmd_AddCommand("advr_selftest", adTest_f);
+    Cmd_AddCommand("vr_dumpplayer", dumpPlayer_f);
+    climb::init();
+    ledges::init();
+}
+
+// Everything precached while loading is in the serverinfo that clients receive.
+void onSpawnServerAfterLoad()
+{
+    broadcastModelCount = precacheCount(sv.model_precache);
+    broadcastSoundCount = precacheCount(sv.sound_precache);
+}
+
+} // namespace qvr::server

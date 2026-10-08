@@ -1,0 +1,1022 @@
+/*
+Copyright (C) 1996-2001 Id Software, Inc.
+Copyright (C) 2002-2009 John Fitzgibbons and others
+Copyright (C) 2007-2008 Kristian Duske
+Copyright (C) 2010-2014 QuakeSpasm developers
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+
+*/
+// r_world.c: world model rendering
+
+#include "quakedef.h"
+
+extern cvar_t gl_fullbrights, r_oldskyleaf, r_showtris; //johnfitz
+extern cvar_t gl_zfix; // QuakeSpasm z-fighting fix
+extern cvar_t r_oit;
+
+extern gltexture_t *lightmap_texture;
+extern gltexture_t *lux_texture; // QVR: r_brush.c
+
+extern GLuint gl_bmodel_vbo;
+extern size_t gl_bmodel_vbo_size;
+extern GLuint gl_bmodel_ibo;
+extern size_t gl_bmodel_ibo_size;
+extern GLuint gl_bmodel_indirect_buffer;
+extern size_t gl_bmodel_indirect_buffer_size;
+extern GLuint gl_bmodel_surf_buffer;
+extern GLuint gl_bmodel_marksurf_buffer;
+extern GLuint gl_bmodel_marksurf_buffer_size;
+
+typedef struct gpumark_frame_s {
+	vec4_t		frustum[4];
+	vec3_t		vieworg;
+	GLuint		oldskyleaf;
+	GLuint		framecount;
+	GLuint		padding[3];
+} gpumark_frame_t;
+
+byte *SV_FatPVS (vec3_t org, qmodel_t *worldmodel);
+
+/*
+===============
+R_MarkVisSurfaces
+===============
+*/
+static void R_MarkVisSurfaces (byte* vis)
+{
+	int			i;
+	GLuint		buf;
+	GLbyte*		ofs;
+	size_t		vissize = (cl.worldmodel->numleafs + 7) >> 3;
+	size_t		nummark = gl_bmodel_marksurf_buffer_size / sizeof (bmodel_gpu_marksurf_t);
+	gpumark_frame_t frame;
+
+	GL_BeginGroup ("Mark surfaces");
+
+	for (i = 0; i < 4; i++)
+	{
+		frame.frustum[i][0] = frustum[i].normal[0];
+		frame.frustum[i][1] = frustum[i].normal[1];
+		frame.frustum[i][2] = frustum[i].normal[2];
+		frame.frustum[i][3] = frustum[i].dist;
+	}
+	frame.vieworg[0] = r_refdef.vieworg[0];
+	frame.vieworg[1] = r_refdef.vieworg[1];
+	frame.vieworg[2] = r_refdef.vieworg[2];
+	frame.oldskyleaf = r_oldskyleaf.value != 0.f;
+	frame.framecount = r_framecount;
+
+	COMPILE_TIME_ASSERT (vis_alignment_must_be_power_of_2, (VIS_ALIGN & (VIS_ALIGN - 1)) == 0);
+	COMPILE_TIME_ASSERT (vis_alignment_must_be_multiple_of_uint, (VIS_ALIGN & 3) == 0);
+	vissize = (vissize + VIS_ALIGN_MASK) & ~VIS_ALIGN_MASK; // round up
+
+	GL_UseProgram (glprogs.clear_indirect);
+	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 1, gl_bmodel_indirect_buffer, 0, cl.worldmodel->texofs[TEXTYPE_COUNT] * sizeof(bmodel_draw_indirect_t));
+	GL_DispatchComputeFunc ((cl.worldmodel->texofs[TEXTYPE_COUNT] + 63) / 64, 1, 1);
+	GL_MemoryBarrierFunc (GL_SHADER_STORAGE_BARRIER_BIT);
+
+	GL_UseProgram (glprogs.cull_mark);
+	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 2, gl_bmodel_ibo, 0, gl_bmodel_ibo_size);
+	GL_Upload (GL_SHADER_STORAGE_BUFFER, vis, vissize, &buf, &ofs);
+	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 3, buf, (GLintptr)ofs, vissize);
+	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 4, gl_bmodel_marksurf_buffer, 0, gl_bmodel_marksurf_buffer_size);
+	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 5, gl_bmodel_surf_buffer, 0, cl.worldmodel->numsurfaces * sizeof(bmodel_gpu_surf_t));
+	GL_Upload (GL_UNIFORM_BUFFER, &frame, sizeof(frame), &buf, &ofs);
+	GL_BindBufferRange (GL_UNIFORM_BUFFER, 1, buf, (GLintptr)ofs, sizeof(frame));
+
+	GL_DispatchComputeFunc ((nummark + 63) / 64, 1, 1);
+	GL_MemoryBarrierFunc (GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_ELEMENT_ARRAY_BARRIER_BIT);
+
+	GL_EndGroup ();
+}
+
+/*
+===============
+R_MarkSurfaces
+===============
+*/
+void R_MarkSurfaces (void)
+{
+	byte		*vis;
+	int			i;
+	qboolean	nearwaterportal;
+
+	// check this leaf for water portals
+	// TODO: loop through all water surfs and use distance to leaf cullbox
+	nearwaterportal = false;
+	for (i=0; i < r_viewleaf->nummarksurfaces; i++)
+		if (cl.worldmodel->surfaces[r_viewleaf->firstmarksurface[i]].flags & SURF_DRAWTURB)
+			nearwaterportal = true;
+
+	// choose vis data
+	if (r_novis.value || r_viewleaf->contents == CONTENTS_SOLID || r_viewleaf->contents == CONTENTS_SKY)
+		vis = Mod_NoVisPVS (cl.worldmodel);
+	else if (nearwaterportal)
+		vis = SV_FatPVS (r_origin, cl.worldmodel);
+	else
+		vis = Mod_LeafPVS (r_viewleaf, cl.worldmodel);
+
+	r_visframecount++;
+
+	VR_WaterMarkVis (vis); // QVR: the geometric waves' faces seen (vr/vr_water.cpp)
+	R_MarkVisSurfaces (vis);
+	R_AddStaticModels (vis);
+}
+
+/*
+================
+GL_WaterAlphaForEntityTextureType
+ 
+Returns the water alpha to use for the entity and texture type combination.
+================
+*/
+float GL_WaterAlphaForEntityTextureType (entity_t *ent, textype_t type)
+{
+	float entalpha;
+	if (ent == NULL || ent->alpha == ENTALPHA_DEFAULT)
+		entalpha = GL_WaterAlphaForTextureType(type);
+	else
+		entalpha = ENTALPHA_DECODE(ent->alpha);
+	if (type == TEXTYPE_TELE)
+		entalpha *= VR_TeleportOpacity ();
+	return entalpha;
+}
+
+typedef struct bmodel_gpu_instance_s {
+	float		world[12];	// world matrix (transposed mat4x3)
+	float		alpha;
+	float		padding[3];
+	float		wound[4];	// QVR: a held prop's blood (vr/vr_wounds.cpp: its box mask)
+	float		woundbox[4];	// QVR: its box's centre, 1 / its largest side
+	float		retro[4];	// QVR: retro textures (vr/vr_retro.h): its set (VR_RetroInstance)
+} bmodel_gpu_instance_t;
+
+typedef struct bmodel_bindless_gpu_call_s {
+	GLuint		flags;
+	GLfloat		alpha;
+	GLuint64	texture;
+	GLuint64	fullbright;
+	GLuint64	normalmap;	// QVR: vr_normalmaps
+	GLuint64	specmap;	// QVR: an external pack's specular map (vr/vr_extmaps.cpp; CF_SPECMAP)
+	GLuint64	padding;	// QVR: (uvclamp on 16 bytes, as std430 places it)
+	GLfloat		uvclamp[4];	// QVR: texture_t's (parallax mapping)
+	GLfloat		detail[4];	// QVR: its detail texture (vr/vr_detail.cpp)
+	GLfloat		extmat[4];	// QVR: the external maps' numbers (VR_ExtMapsCall)
+	GLfloat		retro[4];	// QVR: retro textures (VR_RetroCall): the texture's Quake size, its set
+} bmodel_bindless_gpu_call_t;
+
+typedef struct bmodel_bound_gpu_call_s {
+	GLuint		flags;
+	GLfloat		alpha;
+	GLint		baseinstance;
+	GLint		padding;
+	GLfloat		uvclamp[4];	// QVR: texture_t's (parallax mapping)
+	GLfloat		detail[4];	// QVR: its detail texture (vr/vr_detail.cpp)
+	GLfloat		extmat[4];	// QVR: the external maps' numbers (VR_ExtMapsCall)
+	GLfloat		retro[4];	// QVR: retro textures (VR_RetroCall)
+} bmodel_bound_gpu_call_t;
+
+typedef struct bmodel_gpu_call_remap_s {
+	GLuint		src;
+	GLuint		inst;
+} bmodel_gpu_call_remap_t;
+
+static bmodel_gpu_instance_t		bmodel_instances[MAX_VISEDICTS + 1]; // +1 for worldspawn
+static union {
+	struct {
+		bmodel_bindless_gpu_call_t	params[MAX_BMODEL_DRAWS];
+	} bindless;
+	struct {
+		bmodel_bound_gpu_call_t		params[MAX_BMODEL_DRAWS];
+		gltexture_t					*textures[MAX_BMODEL_DRAWS][4];	// QVR: and the normal and specular maps
+	} bound;
+} bmodel_calls;
+static bmodel_gpu_call_remap_t		bmodel_call_remap[MAX_BMODEL_DRAWS];
+static int							num_bmodel_calls;
+static GLuint						bmodel_batch_program;
+
+/*
+=============
+R_InitBModelInstance
+=============
+*/
+static void R_BModelMatrix (entity_t *ent, float mat[16]) // QVR: (R_PaintBrushWounds too)
+{
+	vec3_t angles;
+
+	angles[0] = -ent->angles[0];
+	angles[1] =  ent->angles[1];
+	angles[2] =  ent->angles[2];
+	R_EntityMatrix (mat, ent->origin, angles, ent == &cl_entities[0] ? ENTSCALE_DEFAULT : ent->scale);
+	if (ent != &cl_entities[0]) // QVR
+		VR_BrushTransform (ent, mat); // QVR
+}
+
+static void R_InitBModelInstance (bmodel_gpu_instance_t *inst, entity_t *ent)
+{
+	float mat[16];
+
+	R_BModelMatrix (ent, mat); // QVR: (shared with R_PaintBrushWounds)
+
+	MatrixTranspose4x3 (mat, inst->world);
+
+	inst->alpha = ent->alpha == ENTALPHA_DEFAULT ? -1.f : ENTALPHA_DECODE (ent->alpha);
+	memset (&inst->padding, 0, sizeof(inst->padding));
+	inst->padding[0] = ent == &cl_entities[0] ? 0.f : VR_EntityGlow (ent); // QVR: the shader's glow
+	inst->padding[1] = VR_ParallaxDepth (ent, mat, NULL, 1); // QVR: its parallax depth in units (vr_parallax)
+	inst->padding[2] = ent == &cl_entities[0] ? 0.f : VR_BrushAOSelf (ent); // QVR: its own dynamic occlusion group (vr/vr_ao.cpp)
+	VR_RetroInstance (ent, inst->retro); // QVR: retro textures (vr/vr_retro.cpp)
+	inst->retro[3] = ent == &cl_entities[0] ? 1.f : 0.f; // QVR: the world: its decals (vr/vr_decals.cpp, QVR_WORLD_FS_DECALS)
+	if (ent == &cl_entities[0]) // QVR: a held prop's blood (vr/vr_wounds.cpp)
+	{
+		memset (inst->wound, 0, sizeof (inst->wound));
+		memset (inst->woundbox, 0, sizeof (inst->woundbox));
+	}
+	else
+		VR_BrushWound (ent, inst->wound, inst->woundbox);
+}
+
+/*
+=================
+R_BModelCentre -- QVR
+
+Where the middle of brush model `e`'s box is drawn this frame (vr/vr_wounds.cpp's tests).
+=================
+*/
+void R_BModelCentre (entity_t *e, float out[3])
+{
+	float	mat[16];
+	vec3_t	mid;
+	int		i;
+
+	R_BModelMatrix (e, mat);
+	for (i = 0; i < 3; i++)
+		mid[i] = 0.5f * (e->model->mins[i] + e->model->maxs[i]);
+	for (i = 0; i < 3; i++)
+		out[i] = mat[i] * mid[0] + mat[4 + i] * mid[1] + mat[8 + i] * mid[2] + mat[12 + i];
+}
+
+/*
+=================
+R_PaintBrushWounds -- QVR
+
+A held prop's blood (vr/vr_wounds.cpp): brush model `e`'s box, as it is drawn this frame, drawn into the bound
+framebuffer (its box mask's layer; the viewport: its region), each side of the box into its cell (vr_glsl.h's
+QVR_BOX_WOUND_PAINT_VS), with `numsplats` splats (five vec4 each: the wound paint's fragment shader). The caller sets
+the blending.
+=================
+*/
+qboolean R_PaintBrushWounds (entity_t *e, int numsplats, const float *splats)
+{
+	float	mat[16], world[12], centre[4], half[4];
+	int		i;
+
+	if (!e->model || e->model->type != mod_brush || numsplats <= 0)
+		return false;
+	R_BModelMatrix (e, mat);
+	MatrixTranspose4x3 (mat, world);
+	centre[3] = 0.f;
+	for (i = 0; i < 3; i++)
+	{
+		centre[i] = 0.5f * (e->model->mins[i] + e->model->maxs[i]);
+		half[i] = 0.5f * (e->model->maxs[i] - e->model->mins[i]);
+		centre[3] = q_max (centre[3], 2.f * half[i]);
+	}
+	half[3] = 0.f;
+	if (centre[3] <= 0.f)
+		return false;
+
+	GL_UseProgram (glprogs.woundpaintbox);
+	GL_SetState (GLS_BLEND_OPAQUE | GLS_NO_ZTEST | GLS_NO_ZWRITE | GLS_CULL_NONE | GLS_ATTRIBS (0));
+	GL_Uniform1iFunc (0, numsplats);
+	GL_Uniform4fvFunc (1, numsplats * 5, splats);
+	GL_Uniform4fvFunc (81, 3, world);
+	GL_Uniform4fvFunc (84, 1, centre);
+	GL_Uniform4fvFunc (85, 1, half);
+	glDrawArrays (GL_TRIANGLES, 0, 36);
+	return true;
+}
+
+/*
+=============
+R_ResetBModelCalls
+=============
+*/
+static void R_ResetBModelCalls (GLuint program)
+{
+	bmodel_batch_program = program;
+	num_bmodel_calls = 0;
+}
+
+/*
+=============
+R_FlushBModelCalls
+=============
+*/
+static void R_FlushBModelCalls (void)
+{
+	GLuint	cmdbuf, buf;
+	GLbyte	*ofs;
+	size_t	dstcmdofs;
+
+	if (!num_bmodel_calls)
+		return;
+
+	GL_ReserveDeviceMemory (GL_DRAW_INDIRECT_BUFFER, sizeof (bmodel_draw_indirect_t) * num_bmodel_calls, &cmdbuf, &dstcmdofs);
+
+	GL_UseProgram (glprogs.gather_indirect);
+	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 5, gl_bmodel_indirect_buffer, 0, gl_bmodel_indirect_buffer_size);
+	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 6, cmdbuf, dstcmdofs, sizeof (bmodel_draw_indirect_t) * num_bmodel_calls);
+	GL_Upload (GL_SHADER_STORAGE_BUFFER, bmodel_call_remap, sizeof (bmodel_call_remap[0]) * num_bmodel_calls, &buf, &ofs);
+	GL_BindBufferRange  (GL_SHADER_STORAGE_BUFFER, 7, buf, (GLintptr)ofs, sizeof (bmodel_call_remap[0]) * num_bmodel_calls);
+	GL_DispatchComputeFunc ((num_bmodel_calls + 63) / 64, 1, 1);
+	GL_MemoryBarrierFunc (GL_COMMAND_BARRIER_BIT);
+
+	GL_UseProgram (bmodel_batch_program);
+	VR_RetroBind (QVR_RETRO_LUT_UNIT_WORLD); // QVR: the palette's table for retro textures (vr/vr_retro.cpp)
+	GL_BindBuffer (GL_ELEMENT_ARRAY_BUFFER, gl_bmodel_ibo);
+	GL_BindBuffer (GL_ARRAY_BUFFER, gl_bmodel_vbo);
+	GL_BindBuffer (GL_DRAW_INDIRECT_BUFFER, cmdbuf);
+	GL_VertexAttribPointerFunc (0, 3, GL_FLOAT, GL_FALSE, sizeof (glvert_t), (void *) offsetof (glvert_t, pos));
+	GL_VertexAttribPointerFunc (1, 4, GL_FLOAT, GL_FALSE, sizeof (glvert_t), (void *) offsetof (glvert_t, st));
+	GL_VertexAttribPointerFunc (2, 1, GL_FLOAT, GL_FALSE, sizeof (glvert_t), (void *) offsetof (glvert_t, lmofs));
+	GL_VertexAttribIPointerFunc (3, 4, GL_UNSIGNED_BYTE, sizeof (glvert_t), (void *) offsetof (glvert_t, styles));
+	GL_VertexAttribPointerFunc (4, 1, GL_FLOAT, GL_FALSE, sizeof (glvert_t), (void *) offsetof (glvert_t, swellpin));
+	GL_VertexAttribPointerFunc (5, 3, GL_FLOAT, GL_FALSE, sizeof (glvert_t), (void *) offsetof (glvert_t, centre));
+
+	if (gl_bindless_able)
+	{
+		GL_Upload (GL_SHADER_STORAGE_BUFFER, bmodel_calls.bindless.params, sizeof (bmodel_calls.bindless.params[0]) * num_bmodel_calls, &buf, &ofs);
+		GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 1, buf, (GLintptr)ofs, sizeof (bmodel_calls.bindless.params[0]) * num_bmodel_calls);
+		GL_MultiDrawElementsIndirectFunc (GL_TRIANGLES, GL_UNSIGNED_INT, (const void *)dstcmdofs, num_bmodel_calls, sizeof (bmodel_draw_indirect_t));
+	}
+	else
+	{
+		int i;
+
+		GL_Upload (GL_SHADER_STORAGE_BUFFER, &bmodel_calls.bound.params, sizeof (bmodel_calls.bound.params[0]) * num_bmodel_calls, &buf, &ofs);
+		GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 1, buf, (GLintptr)ofs, sizeof (bmodel_calls.bound.params[0]) * num_bmodel_calls);
+
+		for (i = 0; i < num_bmodel_calls; i++)
+		{
+			GL_Uniform1iFunc (0, i);
+			GL_BindTextures (0, 2, bmodel_calls.bound.textures[i]);
+			GL_Bind (GL_TEXTURE3, bmodel_calls.bound.textures[i][2]); // QVR: the normal map
+			GL_Bind (GL_TEXTURE11, bmodel_calls.bound.textures[i][3]); // QVR: the specular map (SpecTex)
+			GL_DrawElementsIndirectFunc (GL_TRIANGLES, GL_UNSIGNED_INT, (const byte *)(dstcmdofs + i * sizeof (bmodel_draw_indirect_t)));
+		}
+	}
+
+	num_bmodel_calls = 0;
+}
+
+/*
+=============
+R_AddBModelCall
+=============
+*/
+static void R_AddBModelCall (int index, int first_instance, int num_instances, texture_t *t, qboolean zfix, entity_t *ent) // QVR: ent, the batch's first (retro textures)
+{
+	static const float noclamp[4] = {0.f, 0.f, 0.f, 0.f}; // QVR
+	GLuint		flags;
+	float		alpha;
+	gltexture_t	*tx, *fb;
+	gltexture_t	*nm, *spec; // QVR
+	float		extmat[4]; // QVR
+	unsigned	extflags; // QVR
+
+	if (num_bmodel_calls == MAX_BMODEL_DRAWS)
+		R_FlushBModelCalls ();
+
+	if (t)
+	{
+		tx = t->gltexture;
+		fb = t->fullbright;
+		if (r_lightmap_cheatsafe)
+			tx = fb = NULL;
+		if (!gl_fullbrights.value && t->type != TEXTYPE_SKY)
+			fb = NULL;
+	}
+	else
+	{
+		tx = fb = whitetexture;
+	}
+
+	if (!gl_zfix.value || map_checks.value)
+		zfix = 0;
+
+	nm = TexMgr_NormalMap (tx); // QVR: or an external pack's, its specular map, its glow hidden (vr/vr_extmaps.cpp)
+	extflags = VR_ExtMapsCall (tx && t ? t : NULL, &nm, &spec, &fb, extmat);
+	flags = zfix | ((fb != NULL) << 1) | ((r_fullbright_cheatsafe != false) << 2) | extflags;
+	if (t && TEXTYPE_ISLIQUID (t->type)) // QVR: the liquid's kind for its look (gl_shaders.h LiquidKind)
+		flags |= (t->type - TEXTYPE_FIRSTLIQUID + 1) << 3;
+	alpha = t ? GL_WaterAlphaForTextureType (t->type) : 1.f;
+
+	if (gl_bindless_able)
+	{
+		bmodel_bindless_gpu_call_t *call = &bmodel_calls.bindless.params[num_bmodel_calls];
+		call->flags = flags;
+		call->alpha = alpha;
+		call->texture = tx ? tx->bindless_handle : greytexture->bindless_handle;
+		call->fullbright = fb ? fb->bindless_handle : blacktexture->bindless_handle;
+		call->normalmap = nm->bindless_handle; // QVR
+		call->specmap = (spec ? spec : whitetexture)->bindless_handle; // QVR
+		call->padding = 0;
+		memcpy (call->uvclamp, t ? t->uvclamp : noclamp, sizeof (call->uvclamp)); // QVR
+		VR_DetailCall (tx ? t : NULL, call->detail); // QVR
+		memcpy (call->extmat, extmat, sizeof (call->extmat)); // QVR
+		VR_RetroCall (ent, tx ? t : NULL, call->retro); // QVR
+	}
+	else
+	{
+		bmodel_bound_gpu_call_t *call = &bmodel_calls.bound.params[num_bmodel_calls];
+		gltexture_t **textures = bmodel_calls.bound.textures[num_bmodel_calls];
+		call->flags = flags;
+		call->alpha = alpha;
+		call->baseinstance = first_instance;
+		call->padding = 0;
+		textures[0] = tx ? tx : greytexture;
+		textures[1] = fb ? fb : blacktexture;
+		textures[2] = nm; // QVR
+		textures[3] = spec ? spec : whitetexture; // QVR
+		memcpy (call->uvclamp, t ? t->uvclamp : noclamp, sizeof (call->uvclamp)); // QVR
+		VR_DetailCall (tx ? t : NULL, call->detail); // QVR
+		memcpy (call->extmat, extmat, sizeof (call->extmat)); // QVR
+		VR_RetroCall (ent, tx ? t : NULL, call->retro); // QVR
+	}
+
+	SDL_assert (num_instances > 0);
+	SDL_assert (num_instances <= MAX_BMODEL_INSTANCES);
+	bmodel_call_remap[num_bmodel_calls].src = index;
+	bmodel_call_remap[num_bmodel_calls].inst = first_instance * MAX_BMODEL_INSTANCES + (num_instances - 1);
+
+	++num_bmodel_calls;
+}
+
+/*
+=============
+R_ChooseBModelProgram
+=============
+*/
+static GLuint R_ChooseBModelProgram (qboolean oit, qboolean alphatest)
+{
+	extern cvar_t r_softemu_lightmap_banding;
+
+	switch (softemu)
+	{
+	case SOFTEMU_BANDED:
+		if (r_softemu_lightmap_banding.value != 0.f)
+			return glprogs.world[oit][2][alphatest];
+		else
+			return glprogs.world[oit][1][alphatest];
+
+	case SOFTEMU_COARSE:
+		if (r_softemu_lightmap_banding.value > 0.f)
+			return glprogs.world[oit][2][alphatest];
+		else
+			return glprogs.world[oit][1][alphatest];
+
+	default:
+		if (r_softemu_lightmap_banding.value > 0.f)
+			return glprogs.world[oit][2][alphatest];
+		else
+			return glprogs.world[oit][0][alphatest];
+	}
+}
+
+typedef enum {
+	BP_SOLID,
+	BP_ALPHATEST,
+	BP_SKYLAYERS,
+	BP_SKYCUBEMAP,
+	BP_SKYSTENCIL,
+	BP_SHOWTRIS,
+} brushpass_t;
+
+static void R_AddBModelPassCalls (entity_t **ents, int count, textype_t texbegin, textype_t texend, brushpass_t pass); // QVR
+
+/*
+=============
+R_DrawBrushModels_Real
+=============
+*/
+static void R_DrawBrushModels_Real (entity_t **ents, int count, brushpass_t pass, qboolean translucent)
+{
+	int i; // QVR: (j and baseinst: R_AddBModelPassCalls)
+	int totalinst;
+	unsigned state;
+	GLuint program;
+	GLuint buf;
+	GLbyte *ofs;
+	textype_t texbegin, texend;
+	qboolean oit;
+	qboolean a2c; // QVR
+
+	if (!count)
+		return;
+
+	if (count > countof(bmodel_instances))
+	{
+		Con_DWarning ("bmodel instance overflow: %d > %d\n", count, (int)countof(bmodel_instances));
+		count = countof(bmodel_instances);
+	}
+
+	oit = translucent && R_GetEffectiveAlphaMode () == ALPHAMODE_OIT;
+	switch (pass)
+	{
+	default:
+	case BP_SOLID:
+		texbegin = 0;
+		texend = TEXTYPE_CUTOUT;
+		program = R_ChooseBModelProgram (oit, false);
+		break;
+	case BP_ALPHATEST:
+		texbegin = TEXTYPE_CUTOUT;
+		texend = TEXTYPE_CUTOUT + 1;
+		program = R_ChooseBModelProgram (oit, true);
+		break;
+	case BP_SKYLAYERS:
+		texbegin = TEXTYPE_SKY;
+		texend = TEXTYPE_SKY + 1;
+		program = glprogs.skylayers[softemu == SOFTEMU_COARSE];
+		break;
+	case BP_SKYCUBEMAP:
+		texbegin = TEXTYPE_SKY;
+		texend = TEXTYPE_SKY + 1;
+		program = glprogs.skycubemap[Sky_IsAnimated ()][softemu == SOFTEMU_COARSE];
+		break;
+	case BP_SKYSTENCIL:
+		texbegin = TEXTYPE_SKY;
+		texend = TEXTYPE_SKY + 1;
+		program = glprogs.skystencil;
+		break;
+	case BP_SHOWTRIS:
+		texbegin = 0;
+		texend = TEXTYPE_COUNT;
+		program = glprogs.world[0][0][0];
+		break;
+	}
+
+	// fill instance data
+	for (i = 0, totalinst = 0; i < count; i++)
+		if (ents[i]->model->texofs[texend] - ents[i]->model->texofs[texbegin] > 0)
+			R_InitBModelInstance (&bmodel_instances[totalinst++], ents[i]);
+
+	if (!totalinst)
+		return;
+
+	// setup state
+	state = GLS_CULL_BACK | GLS_ATTRIBS(4);
+	if (!translucent)
+		state |= GLS_BLEND_OPAQUE;
+	else
+		state |= GLS_BLEND_ALPHA_OIT | GLS_NO_ZWRITE;
+	
+	R_ResetBModelCalls (program);
+	GL_SetState (state);
+	a2c = pass == BP_ALPHATEST && !translucent && VR_AlphaToCoverage (); // QVR: fences' edges by alpha to coverage (vr_alpha_coverage, MSAA)
+	if (a2c)
+	{
+		glEnable (GL_SAMPLE_ALPHA_TO_COVERAGE);
+		glEnable (GL_SAMPLE_ALPHA_TO_ONE);
+	}
+	if (pass <= BP_ALPHATEST)
+	{ // QVR: and the deluxemaps
+		GL_Bind (GL_TEXTURE2, r_fullbright_cheatsafe ? greytexture : lightmap_texture);
+		GL_Bind (GL_TEXTURE9, lux_texture); // QVR: the light's directions (deluxemaps: LuxTex; read only with ShadowFlags 128)
+		GL_BindNative (GL_TEXTURE13, GL_TEXTURE_2D_ARRAY, VR_WoundTexture ()); // QVR: a held prop's blood (WoundMasks: BoxWounds)
+		VR_BindDecals (); // QVR: the decals on the world (vr/vr_decals.cpp: buffers 3 and 4, the atlas on unit 14)
+	}
+	else if (pass == BP_SKYCUBEMAP)
+		GL_Bind (GL_TEXTURE2, skybox->cubemap);
+
+	GL_Upload (GL_SHADER_STORAGE_BUFFER, bmodel_instances, sizeof(bmodel_instances[0]) * count, &buf, &ofs);
+	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 2, buf, (GLintptr)ofs, sizeof(bmodel_instances[0]) * count);
+
+	// QVR: the opaque world and brush models' depth first (the same draws, depth only), so that their costly shading
+	// (parallax, bumps, the lights' shadows) runs once a pixel, for the nearest surface only, not for the ones drawn
+	// over later. The vertex shader's gl_Position is invariant: the same depths, which the shading pass then passes.
+	if (pass == BP_SOLID && !translucent)
+	{
+		R_ResetBModelCalls (glprogs.world_depth);
+		glColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+		R_AddBModelPassCalls (ents, count, texbegin, texend, pass);
+		R_FlushBModelCalls ();
+		glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		R_ResetBModelCalls (program);
+	}
+
+	R_AddBModelPassCalls (ents, count, texbegin, texend, pass);
+
+	R_FlushBModelCalls ();
+	if (a2c) // QVR
+	{
+		glDisable (GL_SAMPLE_ALPHA_TO_COVERAGE);
+		glDisable (GL_SAMPLE_ALPHA_TO_ONE);
+	}
+}
+
+/*
+=============
+R_AddBModelPassCalls
+
+The draw calls of a pass over the entities (instances filled in bmodel_instances in this order).
+=============
+*/
+static void R_AddBModelPassCalls (entity_t **ents, int count, textype_t texbegin, textype_t texend, brushpass_t pass)
+{
+	int i, j, baseinst;
+
+	// generate drawcalls
+	for (i = 0, baseinst = 0; i < count; /**/)
+	{
+		int numinst;
+		entity_t *e = ents[i++];
+		qmodel_t *model = e->model;
+		qboolean isworld = (e == &cl_entities[0]);
+		qboolean isstatic = PTR_IN_RANGE (e, cl_static_entities, cl_static_entities + MAX_STATIC_ENTITIES);
+		qboolean zfix = !isworld && !isstatic;
+		int frame = isworld ? 0 : e->frame;
+		int numtex = model->texofs[texend] - model->texofs[texbegin];
+
+		if (!numtex)
+			continue;
+
+		for (numinst = 1; i < count && ents[i]->model == model && !ents[i]->frame == !frame && numinst < MAX_BMODEL_INSTANCES; i++) // QVR: one frame a batch (a pressed button's alternate textures: docs/vr-port/ROUND21.md)
+			numinst += (ents[i]->model->texofs[texend] - ents[i]->model->texofs[texbegin]) > 0;
+
+		for (j = model->texofs[texbegin]; j < model->texofs[texend]; j++)
+		{
+			texture_t *t = model->textures[model->usedtextures[j]];
+			R_AddBModelCall (model->firstcmd + j, baseinst, numinst, pass != BP_SHOWTRIS ? R_TextureAnimation (t, frame) : 0, zfix, e);
+		}
+
+		baseinst += numinst;
+	}
+} // QVR: R_AddBModelPassCalls
+
+/*
+=============
+R_FlushLiquidMeshCalls
+
+QVR: the world's liquids from the geometric waves' mesh (vr/vr_water.cpp, vr_water_geo_waves): its own vertex and
+index buffers, a pin per vertex (attribute 4) for the vertex shaders' swells. The calls are Ironwail's (R_AddBModelCall),
+their commands the ranges of the faces seen this view (VR_WaterMarkVis), not the GPU's culling's.
+=============
+*/
+static bmodel_draw_indirect_t liquid_mesh_cmds[MAX_BMODEL_DRAWS];
+
+static void R_FlushLiquidMeshCalls (void)
+{
+	GLuint	buf;
+	GLbyte	*ofs;
+
+	if (!num_bmodel_calls)
+		return;
+
+	GL_Upload (GL_DRAW_INDIRECT_BUFFER, liquid_mesh_cmds, sizeof (liquid_mesh_cmds[0]) * num_bmodel_calls, &buf, &ofs);
+	GL_UseProgram (bmodel_batch_program);
+	VR_WaterMeshBind ();
+	GL_BindBuffer (GL_DRAW_INDIRECT_BUFFER, buf);
+	if (gl_bindless_able)
+	{
+		GLuint pbuf;
+		GLbyte *pofs;
+		GL_Upload (GL_SHADER_STORAGE_BUFFER, bmodel_calls.bindless.params, sizeof (bmodel_calls.bindless.params[0]) * num_bmodel_calls, &pbuf, &pofs);
+		GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 1, pbuf, (GLintptr)pofs, sizeof (bmodel_calls.bindless.params[0]) * num_bmodel_calls);
+		GL_MultiDrawElementsIndirectFunc (GL_TRIANGLES, GL_UNSIGNED_INT, (const void *)ofs, num_bmodel_calls, sizeof (bmodel_draw_indirect_t));
+	}
+	else
+	{
+		int i;
+		GLuint pbuf;
+		GLbyte *pofs;
+		GL_Upload (GL_SHADER_STORAGE_BUFFER, &bmodel_calls.bound.params, sizeof (bmodel_calls.bound.params[0]) * num_bmodel_calls, &pbuf, &pofs);
+		GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 1, pbuf, (GLintptr)pofs, sizeof (bmodel_calls.bound.params[0]) * num_bmodel_calls);
+		for (i = 0; i < num_bmodel_calls; i++)
+		{
+			GL_Uniform1iFunc (0, i);
+			GL_BindTextures (0, 2, bmodel_calls.bound.textures[i]);
+			GL_Bind (GL_TEXTURE3, bmodel_calls.bound.textures[i][2]);
+			GL_Bind (GL_TEXTURE11, bmodel_calls.bound.textures[i][3]); // QVR: the specular map
+			GL_DrawElementsIndirectFunc (GL_TRIANGLES, GL_UNSIGNED_INT, (const byte *)ofs + i * sizeof (bmodel_draw_indirect_t));
+		}
+	}
+
+	num_bmodel_calls = 0;
+}
+
+/*
+=============
+R_DrawLiquidMesh
+
+QVR: the world's liquids of this pass (translucent or not) from the geometric waves' mesh; baseinst: the world's instance.
+=============
+*/
+static void R_DrawLiquidMesh (int baseinst, qboolean translucent, unsigned state)
+{
+	qmodel_t *model = cl.worldmodel;
+	int j, k, n;
+
+	GL_SetState ((state & ~GLS_MASK_ATTRIBS) | GLS_ATTRIBS(5));
+	for (j = model->texofs[TEXTYPE_FIRSTLIQUID]; j < model->texofs[TEXTYPE_LASTLIQUID+1]; j++)
+	{
+		texture_t *t = model->textures[model->usedtextures[j]];
+		const unsigned *ranges;
+		if ((GL_WaterAlphaForEntityTextureType (&cl_entities[0], t->type) < 1.f) != translucent)
+			continue;
+		n = VR_WaterMeshRanges (model->usedtextures[j], &ranges);
+		for (k = 0; k < n; k++)
+		{
+			bmodel_draw_indirect_t *cmd;
+			if (num_bmodel_calls == MAX_BMODEL_DRAWS)
+				R_FlushLiquidMeshCalls ();
+			cmd = &liquid_mesh_cmds[num_bmodel_calls];
+			cmd->firstIndex = ranges[k * 2];
+			cmd->count = ranges[k * 2 + 1];
+			cmd->instanceCount = 1;
+			cmd->baseVertex = 0;
+			cmd->baseInstance = baseinst;
+			R_AddBModelCall (0, baseinst, 1, R_TextureAnimation (t, 0), false, &cl_entities[0]);
+		}
+	}
+	R_FlushLiquidMeshCalls ();
+	GL_SetState (state);
+}
+
+/*
+=============
+R_EntHasWater
+=============
+*/
+static qboolean R_EntHasWater (entity_t *ent, qboolean translucent)
+{
+	int i;
+	for (i = TEXTYPE_FIRSTLIQUID; i < TEXTYPE_LASTLIQUID+1; i++)
+	{
+		int numtex = ent->model->texofs[i+1] - ent->model->texofs[i];
+		if (i == TEXTYPE_TELE && VR_PortalDrawing ()) // only the entrance overlays stars
+			continue;
+		if (numtex && (GL_WaterAlphaForEntityTextureType (ent, (textype_t)i) < 1.f) == translucent)
+			return true;
+	}
+	return false;
+}
+
+/*
+=============
+R_DrawBrushModels_Water
+=============
+*/
+void R_DrawBrushModels_Water (entity_t **ents, int count, qboolean translucent)
+{
+	int i, j;
+	int totalinst, baseinst;
+	unsigned state;
+	GLuint buf, program;
+	GLbyte *ofs;
+	qboolean oit;
+	GLuint scenedepth; // QVR
+	int meshinst = -1; // QVR: the world's instance, its liquids drawn from the geometric waves' mesh (vr/vr_water.cpp)
+
+	if (count > countof(bmodel_instances))
+	{
+		Con_DWarning ("bmodel instance overflow: %d > %d\n", count, (int)countof(bmodel_instances));
+		count = countof(bmodel_instances);
+	}
+
+	// fill instance data
+	for (i = 0, totalinst = 0; i < count; i++)
+		if (R_EntHasWater (ents[i], translucent))
+			R_InitBModelInstance (&bmodel_instances[totalinst++], ents[i]);
+
+	if (!totalinst)
+		return;
+
+	GL_BeginGroup (translucent ? "Water (translucent)" : "Water (opaque)");
+
+	// QVR: how far the opaque scene is, for the refraction not to read what is in front of the water and for the
+	// shoreline foam (vr/vr_water.cpp; a small pass of its own: before this draw's state is set)
+	scenedepth = VR_WaterSceneDepth (translucent);
+
+	// setup state
+	state = GLS_CULL_BACK | GLS_ATTRIBS(6); // QVR: swell pin and slipgate surface centre
+	if (translucent)
+		state |= GLS_BLEND_ALPHA_OIT | GLS_NO_ZWRITE;
+	else
+		state |= GLS_BLEND_OPAQUE;
+
+	oit = translucent && R_GetEffectiveAlphaMode () == ALPHAMODE_OIT;
+	if (cl.worldmodel->haslitwater && r_litwater.value)
+		program = glprogs.world[oit][q_max(0, (int)softemu - 1)][WORLDSHADER_WATER];
+	else
+		program = glprogs.water[oit][softemu == SOFTEMU_COARSE];
+
+	R_ResetBModelCalls (program);
+	GL_SetState (state);
+	GL_Bind (GL_TEXTURE2, r_fullbright_cheatsafe ? greytexture : lightmap_texture);
+	if (translucent) // QVR: refraction (vr/vr_water.cpp): the opaque scene (with MSAA resolved first)
+		VR_BindOpaqueScene ();
+	else
+		GL_BindNative (GL_TEXTURE6, GL_TEXTURE_2D, 0);
+	GL_BindNative (GL_TEXTURE8, GL_TEXTURE_2D, scenedepth); // QVR
+	GL_BindNative (GL_TEXTURE16, GL_TEXTURE_CUBE_MAP, VR_WaterCubeTexture ()); // QVR: the room reflected (LiquidCube; vr/vr_envmap.cpp)
+	GL_BindNative (GL_TEXTURE17, GL_TEXTURE_2D_ARRAY, VR_PortalTexture ()); // QVR: where a slipgate leads (PortalScene; vr/vr_portals.cpp)
+
+	GL_Upload (GL_SHADER_STORAGE_BUFFER, bmodel_instances, sizeof(bmodel_instances[0]) * totalinst, &buf, &ofs);
+	GL_BindBufferRange (GL_SHADER_STORAGE_BUFFER, 2, buf, (GLintptr)ofs, sizeof(bmodel_instances[0]) * count);
+
+	// generate drawcalls
+	for (i = 0, baseinst = 0; i < count; /**/)
+	{
+		int numinst;
+		entity_t *e = ents[i++];
+		qmodel_t *model = e->model;
+		qboolean isworld = (e == &cl_entities[0]);
+		int frame = isworld ? 0 : e->frame;
+
+		if (!R_EntHasWater (e, translucent))
+			continue;
+
+		for (numinst = 1; i < count && ents[i]->model == model && !ents[i]->frame == !frame && numinst < MAX_BMODEL_INSTANCES; i++) // QVR: one frame a batch
+			numinst += R_EntHasWater (ents[i], translucent);
+
+		if (isworld && VR_WaterMeshActive ()) // QVR
+		{
+			meshinst = baseinst; // pools use the wave mesh; teleport surfaces always use their BSP vertices
+		}
+
+		for (j = model->texofs[TEXTYPE_FIRSTLIQUID]; j < model->texofs[TEXTYPE_LASTLIQUID+1]; j++)
+		{
+			texture_t *t = model->textures[model->usedtextures[j]];
+			if ((isworld && VR_WaterMeshActive () && t->type != TEXTYPE_TELE) ||
+				(t->type == TEXTYPE_TELE && VR_PortalDrawing ()))
+				continue;
+			if ((GL_WaterAlphaForEntityTextureType (e, t->type) < 1.f) != translucent)
+				continue;
+			R_AddBModelCall (model->firstcmd + j, baseinst, numinst, R_TextureAnimation (t, frame), !isworld, e);
+		}
+
+		baseinst += numinst;
+	}
+
+	R_FlushBModelCalls ();
+
+	if (meshinst >= 0) // QVR
+		R_DrawLiquidMesh (meshinst, translucent, state);
+
+	GL_EndGroup ();
+}
+
+/*
+=============
+R_GetBModelAlphaPasses
+=============
+*/
+static uint32_t R_GetBModelAlphaPasses (const entity_t *ent)
+{
+	const qmodel_t *mod = ent->model;
+	uint32_t mask = 0;
+
+	if (mod->texofs[TEXTYPE_CUTOUT] != mod->texofs[TEXTYPE_DEFAULT])
+		mask |= (1 << BP_SOLID);
+	if (mod->texofs[TEXTYPE_SKY] != mod->texofs[TEXTYPE_CUTOUT])
+		mask |= (1 << BP_ALPHATEST);
+
+	return mask;
+}
+
+/*
+=============
+R_CanMergeBModelAlphaPasses
+=============
+*/
+static qboolean R_CanMergeBModelAlphaPasses (uint32_t mask_a, uint32_t mask_b)
+{
+	COMPILE_TIME_ASSERT (check_bit_0, BP_SOLID == 0);
+	COMPILE_TIME_ASSERT (check_bit_1, BP_ALPHATEST == 1);
+
+	enum
+	{
+		#define ALLOW_MERGE(a, b) (1 << ((a)|((b)<<2)))
+
+		MERGE_LUT =
+			ALLOW_MERGE (0, 0) |
+			ALLOW_MERGE (0, 1) |
+			ALLOW_MERGE (0, 2) |
+			ALLOW_MERGE (0, 3) |
+
+			ALLOW_MERGE (1, 0) |
+			ALLOW_MERGE (1, 1) |
+			ALLOW_MERGE (1, 2) |
+			ALLOW_MERGE (1, 3) |
+
+			ALLOW_MERGE (2, 0) |
+			ALLOW_MERGE (2, 2) |
+
+			ALLOW_MERGE (3, 0) |
+			ALLOW_MERGE (3, 2)
+		,
+
+		#undef ALLOW_MERGE
+	};
+
+	return (MERGE_LUT & (1 << (mask_a | (mask_b << 2)))) != 0;
+}
+
+/*
+=============
+R_DrawBrushModels
+=============
+*/
+void R_DrawBrushModels (entity_t **ents, int count)
+{
+	qboolean translucent;
+	if (!count)
+		return;
+	translucent = (ents[0] != &cl_entities[0]) && !ENTALPHA_OPAQUE (ents[0]->alpha);
+	if (!translucent || R_GetEffectiveAlphaMode () == ALPHAMODE_OIT)
+	{
+		R_DrawBrushModels_Real (ents, count, BP_SOLID, translucent);
+		R_DrawBrushModels_Real (ents, count, BP_ALPHATEST, translucent);
+	}
+	else
+	{
+		int i, j;
+		for (i = 0; i < count; /**/)
+		{
+			uint32_t mask = R_GetBModelAlphaPasses (ents[i]);
+			if (!mask)
+			{
+				i++;
+				continue;
+			}
+			for (j = i + 1; j < count; j++)
+			{
+				uint32_t nextmask = R_GetBModelAlphaPasses (ents[j]);
+				if (!R_CanMergeBModelAlphaPasses (mask, nextmask))
+					break;
+				mask |= nextmask;
+			}
+			if (mask & (1 << BP_SOLID))
+				R_DrawBrushModels_Real (ents + i, j - i, BP_SOLID, true);
+			if (mask & (1 << BP_ALPHATEST))
+				R_DrawBrushModels_Real (ents + i, j - i, BP_ALPHATEST, true);
+			i = j;
+		}
+	}
+}
+
+/*
+=============
+R_DrawBrushModels_SkyLayers
+=============
+*/
+void R_DrawBrushModels_SkyLayers (entity_t **ents, int count)
+{
+	R_DrawBrushModels_Real (ents, count, BP_SKYLAYERS, false);
+}
+
+/*
+=============
+R_DrawBrushModels_SkyCubemap
+=============
+*/
+void R_DrawBrushModels_SkyCubemap (entity_t **ents, int count)
+{
+	R_DrawBrushModels_Real (ents, count, BP_SKYCUBEMAP, false);
+}
+
+/*
+=============
+R_DrawBrushModels_SkyStencil
+=============
+*/
+void R_DrawBrushModels_SkyStencil (entity_t **ents, int count)
+{
+	R_DrawBrushModels_Real (ents, count, BP_SKYSTENCIL, false);
+}
+
+/*
+=============
+R_DrawBrushModels_ShowTris
+=============
+*/
+void R_DrawBrushModels_ShowTris (entity_t **ents, int count)
+{
+	R_DrawBrushModels_Real (ents, count, BP_SHOWTRIS, false);
+}

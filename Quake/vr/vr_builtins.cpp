@@ -1,0 +1,1755 @@
+// vr_builtins.cpp -- Quake VR QuakeC builtins.
+//
+// The QC declares these as `= #0`; after Ironwail's own by-name binding they are still
+// unbound, so they are given numbers from a private range here and bound by name.
+
+#include "vr_progs.hpp"
+#include "vr_melee_shared.h"
+#include "vr_box3d.hpp"
+#include "vr_carry2h.hpp"
+#include "vr_crates.hpp"
+#include "vr_debris.hpp"
+#include "vr_grip.hpp"
+#include "vr_held.hpp"
+#include "vr_highlights.hpp"
+#include "vr_hitmodel.hpp"
+#include "vr_motion.hpp"
+#include "vr_engine.hpp"
+#include "vr_physics.hpp"
+#include "vr_props.hpp"
+#include "vr_protocol.hpp"
+#include "vr_ropesim.hpp"
+#include "vr_server.hpp"
+#include "vr_twohand.hpp"
+#include "vr_cvars.hpp"
+#include "vr_worldtext.hpp"
+#include "vr_view.hpp"
+#include "vr_weapons.hpp"
+#include "vr_weight.hpp"
+#include "vr_walltorch.hpp"
+
+#include "Zancle/Base/GetArraySize.hpp"
+#include "Zancle/Base/IntTypes.hpp"
+#include "Zancle/Base/SizeT.hpp"
+#include "Zancle/Container/Vector.hpp"
+#include "Zancle/Math/Clamp.hpp"
+#include "Zancle/Math/MinMax.hpp"
+
+
+namespace qvr::progs
+{
+namespace
+{
+
+// Ironwail numbers its unnumbered builtins downwards from MAX_BUILTINS - 2 (none today: its highest numbered one is
+// #627). The VR ones from 900 (1000 until they filled the 80 slots below the 200 kept for Ironwail's).
+constexpr int firstVrBuiltin = 900;
+
+// ----------------------------------------------------------------------------
+// Math and vectors
+
+void PF_makeforward()
+{
+    vec3_t right, up;
+    AngleVectors(G_VECTOR(OFS_PARM0), pr_global_struct->v_forward, right, up);
+}
+
+// The bounds of an entity's model (its mins with `max` 0, maxs otherwise), in model space:
+// vector(entity e, float max) modelbounds.
+void PF_modelbounds()
+{
+    edict_t* ent = G_EDICT(OFS_PARM0);
+    const bool max = G_FLOAT(OFS_PARM1) != 0.f;
+    float* out = G_VECTOR(OFS_RETURN);
+    VectorCopy(vec3_origin, out);
+
+    const int index = static_cast<int>(ent->v.modelindex);
+    const qmodel_t* model = index > 0 && index < MAX_MODELS ? sv.models[index] : nullptr;
+    if(model)
+    {
+        VectorCopy(max ? model->maxs : model->mins, out);
+    }
+}
+
+// The middle of an entity's drawn model, turned with it, in the world (vr_rigid.cpp): vector(entity
+// e) modelcentre. Dropped weapons and backpacks are drawn well off their box's middle.
+void PF_modelcentre()
+{
+    const glm::vec3 c = physics::modelCentre(G_EDICT(OFS_PARM0));
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = c.x;
+    out[1] = c.y;
+    out[2] = c.z;
+}
+
+// entity(vector org, float rad, vector dir, float mincos) findcone: findradius's chain (the same entities, in the same
+// order: the last first), less those that have no model or whose drawn middle (modelcentre) is out of the cone from
+// `org` along `dir` (a unit vector) whose cosine is `mincos`, or within a unit of `org`. A little wider than that cone:
+// the caller tests each again as before (QC VR_Forcegrab_FindTarget: everything within reach of a hand, every frame;
+// a pile of props in reach was hundreds of them through QC).
+void PF_findcone()
+{
+    const float* org = G_VECTOR(OFS_PARM0);
+    const float rad = G_FLOAT(OFS_PARM1) * G_FLOAT(OFS_PARM1);
+    const glm::vec3 from{org[0], org[1], org[2]};
+    const float* d = G_VECTOR(OFS_PARM2);
+    const glm::vec3 dir{d[0], d[1], d[2]};
+    const float minCos = G_FLOAT(OFS_PARM3) - 1e-4f;
+    edict_t* chain = qcvm->edicts;
+    edict_t* ent = NEXT_EDICT(qcvm->edicts);
+    for(int i = 1; i < qcvm->num_edicts; i++, ent = NEXT_EDICT(ent))
+    {
+        if(ent->free || static_cast<int>(ent->v.solid) == SOLID_NOT)
+        {
+            continue;
+        }
+        // (findradius's test, in its order and precision)
+        float x = org[0] - (ent->v.origin[0] + (ent->v.mins[0] + ent->v.maxs[0]) * 0.5);
+        float lensq = x * x;
+        if(lensq > rad)
+        {
+            continue;
+        }
+        x = org[1] - (ent->v.origin[1] + (ent->v.mins[1] + ent->v.maxs[1]) * 0.5);
+        lensq += x * x;
+        if(lensq > rad)
+        {
+            continue;
+        }
+        x = org[2] - (ent->v.origin[2] + (ent->v.mins[2] + ent->v.maxs[2]) * 0.5);
+        lensq += x * x;
+        if(lensq > rad)
+        {
+            continue;
+        }
+        if(!ent->v.model || !*PR_GetString(ent->v.model))
+        {
+            continue;
+        }
+        const glm::vec3 to = physics::modelCentre(ent) - from;
+        const float dist = glm::length(to);
+        if(dist < 0.999f || glm::dot(to, dir) < minCos * dist)
+        {
+            continue;
+        }
+        ent->v.chain = EDICT_TO_PROG(chain);
+        chain = ent;
+    }
+    G_INT(OFS_RETURN) = EDICT_TO_PROG(chain);
+}
+
+// Where the force grab takes an entity, in the world (vector(entity e) forcegrabpoint): a weapon by its handle, its
+// origin (weapons::heldAtOrigin: it arrives in the hand as it is held), anything else by its drawn middle.
+void PF_forcegrabpoint()
+{
+    edict_t* e = G_EDICT(OFS_PARM0);
+    const int index = static_cast<int>(e->v.modelindex);
+    const qmodel_t* model = index > 0 && index < MAX_MODELS ? sv.models[index] : nullptr;
+    const glm::vec3 c = weapons::heldAtOrigin(model) ? glm::vec3{e->v.origin[0], e->v.origin[1], e->v.origin[2]}
+                                                    : physics::modelCentre(e);
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = c.x;
+    out[1] = c.y;
+    out[2] = c.z;
+}
+
+// void(vector v1, vector mins, vector maxs, vector v2, float nomonsters, entity forent) tracebox:
+// traceline with a box (the engine's own collision, hulls and all); sets the trace_ globals.
+void PF_tracebox()
+{
+    const trace_t trace = SV_Move(G_VECTOR(OFS_PARM0), G_VECTOR(OFS_PARM1), G_VECTOR(OFS_PARM2),
+        G_VECTOR(OFS_PARM3), static_cast<int>(G_FLOAT(OFS_PARM4)), G_EDICT(OFS_PARM5));
+
+    pr_global_struct->trace_allsolid = trace.allsolid;
+    pr_global_struct->trace_startsolid = trace.startsolid;
+    pr_global_struct->trace_fraction = trace.fraction;
+    pr_global_struct->trace_inwater = trace.inwater;
+    pr_global_struct->trace_inopen = trace.inopen;
+    VectorCopy(trace.endpos, pr_global_struct->trace_endpos);
+    VectorCopy(trace.plane.normal, pr_global_struct->trace_plane_normal);
+    pr_global_struct->trace_plane_dist = trace.plane.dist;
+    edict_t* hit = trace.ent ? trace.ent : qcvm->edicts;
+    pr_global_struct->trace_ent = EDICT_TO_PROG(hit);
+}
+
+// ----------------------------------------------------------------------------
+// Cvar handles: QC resolves cvar names once per map, then reads them by index.
+
+za::Vector<cvar_t*> cvarHandles;
+
+[[nodiscard]] cvar_t* cvarFromHandle(float handle)
+{
+    const int i = static_cast<int>(handle);
+    if(i < 0 || i >= static_cast<int>(cvarHandles.size()))
+    {
+        Con_DPrintf("VR: invalid cvar handle %d\n", i);
+        return nullptr;
+    }
+
+    return cvarHandles[i];
+}
+
+void PF_cvar_hmake()
+{
+    const char* name = G_STRING(OFS_PARM0);
+    cvar_t* var = Cvar_FindVar(name);
+    if(!var)
+    {
+        Con_Printf("VR: cvar_hmake: unknown cvar \"%s\"\n", name);
+        G_FLOAT(OFS_RETURN) = -1.f;
+        return;
+    }
+
+    cvarHandles.pushBack(var);
+    G_FLOAT(OFS_RETURN) = static_cast<float>(cvarHandles.size() - 1);
+}
+
+void PF_cvar_hget()
+{
+    cvar_t* var = cvarFromHandle(G_FLOAT(OFS_PARM0));
+    G_FLOAT(OFS_RETURN) = var ? var->value : 0.f;
+}
+
+void PF_cvar_hclear()
+{
+    cvarHandles.clear();
+}
+
+// ----------------------------------------------------------------------------
+// World text (see vr_worldtext.hpp)
+
+[[nodiscard]] int worldTextHandle()
+{
+    return static_cast<int>(G_FLOAT(OFS_PARM0));
+}
+
+[[nodiscard]] glm::vec3 vecParm1()
+{
+    const float* v = G_VECTOR(OFS_PARM1);
+    return {v[0], v[1], v[2]};
+}
+
+void PF_worldtext_hmake()
+{
+    G_FLOAT(OFS_RETURN) = static_cast<float>(worldtext::serverMake());
+}
+
+void PF_worldtext_hsettext()
+{
+    worldtext::serverSetText(worldTextHandle(), G_STRING(OFS_PARM1));
+}
+
+void PF_worldtext_hsetpos()
+{
+    worldtext::serverSetPos(worldTextHandle(), vecParm1());
+}
+
+extern "C" float VR_PortalHandles(edict_t* trig, edict_t* who); // vr_portals.cpp
+
+// float(entity trig, entity who) portal_handles: 1 if the engine carries this player through the trigger's slipgate
+// (vr_portals_walk; teleport_touch then leaves him be).
+void PF_portal_handles()
+{
+    G_FLOAT(OFS_RETURN) = VR_PortalHandles(G_EDICT(OFS_PARM0), G_EDICT(OFS_PARM1));
+}
+
+extern "C" float VR_PortalCrossings(void);                    // vr_portals.cpp
+extern "C" void VR_PortalEntry(int i, float out[3]);
+extern "C" void VR_PortalExit(int i, float out[3]);
+extern "C" void VR_PortalTurn(const float v[3], float out[3]);
+
+// float() portal_crossings: how many slipgates the last MOVE_PORTALS traceline went through (0 none).
+void PF_portal_crossings()
+{
+    G_FLOAT(OFS_RETURN) = VR_PortalCrossings();
+}
+
+// vector(float i) portal_entry, portal_exit: where it went into the i-th (from 0) and came out of it.
+void PF_portal_entry()
+{
+    VR_PortalEntry(static_cast<int>(G_FLOAT(OFS_PARM0)), G_VECTOR(OFS_RETURN));
+}
+
+void PF_portal_exit()
+{
+    VR_PortalExit(static_cast<int>(G_FLOAT(OFS_PARM0)), G_VECTOR(OFS_RETURN));
+}
+
+// vector(vector v) portal_turn: v turned as the last MOVE_PORTALS traceline was by its gates.
+void PF_portal_turn()
+{
+    const float v[3] = {G_VECTOR(OFS_PARM0)[0], G_VECTOR(OFS_PARM0)[1], G_VECTOR(OFS_PARM0)[2]};
+    VR_PortalTurn(v, G_VECTOR(OFS_RETURN));
+}
+
+void PF_worldtext_hsetangles()
+{
+    worldtext::serverSetAngles(worldTextHandle(), vecParm1());
+}
+
+void PF_worldtext_hsethalign()
+{
+    worldtext::serverSetHAlign(
+        worldTextHandle(), static_cast<worldtext::HAlign>(static_cast<int>(G_FLOAT(OFS_PARM1))));
+}
+
+void PF_worldtext_hsetscale()
+{
+    worldtext::serverSetScale(worldTextHandle(), G_FLOAT(OFS_PARM1));
+}
+
+// floattext(origin, text, colour, scale): a text that rises from `origin` and fades, facing
+// whoever looks (a damage number), shown to every client.
+void PF_floattext()
+{
+    const float* org = G_VECTOR(OFS_PARM0);
+    const float* color = G_VECTOR(OFS_PARM2);
+    worldtext::serverFloatText({org[0], org[1], org[2]}, G_STRING(OFS_PARM1), {color[0], color[1], color[2]},
+        G_FLOAT(OFS_PARM3));
+}
+
+// ----------------------------------------------------------------------------
+// Files
+
+// float(string path) fileexists: whether a file is in the game's search path. Precaching a missing
+// model is an error, so the QC checks first for data that may not be installed (the mission packs'
+// monsters: vrfiringrange's monster buttons).
+void PF_fileexists()
+{
+    G_FLOAT(OFS_RETURN) = COM_FileExists(G_STRING(OFS_PARM0), nullptr) ? 1.f : 0.f;
+}
+
+// ----------------------------------------------------------------------------
+// Highlight markers (vr_highlights.cpp; QC vr_highlights.qc)
+
+// float() highlighting: whether a highlight log is running (the QC skips its work when not).
+void PF_highlighting()
+{
+    G_FLOAT(OFS_RETURN) = highlights::active() ? 1.f : 0.f;
+}
+
+// highlight(kind, score, subject, detail, since): a moment for the log; `subject`'s classname (world: none); `score` 0:
+// the kind's own; `since` the game time it began (0: now).
+void PF_highlight()
+{
+    if(!highlights::active())
+    {
+        return;
+    }
+    const edict_t* subject = G_EDICT(OFS_PARM2);
+    const char* name = subject != qcvm->edicts && !subject->free ? PR_GetString(subject->v.classname) : "";
+    highlights::event(G_STRING(OFS_PARM0), G_FLOAT(OFS_PARM1), name, G_STRING(OFS_PARM3), G_FLOAT(OFS_PARM4));
+}
+
+// ----------------------------------------------------------------------------
+// Messages
+
+// Same destinations as Ironwail's (static) WriteDest in pr_cmds.c (`len`: the most bytes the write takes, for
+// MSG_BROADCAST's room; VR_BroadcastWritten after it).
+[[nodiscard]] sizebuf_t* writeDest(int len)
+{
+    enum
+    {
+        MSG_BROADCAST = 0,
+        MSG_ONE = 1,
+        MSG_ALL = 2,
+        MSG_INIT = 3
+    };
+
+    switch(static_cast<int>(G_FLOAT(OFS_PARM0)))
+    {
+        case MSG_BROADCAST: return VR_BroadcastDest(len); // sv.datagram, or nowhere when full (vr_server.cpp)
+        case MSG_ONE:
+        {
+            edict_t* ent = PROG_TO_EDICT(pr_global_struct->msg_entity);
+            const int entnum = NUM_FOR_EDICT(ent);
+            if(entnum < 1 || entnum > svs.maxclients)
+            {
+                PR_RunError("WriteDest: not a client");
+            }
+            return &svs.clients[entnum - 1].message;
+        }
+        case MSG_ALL: return &sv.reliable_datagram;
+        case MSG_INIT: return sv.signon;
+        default: PR_RunError("WriteDest: bad destination"); return nullptr;
+    }
+}
+
+void PF_WriteVec3()
+{
+    sizebuf_t* dest = writeDest(12);
+    const float* v = G_VECTOR(OFS_PARM1);
+    for(int i = 0; i < 3; i++)
+    {
+        MSG_WriteCoord(dest, v[i], sv.protocolflags);
+    }
+    VR_BroadcastWritten(dest);
+}
+
+// ----------------------------------------------------------------------------
+// Effects and the player's hands
+
+// A wound on a model (vr_wounds.cpp): void(entity e, vector org, vector dir, float kind, float amount, float extra)
+// woundevent. `e` hit at `org` going `dir` (unit), QVR_WOUND_* `kind`, `amount` (damage, 0..255), `extra` (pellets;
+// a liquid's: its surface's height is org_z). Unreliable, to every client, as particles.
+// The entities sent a wound this map: their removal is sent (onEdictFree).
+za::Vector<za::U8> woundsSent;
+
+void PF_woundevent()
+{
+    const int num = NUM_FOR_EDICT(G_EDICT(OFS_PARM0));
+    const float* org = G_VECTOR(OFS_PARM1);
+    const float* dir = G_VECTOR(OFS_PARM2);
+    const int kind = static_cast<int>(G_FLOAT(OFS_PARM3));
+    const int amount = static_cast<int>(G_FLOAT(OFS_PARM4) + 0.5f);
+    const int extra = static_cast<int>(G_FLOAT(OFS_PARM5));
+
+    if(sv.state != ss_active || sv.datagram.cursize > MAX_DATAGRAM - 32)
+    {
+        return;
+    }
+
+    MSG_WriteByte(&sv.datagram, protocol::svc_quakevr);
+    MSG_WriteByte(&sv.datagram, protocol::QVR_SVC_WOUND);
+    MSG_WriteShort(&sv.datagram, num);
+    for(int i = 0; i < 3; i++)
+    {
+        MSG_WriteCoord(&sv.datagram, org[i], sv.protocolflags);
+    }
+    for(int i = 0; i < 3; i++)
+    {
+        MSG_WriteChar(&sv.datagram, CLAMP(-127, static_cast<int>(dir[i] * 127.f), 127));
+    }
+    MSG_WriteByte(&sv.datagram, CLAMP(0, kind, 255));
+    MSG_WriteByte(&sv.datagram, CLAMP(0, amount, 255));
+    MSG_WriteByte(&sv.datagram, CLAMP(0, extra, 255));
+    VR_BroadcastMessageEnd(); // a boundary (vr_server.cpp)
+    if(num >= static_cast<int>(woundsSent.size()))
+    {
+        woundsSent.resize(static_cast<za::SizeT>(num) + 1, 0);
+    }
+    woundsSent[static_cast<za::SizeT>(num)] = 1;
+}
+
+// torchflametouch(t): what of you the flame of torch `t`, held by you, touches (single player: the client's last
+// frame; vr_walltorch.cpp walltorch::flameOnYou): bits 1 the hand holding it, 2 the other hand, 4 the holding arm, 8 the
+// other arm, 16 the torso or legs, 32 the head, and 256 times the deepest one's bit (but the holding hand's); 0 nothing
+// (or neither vr_burn_self nor vr_burn_drop on). trace_endpos:
+// where (the deepest contact but the holding hand's, that one if alone), on the body; trace_plane_normal: the way out.
+void PF_torchflametouch()
+{
+    glm::vec3 at{0.f}, out{0.f, 0.f, 1.f};
+    const unsigned parts = walltorch::flameOnYou(NUM_FOR_EDICT(G_EDICT(OFS_PARM0)), at, out);
+    G_FLOAT(OFS_RETURN) = static_cast<float>(parts);
+    if(parts)
+    {
+        for(int i = 0; i < 3; i++)
+        {
+            pr_global_struct->trace_endpos[i] = at[i];
+            pr_global_struct->trace_plane_normal[i] = out[i];
+        }
+    }
+}
+
+// float anglemod(float v): v wrapped into [0, 360) (AngleMod360, mathlib.c). Was QC's (ai.qc), a loop of a step per
+// 360 degrees: a hanging pickup's anglemod(100 * time) took one per 3.6 s of level time, every think.
+void PF_anglemod()
+{
+    G_FLOAT(OFS_RETURN) = AngleMod360(G_FLOAT(OFS_PARM0));
+}
+
+// The melee history (QC vr_melee.qc VR_Melee_Track): a hand's blow keeps its last VR_MELEE_HISTORY poses' velocities (the
+// far end's, the grip's, the wrist's; m/s) and time steps in a ring, the newest at mh_hi; a time step of 0 ends it. The
+// builtins below walk it back from the newest pose, as the QC loops they replace did (fteqcc made each `b.mh_hdt[k]` a
+// call, a binary search), and do the same float operations in the same order as the VM (pr_exec.c: vectors a component
+// at a time, a dot product's terms summed in order; PF_vlen and PF_normalize in double, PF_max), so their results are the
+// QC's to the bit (vr_melee_shared.h's constants read as floats, as the QC's are).
+struct MeleeRing
+{
+    edict_t* b;
+    const MeleeHistoryFields& f;
+    int k; // the pose looked at
+
+    explicit MeleeRing(edict_t* xB) : b{xB}, f{bindings().melee}, k{static_cast<int>(E_FLOAT(xB, bindings().melee.hi))}
+    {
+        if(k < 0 || k >= VR_MELEE_HISTORY)
+        {
+            k = 0; // (never: VR_Melee_Track keeps it in the ring)
+        }
+    }
+
+    [[nodiscard]] float dt() const
+    {
+        return E_FLOAT(b, f.hdt + k);
+    }
+
+    [[nodiscard]] const float* at(int xArray) const // the pose's vector of the ring xArray (f.hfar, f.hgrip, f.hwrist)
+    {
+        return E_VECTOR(b, xArray + 3 * k);
+    }
+
+    void older()
+    {
+        k = k > 0 ? k - 1 : VR_MELEE_HISTORY - 1;
+    }
+};
+
+// `to` + `v` * `s`, as QC's `to = to + v * s` (OP_MUL_VF, OP_ADD_V).
+void meleeAddScaled(float* to, const float* v, float s)
+{
+    for(int i = 0; i < 3; i++)
+    {
+        const float scaled = s * v[i];
+        to[i] = to[i] + scaled;
+    }
+}
+
+[[nodiscard]] float meleeDot(const float* a, const float* b) // QC's `a * b` (OP_MUL_V)
+{
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+[[nodiscard]] float meleeVlen(const float* v) // PF_vlen
+{
+    return static_cast<float>(sqrt(static_cast<double>(v[0]) * v[0] + static_cast<double>(v[1]) * v[1] +
+                                   static_cast<double>(v[2]) * v[2]));
+}
+
+// float meleerun(entity b, float xGrip): how far the far end (xGrip: the grip) came towards where it goes now (m), looking
+// back VR_MELEE_RUN_TIME at most (builtins.qc).
+void PF_meleerun()
+{
+    G_FLOAT(OFS_RETURN) = 0.f;
+    if(!bindings().melee.valid)
+    {
+        return;
+    }
+    MeleeRing r{G_EDICT(OFS_PARM0)};
+    const bool grip = G_FLOAT(OFS_PARM1) != 0.f;
+    const float* way = E_VECTOR(r.b, grip ? r.f.vgrip : r.f.vfar);
+    float now[3] = {0.f, 0.f, 0.f}; // normalize(way): PF_normalize
+    const double len = sqrt(static_cast<double>(way[0]) * way[0] + static_cast<double>(way[1]) * way[1] +
+                            static_cast<double>(way[2]) * way[2]);
+    if(len != 0)
+    {
+        const double inv = 1 / len;
+        for(int i = 0; i < 3; i++)
+        {
+            now[i] = static_cast<float>(way[i] * inv);
+        }
+    }
+    float moved[3] = {0.f, 0.f, 0.f};
+    float run = 0.f;
+    float back = 0.f;
+    for(int n = 0; n < VR_MELEE_HISTORY; ++n)
+    {
+        const float dt = r.dt();
+        if(dt <= 0.f)
+        {
+            break;
+        }
+        meleeAddScaled(moved, r.at(grip ? r.f.hgrip : r.f.hfar), dt);
+        const float along = meleeDot(moved, now);
+        if(run < along) // max(run, along): PF_max
+        {
+            run = along;
+        }
+        back = back + dt;
+        if(back > static_cast<float>(VR_MELEE_RUN_TIME))
+        {
+            break;
+        }
+        r.older();
+    }
+    G_FLOAT(OFS_RETURN) = run;
+}
+
+// float meleewristspeed(entity b): the wrist's net travel over the last VR_MELEE_WRIST_TIME, over that time (m/s).
+void PF_meleewristspeed()
+{
+    G_FLOAT(OFS_RETURN) = 0.f;
+    if(!bindings().melee.valid)
+    {
+        return;
+    }
+    MeleeRing r{G_EDICT(OFS_PARM0)};
+    const float window = static_cast<float>(VR_MELEE_WRIST_TIME);
+    float moved[3] = {0.f, 0.f, 0.f};
+    float back = 0.f;
+    for(int n = 0; n < VR_MELEE_HISTORY; ++n)
+    {
+        const float dt = r.dt();
+        if(dt <= 0.f)
+        {
+            break;
+        }
+        meleeAddScaled(moved, r.at(r.f.hwrist), dt);
+        back = back + dt;
+        if(back >= window)
+        {
+            break;
+        }
+        r.older();
+    }
+    const float over = back < window ? window : back; // max(back, window): PF_max
+    G_FLOAT(OFS_RETURN) = meleeVlen(moved) / over;
+}
+
+// float meleewiggled(entity b): whether the grip went back the other way at VR_MELEE_WIGGLE_BACK of its speed now or
+// more, within VR_MELEE_WIGGLE_TIME.
+void PF_meleewiggled()
+{
+    G_FLOAT(OFS_RETURN) = 0.f;
+    if(!bindings().melee.valid)
+    {
+        return;
+    }
+    MeleeRing r{G_EDICT(OFS_PARM0)};
+    const float* vgrip = E_VECTOR(r.b, r.f.vgrip);
+    const float speed = meleeVlen(vgrip);
+    if(speed <= 0.f)
+    {
+        return;
+    }
+    const float inv = 1.f / speed;
+    const float now[3] = {inv * vgrip[0], inv * vgrip[1], inv * vgrip[2]};
+    const float against = static_cast<float>(VR_MELEE_WIGGLE_BACK) * speed;
+    float back = 0.f;
+    for(int n = 0; n < VR_MELEE_HISTORY; ++n)
+    {
+        const float dt = r.dt();
+        if(dt <= 0.f)
+        {
+            break;
+        }
+        if(-meleeDot(r.at(r.f.hgrip), now) >= against)
+        {
+            G_FLOAT(OFS_RETURN) = 1.f;
+            return;
+        }
+        back = back + dt;
+        if(back >= static_cast<float>(VR_MELEE_WIGGLE_TIME))
+        {
+            break;
+        }
+        r.older();
+    }
+}
+
+// vector meleegripago(entity b, float xBack): where the grip was xBack s ago (from the head, in the play space, metres;
+// as far back as the history goes).
+void PF_meleegripago()
+{
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = out[1] = out[2] = 0.f;
+    if(!bindings().melee.valid)
+    {
+        return;
+    }
+    MeleeRing r{G_EDICT(OFS_PARM0)};
+    const float within = G_FLOAT(OFS_PARM1);
+    float moved[3] = {0.f, 0.f, 0.f};
+    float back = 0.f;
+    for(int n = 0; n < VR_MELEE_HISTORY; ++n)
+    {
+        const float dt = r.dt();
+        if(dt <= 0.f || back >= within)
+        {
+            break;
+        }
+        meleeAddScaled(moved, r.at(r.f.hgrip), dt);
+        back = back + dt;
+        r.older();
+    }
+    const float* rgrip = E_VECTOR(r.b, r.f.rgrip);
+    for(int i = 0; i < 3; i++)
+    {
+        out[i] = rgrip[i] - moved[i];
+    }
+}
+
+// particle2(origin, direction, preset, count): unreliable, like vanilla particle().
+void PF_particle2()
+{
+    const float* org = G_VECTOR(OFS_PARM0);
+    const float* dir = G_VECTOR(OFS_PARM1);
+    const int preset = static_cast<int>(G_FLOAT(OFS_PARM2));
+    const int count = static_cast<int>(G_FLOAT(OFS_PARM3));
+
+    if(sv.datagram.cursize > MAX_DATAGRAM - 24)
+    {
+        return;
+    }
+
+    MSG_WriteByte(&sv.datagram, protocol::svc_quakevr);
+    MSG_WriteByte(&sv.datagram, protocol::QVR_SVC_PARTICLE2);
+    for(int i = 0; i < 3; i++)
+    {
+        MSG_WriteCoord(&sv.datagram, org[i], sv.protocolflags);
+    }
+    for(int i = 0; i < 3; i++)
+    {
+        MSG_WriteChar(&sv.datagram, CLAMP(-128, static_cast<int>(dir[i] * 16.f), 127));
+    }
+    MSG_WriteByte(&sv.datagram, preset);
+    MSG_WriteShort(&sv.datagram, count);
+    VR_BroadcastMessageEnd(); // a boundary (vr_server.cpp)
+}
+
+// entity findflags(entity start, .float field, float flags): the next entity after `start` (in edict order, free ones
+// skipped) whose `field` has any of `flags` set; world when there is none (DP's extension). The frame's loops over the
+// monsters (VR_Liquids_Frame, VR_Wounds_Frame) step through them alone, instead of every entity in the VM.
+void PF_findflags()
+{
+    const int from = NUM_FOR_EDICT(G_EDICT(OFS_PARM0));
+    const int field = G_INT(OFS_PARM1);
+    const int flags = static_cast<int>(G_FLOAT(OFS_PARM2));
+    for(int i = from + 1; i < qcvm->num_edicts; i++)
+    {
+        edict_t* e = EDICT_NUM(i);
+        if(!e->free && (static_cast<int>(E_FLOAT(e, field)) & flags))
+        {
+            G_INT(OFS_RETURN) = EDICT_TO_PROG(e);
+            return;
+        }
+    }
+    G_INT(OFS_RETURN) = EDICT_TO_PROG(qcvm->edicts);
+}
+
+// vector liquidentry(vector start, vector end): where the segment first goes into water, slime or
+// lava from the open (or out of it: a shot from under water), on the surface; `start` itself if it
+// crosses none. Leaves the trace globals alone (a shot's trace is still being used).
+void PF_liquidentry()
+{
+    const float* start = G_VECTOR(OFS_PARM0);
+    const float* end = G_VECTOR(OFS_PARM1);
+    glm::vec3 at{start[0], start[1], start[2]};
+    const bool crossed = physics::liquidEntry(at, {end[0], end[1], end[2]}, at);
+    if(developer.value >= 3)
+    {
+        Con_Printf("liquidentry %.0f %.0f %.0f -> %.0f %.0f %.0f: %s\n", start[0], start[1], start[2], end[0], end[1], end[2],
+            crossed ? "crosses" : "no");
+    }
+    float* out = G_VECTOR(OFS_RETURN);
+    for(int i = 0; i < 3; i++)
+    {
+        out[i] = crossed ? at[i] : start[i];
+    }
+}
+
+// void watersplash(vector org, vector dir, float strength, float sound): a splash on a liquid's
+// surface at `org`, something going `dir` into it `strength` hard (4 a shot .. 50 a body), and its
+// sound (QVR_SPLASH_*: none, a shot's plip, a thing's splash by strength).
+void PF_watersplash()
+{
+    const float* org = G_VECTOR(OFS_PARM0);
+    const float* dir = G_VECTOR(OFS_PARM1);
+    physics::waterSplash({org[0], org[1], org[2]}, {dir[0], dir[1], dir[2]}, G_FLOAT(OFS_PARM2),
+        static_cast<physics::SplashSound>(CLAMP(0, static_cast<int>(G_FLOAT(OFS_PARM3)), 2)));
+}
+
+// haptic(hand, delay, duration, frequency, amplitude), for the `self` player.
+void PF_haptic()
+{
+    server::sendHaptic(PROG_TO_EDICT(pr_global_struct->self), static_cast<int>(G_FLOAT(OFS_PARM0)),
+        G_FLOAT(OFS_PARM1), G_FLOAT(OFS_PARM2), G_FLOAT(OFS_PARM3), G_FLOAT(OFS_PARM4));
+}
+
+// carryangles(e, handangles, grab): a held object's angles, turning with the hand (vr_rigid.cpp). At a grab (a regrip:
+// VR_Carry_Regrip) its place in the hand is kept as it is now (its .carry_offset set before), and its grip's settings
+// still move it from there (vr_grip.hpp).
+void PF_carryangles()
+{
+    edict_t* e = G_EDICT(OFS_PARM0);
+    const bool grab = static_cast<int>(G_FLOAT(OFS_PARM2)) != 0;
+    physics::carryAngles(e, G_VECTOR(OFS_PARM1), grab, G_VECTOR(OFS_RETURN));
+    const FieldOffsets& f = fields();
+    if(grab && f.carry_offset >= 0)
+    {
+        grip::serverKeep(e, G_VECTOR(OFS_PARM1), fieldVec(e, f.carry_offset));
+    }
+}
+
+// vector(entity e, entity player, float hand, float lefthand, vector handangles, vector offset) carrygrip: as `player`'s
+// `hand` (cVR_MainHand or cVR_OffHand; lefthand: the left one) at `handangles` takes `e`, whose origin is at `offset` in
+// the hand (forward, right, up: where it was taken, as .carry_offset): its place in the hand by its Held Object Offsets'
+// grip (vr_grip.hpp): its turn with the hand kept (its angles set now) and its origin's place returned (.carry_offset).
+void PF_carrygrip()
+{
+    const float* o = G_VECTOR(OFS_PARM5);
+    const glm::vec3 v = grip::serverTake(G_EDICT(OFS_PARM0), G_EDICT(OFS_PARM1), static_cast<int>(G_FLOAT(OFS_PARM2)),
+        G_FLOAT(OFS_PARM3) != 0.f, G_VECTOR(OFS_PARM4), glm::vec3{o[0], o[1], o[2]});
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = v.x;
+    out[1] = v.y;
+    out[2] = v.z;
+}
+
+// vector(entity e, vector handangles, vector offset) carrypouch: `e`, a hand grenade just taken from the pouch (after
+// carrygrip, `offset` its .carry_offset): turned in the hand by vr_grenade_pouch_hold_* (vr_grip.hpp); its angles set now
+// and its origin's place returned (.carry_offset).
+void PF_carrypouch()
+{
+    const float* o = G_VECTOR(OFS_PARM2);
+    const glm::vec3 v = grip::serverFromPouch(G_EDICT(OFS_PARM0), G_VECTOR(OFS_PARM1), glm::vec3{o[0], o[1], o[2]});
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = v.x;
+    out[1] = v.y;
+    out[2] = v.z;
+}
+
+// vector(entity e, vector handangles, vector offset) carryplace: each frame `e` is held in one hand: its angles set
+// (turning with the hand) and its origin's place in the hand returned (.carry_offset, given as `offset`): placed again
+// at once when its Held Object Offsets changed (vr_grip.hpp).
+void PF_carryplace()
+{
+    const float* o = G_VECTOR(OFS_PARM2);
+    const glm::vec3 v = grip::serverFrame(G_EDICT(OFS_PARM0), G_VECTOR(OFS_PARM1), glm::vec3{o[0], o[1], o[2]});
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = v.x;
+    out[1] = v.y;
+    out[2] = v.z;
+}
+
+// vector(entity e, vector handpos, vector palm) carryfit: how far to move an object a hand grips so
+// that it sits against the palm, not sunk into the fist (vr_held.cpp; vr_held_surface_fit).
+void PF_carryfit()
+{
+    const float* h = G_VECTOR(OFS_PARM1);
+    const float* p = G_VECTOR(OFS_PARM2);
+    const glm::vec3 v = held::surfaceFit(G_EDICT(OFS_PARM0), glm::vec3{h[0], h[1], h[2]}, glm::vec3{p[0], p[1], p[2]});
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = v.x;
+    out[1] = v.y;
+    out[2] = v.z;
+}
+
+// vector(entity e, entity player, float grab) carry2h: a prop held in both hands (vr_carry2h.cpp): at the second
+// hand's grip (grab 1) the grips are kept and its origin returned; after, where it goes (its angles set at once).
+void PF_carry2h()
+{
+    const glm::vec3 v = carry2h::serverPlace(G_EDICT(OFS_PARM0), G_EDICT(OFS_PARM1), G_FLOAT(OFS_PARM2) != 0.f);
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = v.x;
+    out[1] = v.y;
+    out[2] = v.z;
+}
+
+// float(entity e, entity player) carry2hoff: which hands of `player` have been pulled off `e`, held in both (bit 1 the off
+// hand, 2 the main hand; vr_carry2h.cpp detached).
+void PF_carry2hoff()
+{
+    G_FLOAT(OFS_RETURN) = static_cast<float>(carry2h::detached(G_EDICT(OFS_PARM0), G_EDICT(OFS_PARM1)));
+}
+
+// carry2hkeep(entity e, entity player, float hand): `e`, held in both of `player`'s hands, is held by `hand` alone from
+// now on (the other let go): moved onto that hand's grip (vr_carry2h.cpp keep).
+void PF_carry2hkeep()
+{
+    carry2h::keep(G_EDICT(OFS_PARM0), G_EDICT(OFS_PARM1), static_cast<int>(G_FLOAT(OFS_PARM2)));
+}
+
+// float(entity e, vector point, float hand) carryreach: whether the `self` player's `hand` can take hold of `e` (its fist
+// touches its drawn surface, as a hand touching it could), for a carried one (not solid).
+// physicsblast(at, damage): T_RadiusDamage's explosion throws the rigid bodies round it (vr_box3d.cpp; Box3D only).
+void PF_physicsblast()
+{
+    const float* p = G_VECTOR(OFS_PARM0);
+    box3d::blast(glm::vec3{p[0], p[1], p[2]}, G_FLOAT(OFS_PARM1));
+}
+
+// float(entity e, string key) propvalue: a setting of the prop `e` is (Held Object Offsets, vr_props.inc, by its
+// model): "mass" its mass in kg (the setting, else Box3D's), "throw" how much of the hand's throw it keeps (the
+// setting, else from its mass), any other key its value (its default for a model with no settings; 0 for no key).
+void PF_propvalue()
+{
+    edict_t* e = G_EDICT(OFS_PARM0);
+    const char* name = G_STRING(OFS_PARM1);
+    const int index = static_cast<int>(e->v.modelindex);
+    const qmodel_t* model = index > 0 && index < MAX_MODELS ? sv.models[index] : nullptr;
+    const int slot = model ? props::slotForModel(model) : -1;
+    const props::Key key = props::keyByName(name);
+    float out = 0.f;
+    if(key == props::Key::Mass)
+    {
+        out = box3d::propMass(e);
+    }
+    else if(key == props::Key::Throw)
+    {
+        out = props::throwScale(slot, box3d::propMass(e));
+    }
+    else if(key != props::Key::Count && key != props::Key::ID)
+    {
+        out = props::scaledValue(slot, key); // (a length in its model's axes: times its Size)
+    }
+    else
+    {
+        Con_DPrintf("propvalue: no key \"%s\"\n", name);
+    }
+    G_FLOAT(OFS_RETURN) = out;
+}
+
+// float(string model, string key) weaponvalue: a setting of the weapon drawn with `model` ("progs/v_rock2.mdl"; Weapon
+// Offsets and Weapon Weights, vr_weapons.inc, as its cvars name it: "w_mass" kg, "w_meleedmg", "w_throwdmg"...), what
+// it inherits followed (0: no such weapon or key).
+void PF_weaponvalue()
+{
+    const int slot = weapons::slotForName(G_STRING(OFS_PARM0));
+    const weapons::Key key = weapons::keyByName(G_STRING(OFS_PARM1));
+    G_FLOAT(OFS_RETURN) = slot >= 0 && key != weapons::Key::Count ? weapons::value(slot, key) : 0.f;
+}
+
+// float(float mass) weightdamage: the damage multiplier of a melee blow or a throw by a thing of `mass` kg (weight and
+// damage, vr_weight_damage_*; 1 for no mass). float(float mass) weightleniency: the factor on the speed thresholds of
+// its strikes and throws (heavy leniency, vr_weight_lenient*; 1 for anything up to vr_weight_lenient_from).
+void PF_weightdamage()
+{
+    G_FLOAT(OFS_RETURN) = weight::damageMultiplier(G_FLOAT(OFS_PARM0));
+}
+
+void PF_weightleniency()
+{
+    G_FLOAT(OFS_RETURN) = weight::leniency(G_FLOAT(OFS_PARM0));
+}
+
+// vector(vector vel, vector flick, float mass, float hands) throwvelocity: throws by weight (weight::throwVelocity): the
+// velocity (m/s) a thing of `mass` kg leaves `hands` hands (1 or 2) at, from the hand's throw estimate `vel` (m/s) and
+// the part of it the wrist's flick gives (`flick`): the flick its mass keeps, the gain of a real throw, the limit.
+void PF_throwvelocity()
+{
+    const float* v = G_VECTOR(OFS_PARM0);
+    const float* f = G_VECTOR(OFS_PARM1);
+    const weight::ThrowOut out = weight::throwVelocity(
+        glm::vec3{v[0], v[1], v[2]}, glm::vec3{f[0], f[1], f[2]}, G_FLOAT(OFS_PARM2), static_cast<int>(G_FLOAT(OFS_PARM3)));
+    float* r = G_VECTOR(OFS_RETURN);
+    r[0] = out.vel.x;
+    r[1] = out.vel.y;
+    r[2] = out.vel.z;
+}
+
+// float(float what, float mass, ...) throwweight (one builtin: the VR builtins' range is full): a thrown thing's hits
+// and spin by weight. `what` 0 (mass): the factor on its speed thresholds (weight::throwScale); 1 (mass, minmult): the
+// least speed (units/s) it hurts at (throwHitSpeed); 2 (mass, minmult, curvemult, speed, fullspeed): its damage factor
+// hitting at `speed` units/s, 0 under it (throwDamage); 3 (mass, hands, rate): a throw's spin rate (rad/s) limited by its
+// mass (throwSpin).
+void PF_throwweight()
+{
+    const int what = static_cast<int>(G_FLOAT(OFS_PARM0));
+    const float mass = G_FLOAT(OFS_PARM1);
+    float r = 0.f;
+    switch(what)
+    {
+        case 0: r = weight::throwScale(mass); break;
+        case 1: r = weight::throwHitSpeed(mass, G_FLOAT(OFS_PARM2)); break;
+        case 2:
+            r = weight::throwDamage(G_FLOAT(OFS_PARM4), G_FLOAT(OFS_PARM5), mass, G_FLOAT(OFS_PARM2), G_FLOAT(OFS_PARM3));
+            break;
+        case 3:
+            r = glm::length(weight::throwSpin(
+                glm::vec3{G_FLOAT(OFS_PARM3), 0.f, 0.f}, mass, static_cast<int>(G_FLOAT(OFS_PARM2))));
+            break;
+        default: break;
+    }
+    G_FLOAT(OFS_RETURN) = r;
+}
+
+// vector(entity e, vector handangles, float lefthand) propgrip: a prop held the same way every time (Grip Mode 1): from
+// now on it turns with the hand as its Grip Pitch, Yaw and Roll say (its angles set now), and its origin's place in
+// the hand is returned (forward, right, up, as .carry_offset: Grip X, Y (left) and Z; the left hand's mirrored).
+void PF_propgrip()
+{
+    edict_t* e = G_EDICT(OFS_PARM0);
+    const float* handAngles = G_VECTOR(OFS_PARM1);
+    const bool left = G_FLOAT(OFS_PARM2) != 0.f;
+    const int index = static_cast<int>(e->v.modelindex);
+    const qmodel_t* model = index > 0 && index < MAX_MODELS ? sv.models[index] : nullptr;
+    const int slot = model ? props::slotForModel(model) : -1;
+    using props::Key;
+    glm::vec3 place = glm::vec3{props::value(slot, Key::GripX), props::value(slot, Key::GripY), props::value(slot, Key::GripZ)} *
+                      props::size(slot); // (a point of it: grows with its Size)
+    glm::vec3 turn{props::value(slot, Key::GripPitch), props::value(slot, Key::GripYaw), props::value(slot, Key::GripRoll)};
+    if(left)
+    {
+        place.y = -place.y;
+        turn.y = -turn.y;
+        turn.z = -turn.z;
+    }
+    // Pitch up for every model (vr_grip.cpp's fixed grip; carrygrip is what the carry uses now).
+    const float angles[3]{-turn.x, turn.y, turn.z};
+    physics::setCarryTurn(e, handAngles, held::axesFromAngles(angles, true));
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = place.x;
+    out[1] = -place.y;
+    out[2] = place.z;
+}
+
+// vector(entity e, vector angles, vector point) modelpoint: where the point `point` of `e`'s model (units in its model's
+// axes: x forward, y left, z up) is from its origin when it is turned by `angles` (as the renderer turns it: an alias
+// model's pitch is inverted) and scaled as it is drawn. The melee's line of a carried club (a wall torch's head, a
+// brick's end: vr_melee.qc).
+void PF_modelpoint()
+{
+    edict_t* e = G_EDICT(OFS_PARM0);
+    const float* angles = G_VECTOR(OFS_PARM1);
+    const float* p = G_VECTOR(OFS_PARM2);
+    const int index = static_cast<int>(e->v.modelindex);
+    const qmodel_t* model = index > 0 && index < MAX_MODELS ? sv.models[index] : nullptr;
+    // Scaled as it is drawn: the networked scale (an offset from 1) about its origin (a rock's or a brick's size,
+    // vr_debris.cpp); an unscaled model (a wall torch) as it is.
+    const FieldOffsets& f = fields();
+    const glm::vec3 scale = fieldVec(e, f.model_scale), about = fieldVec(e, f.model_scale_origin);
+    const glm::vec3 point = (glm::vec3{p[0], p[1], p[2]} - about) * (glm::vec3{1.f} + scale) + about;
+    const glm::vec3 v = held::axesFromAngles(angles, model && model->type == mod_brush) * point;
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = v.x;
+    out[1] = v.y;
+    out[2] = v.z;
+}
+
+// A push of a hand on a prop (physicspush(e, at, velocity)): the point `at` of the rigid body `e` gets at least the
+// velocity's speed along it (Box3D: an impulse there, so a tall box pushed high tips over; vr_box3d.cpp). False if it is
+// not Box3D's. Optional `mass` (kg, 0: none): what pushes has that mass (a hand's, a weapon's: box3d::push).
+void PF_physicspush()
+{
+    const float* at = G_VECTOR(OFS_PARM1);
+    const float* v = G_VECTOR(OFS_PARM2);
+    const float mass = qcvm->argc > 3 ? G_FLOAT(OFS_PARM3) : 0.f;
+    G_FLOAT(OFS_RETURN) =
+        box3d::push(G_EDICT(OFS_PARM0), glm::vec3{at[0], at[1], at[2]}, glm::vec3{v[0], v[1], v[2]}, mass) ? 1.f : 0.f;
+}
+
+// entity physicsshot(vector start, vector end, vector vel, float mass): a shot's push (box3d::shot): the first loose prop
+// between `start` and `end` pushed where the shot goes in, as physicspush. That prop, or world if none.
+void PF_physicsshot()
+{
+    const float* a = G_VECTOR(OFS_PARM0);
+    const float* b = G_VECTOR(OFS_PARM1);
+    const float* v = G_VECTOR(OFS_PARM2);
+    const int num = box3d::shot(glm::vec3{a[0], a[1], a[2]}, glm::vec3{b[0], b[1], b[2]}, glm::vec3{v[0], v[1], v[2]},
+        G_FLOAT(OFS_PARM3));
+    G_INT(OFS_RETURN) = EDICT_TO_PROG(EDICT_NUM(num));
+}
+
+// Ragdolls (vr_box3d.cpp, "Ragdolls"; vr_carry.qc, vr_wpnforcegrab.qc, vr_burning.qc). float isragdoll(entity e).
+void PF_isragdoll()
+{
+    G_FLOAT(OFS_RETURN) = box3d::isRagdoll(NUM_FOR_EDICT(G_EDICT(OFS_PARM0))) ? 1.f : 0.f;
+}
+
+// Knockdowns (vr_box3d.cpp "Knockdowns"; QC vr_knockdown.qc). float canragdoll(entity e): e can be knocked down as a
+// ragdoll (a monster with a rig, ragdolls on).
+void PF_canragdoll()
+{
+    G_FLOAT(OFS_RETURN) = box3d::canRagdoll(G_EDICT(OFS_PARM0)) ? 1.f : 0.f;
+}
+
+// float ragdollknockdown(entity e): e (.vr_knockdown 1, touchable, not solid) a ragdoll now, alive.
+void PF_ragdollknockdown()
+{
+    G_FLOAT(OFS_RETURN) = box3d::ragdollKnockdown(G_EDICT(OFS_PARM0)) ? 1.f : 0.f;
+}
+
+// float ragdollgetup(entity e, float frameA, float frameB, vector mins, vector maxs, float range): e gets up from its
+// ragdoll, starting from frameA or frameB (whichever fits how it lies; -1 none): 0 no room within range (it stays down),
+// else 1 or 2 (the frame chosen), e at the place found, turned to it (.vr_knockdown 2).
+void PF_ragdollgetup()
+{
+    const float* lo = G_VECTOR(OFS_PARM3);
+    const float* hi = G_VECTOR(OFS_PARM4);
+    G_FLOAT(OFS_RETURN) = static_cast<float>(box3d::ragdollGetUp(G_EDICT(OFS_PARM0), static_cast<int>(G_FLOAT(OFS_PARM1)),
+        static_cast<int>(G_FLOAT(OFS_PARM2)), glm::vec3{lo[0], lo[1], lo[2]}, glm::vec3{hi[0], hi[1], hi[2]}, G_FLOAT(OFS_PARM5)));
+}
+
+// float ragdollgrab(entity e, entity player, float hand): the hand takes the limb of e's ragdoll it is on (or catches
+// the one it pulls).
+void PF_ragdollgrab()
+{
+    G_FLOAT(OFS_RETURN) =
+        box3d::ragdollGrab(G_EDICT(OFS_PARM0), G_EDICT(OFS_PARM1), static_cast<int>(G_FLOAT(OFS_PARM2))) ? 1.f : 0.f;
+}
+
+// float ragdollpull(entity e, entity player, float hand, float flight): a force grab of e's limb nearest the hand's aim.
+void PF_ragdollpull()
+{
+    G_FLOAT(OFS_RETURN) = box3d::ragdollPull(G_EDICT(OFS_PARM0), G_EDICT(OFS_PARM1), static_cast<int>(G_FLOAT(OFS_PARM2)),
+                              G_FLOAT(OFS_PARM3))
+                              ? 1.f
+                              : 0.f;
+}
+
+// void ragdollrelease(entity player, float hand, vector velocity): the hand lets go (a held limb keeps the velocity).
+void PF_ragdollrelease()
+{
+    const float* v = G_VECTOR(OFS_PARM2);
+    box3d::ragdollRelease(G_EDICT(OFS_PARM0), static_cast<int>(G_FLOAT(OFS_PARM1)), glm::vec3{v[0], v[1], v[2]});
+}
+
+// float ragdollheld(entity player, float hand): 0 nothing, 1 holding a ragdoll's limb, 2 pulling one.
+void PF_ragdollheld()
+{
+    G_FLOAT(OFS_RETURN) = static_cast<float>(box3d::ragdollHeld(G_EDICT(OFS_PARM0), static_cast<int>(G_FLOAT(OFS_PARM1))));
+}
+
+// float ragdollreach(entity player, float hand): how far (units) the held or pulled limb's point is from the hand; -1 none.
+void PF_ragdollreach()
+{
+    G_FLOAT(OFS_RETURN) = box3d::ragdollHandReach(G_EDICT(OFS_PARM0), static_cast<int>(G_FLOAT(OFS_PARM1)));
+}
+
+// float ragdollbone(entity e, vector p): the limb of e's ragdoll nearest p; -1 if e isn't one.
+void PF_ragdollbone()
+{
+    const float* p = G_VECTOR(OFS_PARM1);
+    G_FLOAT(OFS_RETURN) = static_cast<float>(box3d::ragdollBone(NUM_FOR_EDICT(G_EDICT(OFS_PARM0)), glm::vec3{p[0], p[1], p[2]}));
+}
+
+// vector ragdollpoint(entity e, float bone, vector p, float toWorld): p from the world into limb `bone`'s space (units),
+// or back.
+void PF_ragdollpoint()
+{
+    const float* p = G_VECTOR(OFS_PARM2);
+    const glm::vec3 v = box3d::ragdollPoint(NUM_FOR_EDICT(G_EDICT(OFS_PARM0)), static_cast<int>(G_FLOAT(OFS_PARM1)),
+        glm::vec3{p[0], p[1], p[2]}, G_FLOAT(OFS_PARM3) != 0.f);
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = v.x;
+    out[1] = v.y;
+    out[2] = v.z;
+}
+
+// Decapitation (vr_box3d.cpp, "Decapitation"; vr_decap.qc). float ragdolldecap(entity e, vector blade, [float settle]):
+// e's ragdoll (made now if it is a dead monster with a rig and none yet) loses its head, launched by the blade's
+// velocity; 1 if it did. `settle` (1 if left out): its parts' motion times this at its next step, after this frame's
+// knocks (a head pop's: vr_decap_pop_body_speed).
+void PF_ragdolldecap()
+{
+    const float* v = G_VECTOR(OFS_PARM1);
+    const float settle = qcvm->argc > 2 ? G_FLOAT(OFS_PARM2) : 1.f;
+    G_FLOAT(OFS_RETURN) = box3d::ragdollDecap(G_EDICT(OFS_PARM0), glm::vec3{v[0], v[1], v[2]}, settle) ? 1.f : 0.f;
+}
+
+// vector ragdollcut(entity e, float what): after the cut, 0 the head's middle, 1 its angles, 2 its velocity, 3 its
+// spin (rad/s: .vr_spin); the stump now, 4 the neck, 5 the way out of it.
+void PF_ragdollcut()
+{
+    const glm::vec3 v = box3d::ragdollCut(NUM_FOR_EDICT(G_EDICT(OFS_PARM0)), static_cast<int>(G_FLOAT(OFS_PARM1)));
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = v.x;
+    out[1] = v.y;
+    out[2] = v.z;
+}
+
+// float ragdollhead(entity e, vector p, [float neck]): 1 if p is on the head of e's ragdoll (its head part, or at the
+// neck: within 4 units of it, or `neck` units if more: the melee's vr_decap_neck), 0 not (or headless), -1 e isn't a
+// ragdoll.
+void PF_ragdollhead()
+{
+    const float* p = G_VECTOR(OFS_PARM1);
+    const float neck = qcvm->argc > 2 ? G_FLOAT(OFS_PARM2) : 0.f;
+    G_FLOAT(OFS_RETURN) =
+        static_cast<float>(box3d::ragdollHeadAt(NUM_FOR_EDICT(G_EDICT(OFS_PARM0)), glm::vec3{p[0], p[1], p[2]}, neck));
+}
+
+// float physicsdamp(entity e, vector relativeTo, float keep, float keepSpin, float maxSpeed, vector add): the Box3D prop's
+// velocity relative to `relativeTo` kept by `keep`, no faster than `maxSpeed` (0: any), `add` added; its spin kept by
+// `keepSpin` (box3d::damp: on its body, so a physicspush after it this frame adds to it). False if it is not Box3D's.
+void PF_physicsdamp()
+{
+    const float* rel = G_VECTOR(OFS_PARM1);
+    const float* add = G_VECTOR(OFS_PARM5);
+    G_FLOAT(OFS_RETURN) = box3d::damp(G_EDICT(OFS_PARM0), glm::vec3{rel[0], rel[1], rel[2]}, G_FLOAT(OFS_PARM2),
+                              G_FLOAT(OFS_PARM3), G_FLOAT(OFS_PARM4), glm::vec3{add[0], add[1], add[2]})
+                              ? 1.f
+                              : 0.f;
+}
+
+// The grappling hook's physical rope (vr_ropesim.cpp).
+// float ropestep(entity hook, vector gun, vector game, vector end, float length, entity skipA, entity skipB): steps it
+// (once a frame), the taut path's length.
+void PF_ropestep()
+{
+    const auto vec = [](int ofs) {
+        const float* v = G_VECTOR(ofs);
+        return glm::vec3{v[0], v[1], v[2]};
+    };
+    const int skipA = NUM_FOR_EDICT(G_EDICT(OFS_PARM5));
+    const int skipB = NUM_FOR_EDICT(G_EDICT(OFS_PARM6));
+    G_FLOAT(OFS_RETURN) =
+        ropesim::step(G_EDICT(OFS_PARM0), vec(OFS_PARM1), vec(OFS_PARM2), vec(OFS_PARM3), G_FLOAT(OFS_PARM4), skipA, skipB).path;
+}
+
+// vector ropepivot(entity hook, float which): the taut path's first corner from the game's end (0), from the hook (1), or
+// (2) its length beyond the first, beyond the second, and in all.
+void PF_ropepivot()
+{
+    const ropesim::Shape& s = ropesim::shape(G_EDICT(OFS_PARM0));
+    const int which = static_cast<int>(G_FLOAT(OFS_PARM1));
+    const glm::vec3 v = which == 0 ? s.pivotA : which == 1 ? s.pivotB : glm::vec3{s.beyondA, s.beyondB, s.path};
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = v.x;
+    out[1] = v.y;
+    out[2] = v.z;
+}
+
+// vector roperetract(entity hook, vector gun, vector end, float remaining): the quick reel-in along the rope's path: the
+// hook's new place, `remaining` units of the path left from the gun (ropesim::retract).
+void PF_roperetract()
+{
+    const auto vec = [](int ofs) {
+        const float* v = G_VECTOR(ofs);
+        return glm::vec3{v[0], v[1], v[2]};
+    };
+    const glm::vec3 p = ropesim::retract(G_EDICT(OFS_PARM0), vec(OFS_PARM1), vec(OFS_PARM2), G_FLOAT(OFS_PARM3));
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = p.x;
+    out[1] = p.y;
+    out[2] = p.z;
+}
+
+// void ropesend(entity hook, entity owner, float beamId): its points to the clients, for that beam.
+void PF_ropesend()
+{
+    ropesim::send(G_EDICT(OFS_PARM0), G_EDICT(OFS_PARM1), static_cast<int>(G_FLOAT(OFS_PARM2)));
+}
+
+// void ropeend(entity owner, float beamId): that beam's rope ended (its hook's rope is another beam's now).
+void PF_ropeend()
+{
+    ropesim::sendEnded(G_EDICT(OFS_PARM0), static_cast<int>(G_FLOAT(OFS_PARM1)));
+}
+
+void PF_carryreach()
+{
+    // The hand's place (the point given, OFS_PARM1) and angles are the `self` player's move's.
+    G_FLOAT(OFS_RETURN) =
+        carry2h::reaches(G_EDICT(OFS_PARM0), PROG_TO_EDICT(pr_global_struct->self), static_cast<int>(G_FLOAT(OFS_PARM2))) ? 1.f : 0.f;
+}
+
+// handimpact(hand, strength, dir): knock the `self` player's drawn hand (a parried blow).
+void PF_handimpact()
+{
+    server::sendHandImpact(PROG_TO_EDICT(pr_global_struct->self), static_cast<int>(G_FLOAT(OFS_PARM0)), G_FLOAT(OFS_PARM1),
+        G_VECTOR(OFS_PARM2));
+}
+
+// catchblend(hand, e, org, ang): the `self` player's `hand` has just caught `e` (a force grab), which was at `org`
+// turned `ang`: its client eases the weapon from there into the hand (vr_drawblend.cpp).
+void PF_catchblend()
+{
+    server::sendCatchBlend(PROG_TO_EDICT(pr_global_struct->self), static_cast<int>(G_FLOAT(OFS_PARM0)),
+        NUM_FOR_EDICT(G_EDICT(OFS_PARM1)), G_VECTOR(OFS_PARM2), G_VECTOR(OFS_PARM3));
+}
+
+// ejectcasings(hand, kind, count, delay, flags): spent casings out of the `self` player's weapon.
+void PF_ejectcasings()
+{
+    server::sendEject(PROG_TO_EDICT(pr_global_struct->self), static_cast<int>(G_FLOAT(OFS_PARM0)),
+        static_cast<int>(G_FLOAT(OFS_PARM1)), static_cast<int>(G_FLOAT(OFS_PARM2)), static_cast<int>(G_FLOAT(OFS_PARM4)),
+        G_FLOAT(OFS_PARM3));
+}
+
+// weaponfired(shooter, hand): a weapon fired (vr_weaponfx.cpp: the drawn kick, the muzzle flash); hand -1 a monster's.
+void PF_weaponfired()
+{
+    server::sendFired(G_EDICT(OFS_PARM0), static_cast<int>(G_FLOAT(OFS_PARM1)));
+}
+
+// tracer(shooter, hand, from, to): a hitscan pellet's line, for the clients' bullet tracers (vr_weaponfx.cpp).
+void PF_tracer()
+{
+    server::sendTracer(G_EDICT(OFS_PARM0), static_cast<int>(G_FLOAT(OFS_PARM1)), G_VECTOR(OFS_PARM2), G_VECTOR(OFS_PARM3));
+}
+
+// watershock(kind, org, radius, duration): the lightning gun in water's effects (vr_shock.cpp): 0 the `self` player
+// shocked, 1 arcs on a liquid's surface round `org`, 2 arcs out from `org` in a liquid.
+void PF_watershock()
+{
+    server::sendShock(PROG_TO_EDICT(pr_global_struct->self), static_cast<int>(G_FLOAT(OFS_PARM0)), G_VECTOR(OFS_PARM1),
+        G_FLOAT(OFS_PARM2), G_FLOAT(OFS_PARM3));
+}
+
+// ----------------------------------------------------------------------------
+// The motion recorder (vr_motion.cpp; QC vr_motion.qc): kept only while a take is recorded or played.
+
+// void(string kind, string sub, float hand, float value, vector at, entity targ, string detail) motionevent
+void PF_motionevent()
+{
+    motion::qcEvent(G_STRING(OFS_PARM0), G_STRING(OFS_PARM1), static_cast<int>(G_FLOAT(OFS_PARM2)), G_FLOAT(OFS_PARM3),
+        G_VECTOR(OFS_PARM4), G_EDICT(OFS_PARM5), G_STRING(OFS_PARM6));
+}
+
+// void(float hand, vector at, string name) motionpoint
+void PF_motionpoint()
+{
+    motion::qcPoint(static_cast<int>(G_FLOAT(OFS_PARM0)), G_VECTOR(OFS_PARM1), G_STRING(OFS_PARM2));
+}
+
+// void(string key, vector value) motionvalue
+void PF_motionvalue()
+{
+    motion::qcValue(G_STRING(OFS_PARM0), G_VECTOR(OFS_PARM1));
+}
+
+// Round 21: the weapons' hotspots (where the other hand may hold them; vr_weapons.hpp), as the local player's view
+// draws them this frame. vector(entity player, float hand, float index) weaponhotspot: hotspot `index` (0..3) of the
+// weapon in `hand` (cVR_MainHand, cVR_OffHand): a grip's point, a blade grip's middle, in the world ('0 0 0' if none);
+// float(entity player, float hand, float index, float what) weaponhotspotinfo: its type (what 0: 0 none, 1 grip,
+// 2 blade), bias in units (1), a blade's share of the way from the hand to the tip (2). Only the local player's (the
+// server's first client, as its view draws it); others' are none.
+[[nodiscard]] view::WeaponHotspot localHotspot()
+{
+    edict_t* player = G_EDICT(OFS_PARM0);
+    if(!sv.active || cls.state != ca_connected || NUM_FOR_EDICT(player) != 1)
+    {
+        return {};
+    }
+    return view::weaponHotspot(static_cast<int>(G_FLOAT(OFS_PARM1)) == 0 ? 0 : 1, static_cast<int>(G_FLOAT(OFS_PARM2)));
+}
+
+void PF_weaponhotspot()
+{
+    const view::WeaponHotspot h = localHotspot();
+    float* out = G_VECTOR(OFS_RETURN);
+    out[0] = h.pos.x;
+    out[1] = h.pos.y;
+    out[2] = h.pos.z;
+}
+
+void PF_weaponhotspotinfo()
+{
+    const view::WeaponHotspot h = localHotspot();
+    const int what = static_cast<int>(G_FLOAT(OFS_PARM3));
+    G_FLOAT(OFS_RETURN) = what == 0 ? static_cast<float>(h.type) : what == 1 ? h.bias : h.share;
+}
+
+// float(entity player, float hand, entity weapon) weapongrabspot: the hotspot (index + 1; 0 none: its handle) by which
+// `player`'s empty `hand` takes `weapon` lying about (vr_weapon_grab_hotspots: the local player's view found the hand
+// nearer that grip or blade hotspot than the handle; vr_twohand.cpp groundSpot). Others' are 0.
+void PF_weapongrabspot()
+{
+    edict_t* player = G_EDICT(OFS_PARM0);
+    edict_t* weapon = G_EDICT(OFS_PARM2);
+    const int hand = static_cast<int>(G_FLOAT(OFS_PARM1)) == 0 ? 0 : 1;
+    const bool local = sv.active && cls.state == ca_connected && NUM_FOR_EDICT(player) == 1;
+    G_FLOAT(OFS_RETURN) = local && (vr_weapon_grab_hotspots.value || vr_weapon_grab_anywhere.value)
+                              ? static_cast<float>(twohand::groundSpot(hand, NUM_FOR_EDICT(weapon)))
+                              : 0.f;
+}
+
+// float(entity player, float hand) weaponanygrip: how `player`'s empty `hand` holds the weapon in its other hand: 0 not,
+// 1 by a hotspot, 2 anywhere on it (vr_weapon_grab_anywhere: a free grip, or both hands on a carried weapon; or a moment
+// ago). QC VRTryHandOff: letting go of the other hand leaves the weapon carried by this one where it holds it. The local
+// player's only (others' are 0).
+void PF_weaponanygrip()
+{
+    edict_t* player = G_EDICT(OFS_PARM0);
+    const int hand = static_cast<int>(G_FLOAT(OFS_PARM1)) == 0 ? 0 : 1;
+    const bool local = sv.active && cls.state == ca_connected && NUM_FOR_EDICT(player) == 1;
+    G_FLOAT(OFS_RETURN) = local ? static_cast<float>(twohand::helpKind(hand)) : 0.f;
+}
+
+// vector(entity player, float hand, float what) weapondrawnpose: the weapon `player`'s `hand` carries off its handle (the
+// hand-off, a hotspot, anywhere), as the local player's view draws it: what 0 its handle's place, 1 its angles as a thrown
+// weapon is given them (MakeThrown negates the pitch: then drawn as it was), 2 '1 0 0' if known ('0 0 0': not carried, or another player),
+// 3 its tip (the melee's line: QC VR_Melee_Line); 4 its handle and 5 its tip in the frame of the hand carrying it as drawn
+// (forward, right, up: QC places them on the hand of the move it runs, VR_Melee_FreeLine). QC: thrown from where it is drawn.
+void PF_weapondrawnpose()
+{
+    edict_t* player = G_EDICT(OFS_PARM0);
+    const int hand = static_cast<int>(G_FLOAT(OFS_PARM1)) == 0 ? 0 : 1;
+    const int what = static_cast<int>(G_FLOAT(OFS_PARM2));
+    const bool local = sv.active && cls.state == ca_connected && NUM_FOR_EDICT(player) == 1;
+    glm::vec3 pos{0.f}, rot{0.f}, tip{0.f};
+    bool mirrored = false;
+    bool known = local && twohand::carrying(hand) && view::carriedWeaponPose(hand, pos, rot, mirrored, tip);
+    if(known && (what == 4 || what == 5))
+    {
+        known = view::carriedWeaponInHand(hand, pos, tip);
+        rot = what == 4 ? pos : tip;
+    }
+    const glm::vec3 out = !known ? glm::vec3{0.f} : what == 0 ? pos : what == 1 || what >= 4 ? rot : what == 3 ? tip : glm::vec3{1.f, 0.f, 0.f};
+    for(int i = 0; i < 3; i++)
+    {
+        G_VECTOR(OFS_RETURN)[i] = out[i];
+    }
+}
+
+// Rocks and bricks lying about (vr_debris.cpp, QC vr_debris.qc). float() debrisplan: places them (after the map's
+// entities), how many; string(float i) debrismodel: piece i's model (to set); float(entity e, float i) debrisput: puts
+// piece i on e (its model set): its skin, size, turn, place resting on the floor and box; its kind (1 a rock, 2 a
+// brick; 0 none).
+void PF_debrisplan()
+{
+    G_FLOAT(OFS_RETURN) = static_cast<float>(debris::plan());
+}
+
+void PF_debrismodel()
+{
+    G_INT(OFS_RETURN) = PR_SetEngineString(debris::modelOf(static_cast<int>(G_FLOAT(OFS_PARM0))));
+}
+
+void PF_debrisput()
+{
+    G_FLOAT(OFS_RETURN) = static_cast<float>(debris::put(G_EDICT(OFS_PARM0), static_cast<int>(G_FLOAT(OFS_PARM1))));
+}
+
+// float(entity e) debrisplace: a piece the map placed (vr_debris_piece, its model set): sized, turned by its yaw and
+// resting on the floor at its origin, its box; its kind (1 a rock, 2 a brick; 0: not one of their models).
+void PF_debrisplace()
+{
+    G_FLOAT(OFS_RETURN) = static_cast<float>(debris::putPlaced(G_EDICT(OFS_PARM0)));
+}
+
+// Wooden crates lying about (vr_crates.cpp, QC vr_crates.qc), as the rocks and bricks: float() crateplan, string(float
+// i) cratemodel, float(entity e, float i) crateput (its kind: 1 small, 2 large; 0 none), float(entity e) crateplace (a
+// crate the map or a test placed, its model set: level, turned by its yaw, resting on the floor under its origin).
+void PF_crateplan()
+{
+    G_FLOAT(OFS_RETURN) = static_cast<float>(crates::plan());
+}
+
+void PF_cratemodel()
+{
+    G_INT(OFS_RETURN) = PR_SetEngineString(crates::modelOf(static_cast<int>(G_FLOAT(OFS_PARM0))));
+}
+
+void PF_crateput()
+{
+    G_FLOAT(OFS_RETURN) = static_cast<float>(crates::put(G_EDICT(OFS_PARM0), static_cast<int>(G_FLOAT(OFS_PARM1))));
+}
+
+// float(float i) cratecrowbar: whether the plan puts a crowbar on crate i (vr_crate_crowbar); float(entity e, float i)
+// cratecrowbarput: lays the crowbar `e` (a thrown weapon, its model set) on it (crates::putCrowbar).
+void PF_cratecrowbar()
+{
+    G_FLOAT(OFS_RETURN) = crates::hasCrowbar(static_cast<int>(G_FLOAT(OFS_PARM0))) ? 1.f : 0.f;
+}
+
+void PF_cratecrowbarput()
+{
+    G_FLOAT(OFS_RETURN) = crates::putCrowbar(G_EDICT(OFS_PARM0), static_cast<int>(G_FLOAT(OFS_PARM1))) ? 1.f : 0.f;
+}
+
+void PF_crateplace()
+{
+    G_FLOAT(OFS_RETURN) = static_cast<float>(crates::putPlaced(G_EDICT(OFS_PARM0)));
+}
+
+// entity sightblocked(vector start, vector end, entity ignore, entity ignore2): the solid prop that blocks sight
+// (.vr_blocksight: a crate, an explosive box; not one in a hand) between `start` and `end`, met by its shape as it lies;
+// world if none (crates::sightBlocked). QC's visible() (ai.qc): monsters don't see you behind one.
+void PF_sightblocked()
+{
+    const float* a = G_VECTOR(OFS_PARM0);
+    const float* b = G_VECTOR(OFS_PARM1);
+    const int ignoreA = qcvm->argc > 2 ? NUM_FOR_EDICT(G_EDICT(OFS_PARM2)) : 0;
+    const int ignoreB = qcvm->argc > 3 ? NUM_FOR_EDICT(G_EDICT(OFS_PARM3)) : 0;
+    const int num = crates::sightBlocked(glm::vec3{a[0], a[1], a[2]}, glm::vec3{b[0], b[1], b[2]}, ignoreA, ignoreB);
+    G_INT(OFS_RETURN) = EDICT_TO_PROG(EDICT_NUM(num));
+}
+
+// float heldshape(entity prop, vector start, vector end): where the line from `start` to `end` first meets the shape of
+// `prop` held in a hand (its held body, as the hand holds it), as a fraction of it; 1 if it doesn't or `prop` isn't held
+// (box3d::heldRay). A crate held up stops monsters' shots (weapons.qc VR_Crate_ShieldShot).
+void PF_heldshape()
+{
+    const float* a = G_VECTOR(OFS_PARM1);
+    const float* b = G_VECTOR(OFS_PARM2);
+    G_FLOAT(OFS_RETURN) = box3d::heldRay(NUM_FOR_EDICT(G_EDICT(OFS_PARM0)), glm::vec3{a[0], a[1], a[2]},
+        glm::vec3{b[0], b[1], b[2]});
+}
+
+// float heldbox(entity prop, vector mins, vector maxs, float reach): whether the shape of `prop` held in a hand meets the
+// box mins..maxs (world) grown by `reach` units: 1 yes, 0 no, -1 `prop` has no held body (box3d::heldBox). A held prop
+// presses a wall button it touches (buttons.qc VR_Buttons_PropFrame).
+void PF_heldbox()
+{
+    const float* lo = G_VECTOR(OFS_PARM1);
+    const float* hi = G_VECTOR(OFS_PARM2);
+    G_FLOAT(OFS_RETURN) = static_cast<float>(box3d::heldBox(NUM_FOR_EDICT(G_EDICT(OFS_PARM0)), glm::vec3{lo[0], lo[1], lo[2]},
+        glm::vec3{hi[0], hi[1], hi[2]}, G_FLOAT(OFS_PARM3)));
+}
+
+// Precise hit detection (vr_hitmodel.cpp). hitmodel_target(e): whether e's model is what is hit (the option on, a
+// monster or corpse with a Quake model).
+void PF_hitmodel_target()
+{
+    G_FLOAT(OFS_RETURN) = hitmodel::target(G_EDICT(OFS_PARM0)) ? 1.f : 0.f;
+}
+
+// hitmodel_segment(e, a, b, radius, class): the segment a..b, a sphere of radius `radius` plus the class's tolerance
+// (0 guns, 1 grapple, 2 melee, 3 thrown), against e's model as drawn: where along it it first meets it (0: it starts
+// in it), -1 missed; -2: e's model is not tested (the option off, not a target): its box as before. The point on the
+// model: hitmodel_rest's (the last hit).
+void PF_hitmodel_segment()
+{
+    edict_t* e = G_EDICT(OFS_PARM0);
+    const float* a = G_VECTOR(OFS_PARM1);
+    const float* b = G_VECTOR(OFS_PARM2);
+    const float radius = za::max(0.f, G_FLOAT(OFS_PARM3));
+    const auto c = static_cast<hitmodel::Class>(za::clamp(static_cast<int>(G_FLOAT(OFS_PARM4)), 0, 3));
+    if(!hitmodel::target(e))
+    {
+        G_FLOAT(OFS_RETURN) = -2.f;
+        return;
+    }
+    hitmodel::Hit h;
+    const bool hit = hitmodel::segment(e, glm::vec3{a[0], a[1], a[2]}, glm::vec3{b[0], b[1], b[2]}, radius + hitmodel::tolerance(c), 1.f, c, h);
+    G_FLOAT(OFS_RETURN) = hit ? h.t : -1.f;
+}
+
+// hitmodel_any(e, a, b, radius): the segment a..b, a sphere of `radius`, against e's model as drawn, whatever e is (a
+// prop, an item: the grappling hook bites only what it touches): where along it it first meets it, -1 missed, -2 e has no
+// shape of its own (its box is). A weapon lying about, drawn by its Weapon Offsets, and a brush prop (an explosive box):
+// its Box3D body, as it is turned (-2 without one).
+void PF_hitmodel_any()
+{
+    edict_t* e = G_EDICT(OFS_PARM0);
+    const float* a = G_VECTOR(OFS_PARM1);
+    const float* b = G_VECTOR(OFS_PARM2);
+    const float radius = za::max(0.f, G_FLOAT(OFS_PARM3));
+    hitmodel::Hit h;
+    const int index = static_cast<int>(e->v.modelindex);
+    const qmodel_t* model = index > 0 && index < MAX_MODELS ? sv.models[index] : nullptr;
+    if(model && model->type == mod_alias && weapons::modelTransform(model).active)
+    {
+        // A weapon's own model lying about, drawn by its Weapon Offsets: its body in Box3D (its drawn shape; its box is
+        // a cube round its handle, which a long gun reaches well out of), else its box.
+        float fraction = 1.f;
+        bool body = false;
+        const bool hit = box3d::castAt(NUM_FOR_EDICT(e), glm::vec3{a[0], a[1], a[2]}, glm::vec3{b[0], b[1], b[2]}, radius,
+            fraction, body);
+        G_FLOAT(OFS_RETURN) = hit ? fraction : body ? -1.f : -2.f;
+        return;
+    }
+    if(model && model->type == mod_brush)
+    {
+        // A brush prop (an explosive box, a health box) loose in Box3D: its body as it is turned (Quake's box round a
+        // tilted one is much bigger than it); placed by the map, not a body yet: its box.
+        float fraction = 1.f;
+        bool body = false;
+        const bool hit = box3d::castAt(NUM_FOR_EDICT(e), glm::vec3{a[0], a[1], a[2]}, glm::vec3{b[0], b[1], b[2]}, radius,
+            fraction, body);
+        G_FLOAT(OFS_RETURN) = hit ? fraction : body ? -1.f : -2.f;
+        return;
+    }
+    if(!model || model->type != mod_alias)
+    {
+        G_FLOAT(OFS_RETURN) = -2.f; // (no model: its box)
+        return;
+    }
+    const bool hit =
+        hitmodel::segment(e, glm::vec3{a[0], a[1], a[2]}, glm::vec3{b[0], b[1], b[2]}, radius, 1.f, hitmodel::Class::Grapple, h);
+    G_FLOAT(OFS_RETURN) = hit ? h.t : -1.f;
+}
+
+// hitmodel_rest(e, p): the point p on e's drawn model, as it is on the model standing (its stand frame), placed at its
+// origin and turned with its yaw (positional damage's head sphere and regions); p itself if e is no target.
+void PF_hitmodel_rest()
+{
+    edict_t* e = G_EDICT(OFS_PARM0);
+    const float* p = G_VECTOR(OFS_PARM1);
+    glm::vec3 out{p[0], p[1], p[2]};
+    hitmodel::restPoint(e, out, out);
+    float* r = G_VECTOR(OFS_RETURN);
+    r[0] = out.x;
+    r[1] = out.y;
+    r[2] = out.z;
+}
+
+// debughitzone(e, zone, lo, hi, radius): Show Hit Zones' zone of `e` this server frame (hitmodel::zoneAdd: in its own
+// frame, x forward, y left, z up from its origin; a box lo..hi, or a capsule of `radius` from lo to hi).
+void PF_debughitzone()
+{
+    const float* lo = G_VECTOR(OFS_PARM2);
+    const float* hi = G_VECTOR(OFS_PARM3);
+    hitmodel::zoneAdd(NUM_FOR_EDICT(G_EDICT(OFS_PARM0)), static_cast<int>(G_FLOAT(OFS_PARM1)), glm::vec3{lo[0], lo[1], lo[2]},
+        glm::vec3{hi[0], hi[1], hi[2]}, G_FLOAT(OFS_PARM4));
+}
+
+struct VrBuiltin
+{
+    const char* name;
+    builtin_t func;
+};
+
+constexpr VrBuiltin vrBuiltins[] = {
+    {"makeforward", PF_makeforward},
+    {"weaponhotspot", PF_weaponhotspot},
+    {"weaponhotspotinfo", PF_weaponhotspotinfo},
+    {"weapongrabspot", PF_weapongrabspot},
+    {"weaponanygrip", PF_weaponanygrip},
+    {"weapondrawnpose", PF_weapondrawnpose},
+    {"modelbounds", PF_modelbounds},
+    {"modelcentre", PF_modelcentre},
+    {"findcone", PF_findcone},
+    {"forcegrabpoint", PF_forcegrabpoint},
+    {"catchblend", PF_catchblend},
+    {"physicsblast", PF_physicsblast},
+    {"propvalue", PF_propvalue},
+    {"propgrip", PF_propgrip},
+    {"weaponvalue", PF_weaponvalue},
+    {"weightdamage", PF_weightdamage},
+    {"weightleniency", PF_weightleniency},
+    {"throwvelocity", PF_throwvelocity},
+    {"throwweight", PF_throwweight},
+    {"debrisplan", PF_debrisplan},
+    {"debrismodel", PF_debrismodel},
+    {"debrisput", PF_debrisput},
+    {"debrisplace", PF_debrisplace},
+    {"crateplan", PF_crateplan},
+    {"cratemodel", PF_cratemodel},
+    {"crateput", PF_crateput},
+    {"cratecrowbar", PF_cratecrowbar},
+    {"cratecrowbarput", PF_cratecrowbarput},
+    {"crateplace", PF_crateplace},
+    {"sightblocked", PF_sightblocked},
+    {"heldshape", PF_heldshape},
+    {"heldbox", PF_heldbox},
+    {"modelpoint", PF_modelpoint},
+    {"physicspush", PF_physicspush},
+    {"isragdoll", PF_isragdoll},
+    {"ragdollgrab", PF_ragdollgrab},
+    {"canragdoll", PF_canragdoll},
+    {"ragdollknockdown", PF_ragdollknockdown},
+    {"ragdollgetup", PF_ragdollgetup},
+    {"ragdollpull", PF_ragdollpull},
+    {"ragdollrelease", PF_ragdollrelease},
+    {"ragdollheld", PF_ragdollheld},
+    {"ragdollreach", PF_ragdollreach},
+    {"ragdollbone", PF_ragdollbone},
+    {"ragdollpoint", PF_ragdollpoint},
+    {"ragdolldecap", PF_ragdolldecap},
+    {"ragdollcut", PF_ragdollcut},
+    {"ragdollhead", PF_ragdollhead},
+    {"physicsshot", PF_physicsshot},
+    {"physicsdamp", PF_physicsdamp},
+    {"ropestep", PF_ropestep},
+    {"ropepivot", PF_ropepivot},
+    {"ropesend", PF_ropesend},
+    {"roperetract", PF_roperetract},
+    {"ropeend", PF_ropeend},
+    {"tracebox", PF_tracebox},
+    {"cvar_hmake", PF_cvar_hmake},
+    {"cvar_hget", PF_cvar_hget},
+    {"cvar_hclear", PF_cvar_hclear},
+    {"worldtext_hmake", PF_worldtext_hmake},
+    {"worldtext_hsettext", PF_worldtext_hsettext},
+    {"worldtext_hsetpos", PF_worldtext_hsetpos},
+    {"worldtext_hsetangles", PF_worldtext_hsetangles},
+    {"portal_handles", PF_portal_handles},
+    {"portal_crossings", PF_portal_crossings},
+    {"portal_entry", PF_portal_entry},
+    {"portal_exit", PF_portal_exit},
+    {"portal_turn", PF_portal_turn},
+    {"worldtext_hsethalign", PF_worldtext_hsethalign},
+    {"worldtext_hsetscale", PF_worldtext_hsetscale},
+    {"WriteVec3", PF_WriteVec3},
+    {"particle2", PF_particle2},
+    {"woundevent", PF_woundevent},
+    {"haptic", PF_haptic},
+    {"handimpact", PF_handimpact},
+    {"carryangles", PF_carryangles},
+    {"carrygrip", PF_carrygrip},
+    {"carryplace", PF_carryplace},
+    {"carrypouch", PF_carrypouch},
+    {"carryfit", PF_carryfit},
+    {"carry2h", PF_carry2h},
+    {"carryreach", PF_carryreach},
+    {"carry2hoff", PF_carry2hoff},
+    {"carry2hkeep", PF_carry2hkeep},
+    {"floattext", PF_floattext},
+    {"ejectcasings", PF_ejectcasings},
+    {"weaponfired", PF_weaponfired},
+    {"tracer", PF_tracer},
+    {"watershock", PF_watershock},
+    {"findflags", PF_findflags},
+    {"liquidentry", PF_liquidentry},
+    {"watersplash", PF_watersplash},
+    {"fileexists", PF_fileexists},
+    {"highlighting", PF_highlighting},
+    {"highlight", PF_highlight},
+    {"motionevent", PF_motionevent},
+    {"motionpoint", PF_motionpoint},
+    {"motionvalue", PF_motionvalue},
+    {"hitmodel_target", PF_hitmodel_target},
+    {"hitmodel_segment", PF_hitmodel_segment},
+    {"hitmodel_any", PF_hitmodel_any},
+    {"hitmodel_rest", PF_hitmodel_rest},
+    {"debughitzone", PF_debughitzone},
+    {"torchflametouch", PF_torchflametouch},
+    {"anglemod", PF_anglemod},
+    {"meleerun", PF_meleerun},
+    {"meleewristspeed", PF_meleewristspeed},
+    {"meleewiggled", PF_meleewiggled},
+    {"meleegripago", PF_meleegripago},
+};
+
+static_assert(firstVrBuiltin + za::getArraySize(vrBuiltins) < MAX_BUILTINS - 200,
+    "VR builtins must not overlap Ironwail's downward-allocated builtins");
+
+} // namespace
+
+void bindBuiltins()
+{
+    int number = firstVrBuiltin;
+    for(const VrBuiltin& b : vrBuiltins)
+    {
+        if(qcvm->builtins[number] != qcvm->builtins[0])
+        {
+            Sys_Error("VR builtin #%d (%s) collides with an engine builtin", number, b.name);
+        }
+
+        qcvm->builtins[number] = b.func;
+        qcvm->builtin_ext[number] = STD_QC;
+
+        if(const func_t f = findFunction(b.name))
+        {
+            dfunction_t& fn = qcvm->functions[f];
+            if(fn.first_statement == 0)
+            {
+                fn.first_statement = -number;
+            }
+        }
+
+        number++;
+    }
+}
+
+void onEdictFree(edict_t* ed)
+{
+    // An entity removed: what the server keeps by its number is forgotten (physics::forgetEntity), and for a wounded one
+    // the clients free its mask, else the next entity put in its slot (edicts are reused), with the same model (a
+    // monster from the same spawner, a gib), would show its wounds. Reliable: once, at its end.
+    if(qcvm != &sv.qcvm || !sv.active)
+    {
+        return;
+    }
+    // Checked: ED_Free runs for any edict, one a saved game's parse frees among them.
+    const int num = NUM_FOR_EDICT_CHECKED(ed);
+    if(num > 0)
+    {
+        physics::forgetEntity(num);
+        ropesim::forget(num);
+    }
+    if(num <= 0 || num >= static_cast<int>(woundsSent.size()) || !woundsSent[static_cast<za::SizeT>(num)])
+    {
+        return;
+    }
+    woundsSent[static_cast<za::SizeT>(num)] = 0;
+    if(sv.reliable_datagram.cursize + 4 > sv.reliable_datagram.maxsize)
+    {
+        return;
+    }
+    MSG_WriteByte(&sv.reliable_datagram, protocol::svc_quakevr);
+    MSG_WriteByte(&sv.reliable_datagram, protocol::QVR_SVC_WOUNDCLEAR);
+    MSG_WriteShort(&sv.reliable_datagram, num);
+}
+
+void resetBuiltinState()
+{
+    cvarHandles.clear();
+    woundsSent.clear();
+    worldtext::serverReset();
+}
+
+} // namespace qvr::progs

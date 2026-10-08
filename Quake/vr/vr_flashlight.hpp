@@ -1,0 +1,121 @@
+// vr_flashlight.hpp -- the chest flashlight (vr_flashlight): a straight tactical torch (round 21; a
+// right-angle one before) stored hanging from a clip on the belt's left (vr_flashlight_side) side, lens down (lighting only the feet:
+// it is meant to be taken, clipped on a gun or worn on the head). Only deliberate presses take, switch or unclip it: an
+// open, still hand (a fist clenched in a fight next to it does nothing).
+// A hand at it with the trigger switches it on or off; an empty hand's grip takes it, held in the
+// fist like a real torch (the tube through the curled fingers, lighting along it: out of the thumb's
+// side in the low grip, out of the little finger's in the overhead one; the upper face button, B or
+// Y, turns it round in the fist); let go, it flies back to the chest on its retracting cord.
+// Held near the gun in the other hand, B or Y clips it along the gun's barrel (under it, or beside a
+// bulky gun): it lights where the gun aims until the free hand takes it off again (at the lamp, B or
+// Y) or the gun leaves the hand (holstered, dropped, thrown, switched), when it goes back to the chest.
+// Let go there instead, it clips on as well with vr_flashlight_auto_gun (the gun) or vr_flashlight_auto_head (the head).
+// Held at a temple, B or Y clips it on the head (round 21), a head torch lighting where the head looks, until a hand at
+// it takes it off (B or Y: back to the chest, or into the hand if it grips; or the grip alone: into the hand). On death,
+// at the intermission and on any map change it goes back to the chest, switched as it was; a fresh start switches it
+// off.
+//
+// Client-side only: its model is a VR view entity (progs/vrflashlight.mdl, make_flashlight.py) and
+// its beam a spot light at the lens (lighting::dlightSpot: per pixel on the world and on models,
+// with its own perspective shadow map), a faint wider spill cone and a faint glow at the lamp; and
+// a soft cone of light in the air (vr_flashlight_beam), added onto each eye's scene.
+
+#pragma once
+
+#include "vr_engine.hpp"
+#include "vr_hands.hpp"
+#include "vr_view.hpp"
+
+namespace qvr::flashlight
+{
+
+void init();
+
+// A map's load (VR_NewMap): the torch's model loaded and its shape read from it, not in the map's first frame.
+void prepare();
+
+// Once per frame, as the view is set up, before it moves the drawn hands (out of the body, out of models, knocked,
+// shaken): the hands the game reads, what lights the lamp up for a hand (as a press there is judged on them).
+void noteGameHands(const hands::State& s);
+
+// Once per frame, as the view is set up: moves the lamp, places its model in `ve` and lights its
+// beam.
+void setupView(const hands::State& s, view::ViewEntity& ve);
+
+// The cord (vr_flashlight_cord), in each eye's opaque scene (VR_DrawSceneOpaque): lit, depth-tested.
+void drawOpaque();
+
+// The visible beam, in each eye's scene after the translucent pass (VR_DrawSceneTranslucent):
+// depth-tested, added onto the scene.
+void drawTranslucent();
+
+enum class Button
+{
+    Trigger,
+    Grip,
+    Secondary // the upper face button: B on the right controller, Y on the left
+};
+
+// A controller's trigger, grip or upper face button pressed or released (vr_input.cpp). True when
+// the flashlight takes it (switching it, holding it, turning it round in the fist, clipping it to a
+// gun or taking it off): the game does not see it. A press it takes, it also takes the release of.
+[[nodiscard]] bool button(int hand, Button b, bool pressed);
+
+// After a Secondary press it took: true (once) when the flashlight went into `hand` whose grip the
+// game had seen pressed (a hand on the gun's foregrip taking the lamp off): the game must see the
+// grip let go, the flashlight has it now.
+[[nodiscard]] bool tookGrip(int hand);
+
+// Once a frame (vr_input.cpp, after the buttons): a grip pressed just before the hand reached the lamp, or while it was
+// still moving there (in slow motion, the hand following its controller), takes it as the hand comes to rest at it
+// with the grip still held (the late grip, ROUND21.md "Flashlight: lit, gripped, nothing"). Then tookGrip(hand) is
+// true: the game saw that press and must see it let go.
+void lateGrips();
+
+// A fresh game's baseline: off, on the chest. Loading subsequently restores the saved state.
+void reset();
+// Player field/level parm persistence. Transient poses and model pointers are rebuilt.
+void saveState();
+void restoreState();
+
+// Whether `hand` holds the flashlight: that hand does not force grab (its move tells the server,
+// QVR_BUTTON_*HANDBUSY, and its aim beam is not drawn).
+[[nodiscard]] bool holds(int hand);
+
+// How far `hand` is from where it reaches the lamp not held (on the body, on its way home, on the head; on a gun, the
+// free hand), over that reach: below 1 it is at the lamp (lit, taken by a press). Very large when no hand reaches it.
+// vr_body_collide lets the body go of a hand coming to it (as of a hand coming to a holster): the hand is drawn where
+// it is, at the lamp that lights up for it.
+[[nodiscard]] float reachRatio(const hands::State& s, int hand);
+
+// The game directory changed (VR_OnGameDirChanged): the guns' torch spots (by model name) forgotten, the torch's
+// shape read again from its model.
+void onGameDirChanged();
+
+// vr_model_reload: models were read again (`torch`: the torch's among them, its Shape read again and printed).
+void onModelsReloaded(bool torch);
+
+// Where the torch held by `hand` is drawn this frame (its entity's origin and angles, as setupView places it): for the
+// hand's grasp, solved before the torch is placed (no frame's lag between them).
+[[nodiscard]] bool heldPlace(const hands::State& s, int hand, glm::vec3& origin, glm::vec3& angles);
+
+// Round 21, the author's tuning notes: how a hand's fingers hold the torch, per grip (vr_flashlight_low_* and _high_*), as a
+// weapon's (Weapon Offsets > Fingers on the Weapon).
+struct Fingers
+{
+    bool manual{false};  // Manual: each finger at its curl, no fitting; else they wrap the torch
+    float curl[5]{};     // thumb first: 0 open, 1 a fist (Manual)
+    float thumbAcross{}; // the thumb across the palm, 0..1 (Manual)
+    float overlap{0.3f}; // how far the fingers and palm may sink into it, 0..1 of weapons::maxOverlapCm (Automatic)
+    float bias[5]{};     // the finger tweaks, thumb first: a share of a full curl (negative: more open)
+    glm::vec3 thumb{0.f}; // the thumb's place (as a weapon's Thumb X/Y/Z)
+};
+
+// How `hand`'s fingers hold the torch it holds (false: it does not hold it).
+[[nodiscard]] bool fingers(int hand, Fingers& out);
+
+// Round 21: whether `hand`'s upper face button (B/Y) is the flashlight's now: the hand holds it, or it is on the head
+// and the hand is at it. The off hand's Y then does not start a voice note at the mouth (vr_input.cpp).
+[[nodiscard]] bool wantsSecondary(int hand);
+
+} // namespace qvr::flashlight

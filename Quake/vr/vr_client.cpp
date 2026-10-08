@@ -1,0 +1,1122 @@
+// vr_client.cpp -- client side of the Quake VR protocol extensions (see vr_protocol.hpp):
+// VR input commands, building the VR move from tracking, and parsing VR server data.
+
+#include "vr_client.hpp"
+#include "vr_chainsaw.hpp"
+#include "vr_held.hpp"
+#include "vr_decals.hpp"
+#include "vr_drawblend.hpp"
+#include "vr_engine.hpp"
+#include "vr_flashlight.hpp"
+#include "vr_painknock.hpp"
+#include "vr_particles.hpp"
+#include "vr_fireparticles.hpp"
+#include "vr_walltorch.hpp"
+#include "vr_cvars.hpp"
+#include "vr_flick.hpp"
+#include "vr_gore.hpp"
+#include "vr_handpose.hpp"
+#include "vr_hands.hpp"
+#include "vr_input.hpp"
+#include "vr_lighting.hpp"
+#include "vr_main.hpp"
+#include "vr_modelcollide.hpp"
+#include "vr_selfcollide.hpp"
+#include "vr_move.hpp"
+#include "vr_posing.hpp"
+#include "vr_rope.hpp"
+#include "vr_protocol.hpp"
+#include "vr_shells.hpp"
+#include "vr_explosiondebris.hpp"
+#include "vr_shock.hpp"
+#include "vr_teleport.hpp"
+#include "vr_throw.hpp"
+#include "vr_trace.hpp"
+#include "vr_twohand.hpp"
+#include "vr_view.hpp"
+#include "vr_weapons.hpp"
+#include "vr_weaponfx.hpp"
+#include "vr_weight.hpp"
+#include "vr_worldtext.hpp"
+#include "vr_wounds.hpp"
+
+#include "Zancle/Base/IntTypes.hpp"
+#include "Zancle/Base/SizeT.hpp"
+#include "Zancle/Container/Vector.hpp"
+#include "Zancle/Math/MinMax.hpp"
+
+#include <string.h>
+
+using namespace qvr;
+using namespace qvr::protocol;
+
+namespace
+{
+
+// QC/vr_defs.qc QVR_VRBITS0_*.
+enum VrBits0 : int
+{
+    VRBITS0_TELEPORTING = 1 << 0,
+    VRBITS0_OFFHAND_GRABBING = 1 << 1,
+    VRBITS0_OFFHAND_PREVGRABBING = 1 << 2,
+    VRBITS0_MAINHAND_GRABBING = 1 << 3,
+    VRBITS0_MAINHAND_PREVGRABBING = 1 << 4,
+    VRBITS0_2H_AIMING = 1 << 5,
+    VRBITS0_OFFHAND_RELOADING = 1 << 6,
+    VRBITS0_OFFHAND_PREVRELOADING = 1 << 7,
+    VRBITS0_MAINHAND_RELOADING = 1 << 8,
+    VRBITS0_MAINHAND_PREVRELOADING = 1 << 9,
+    VRBITS0_OFFHAND_RELOADFLICKING = 1 << 10,
+    VRBITS0_OFFHAND_PREVRELOADFLICKING = 1 << 11,
+    VRBITS0_MAINHAND_RELOADFLICKING = 1 << 12,
+    VRBITS0_MAINHAND_PREVRELOADFLICKING = 1 << 13,
+};
+
+// ----------------------------------------------------------------------------
+// Input commands: +offhandattack and the per-hand +grab/+reload/+flickreload buttons.
+
+struct HandButtons
+{
+    bool grab{false};
+    bool reload{false};
+    bool flickReload{false};
+};
+
+HandButtons leftButtons, rightButtons;
+bool offhandAttack = false;
+bool offhandAttackImpulse = false; // pressed and released between two moves
+
+// HAND_OFF is the left controller (vr_backend.hpp).
+[[nodiscard]] HandButtons& handButtons(int hand)
+{
+    return hand == HAND_OFF ? leftButtons : rightButtons;
+}
+
+#define QVR_BUTTON_COMMANDS(name, expr)          \
+    void name##Down_f()                          \
+    {                                            \
+        expr = true;                             \
+    }                                            \
+    void name##Up_f()                            \
+    {                                            \
+        expr = false;                            \
+    }
+
+QVR_BUTTON_COMMANDS(GrabLeft, leftButtons.grab)
+QVR_BUTTON_COMMANDS(GrabRight, rightButtons.grab)
+QVR_BUTTON_COMMANDS(ReloadLeft, leftButtons.reload)
+QVR_BUTTON_COMMANDS(ReloadRight, rightButtons.reload)
+QVR_BUTTON_COMMANDS(FlickReloadLeft, leftButtons.flickReload)
+QVR_BUTTON_COMMANDS(FlickReloadRight, rightButtons.flickReload)
+
+// By role rather than side: what the controller keys are bound to (quakevr/default.cfg).
+QVR_BUTTON_COMMANDS(GrabMain, handButtons(HAND_MAIN).grab)
+QVR_BUTTON_COMMANDS(GrabOff, handButtons(HAND_OFF).grab)
+QVR_BUTTON_COMMANDS(ReloadMain, handButtons(HAND_MAIN).reload)
+QVR_BUTTON_COMMANDS(ReloadOff, handButtons(HAND_OFF).reload)
+
+#undef QVR_BUTTON_COMMANDS
+
+void OffhandAttackDown_f()
+{
+    offhandAttack = true;
+    offhandAttackImpulse = true;
+}
+
+void OffhandAttackUp_f()
+{
+    offhandAttack = false;
+}
+
+// ----------------------------------------------------------------------------
+// Move
+
+bool wasGrabbing[2]{false, false};
+
+// The throw estimate taken when each hand let go.
+bool thrownValid[2]{false, false};
+throwing::Estimate thrown[2];
+
+// A gun carried by its pump (the hand-off) has no aim, so the view gives it no muzzle; the melee and the parry
+// (QC vr_melee.qc) need its line all the same. Each weapon's muzzle is kept in the frame of the hand holding it
+// (forward, right, up; per slot, mirrored or not) while it is held normally, and put where the carried gun is drawn.
+struct MuzzleOffset
+{
+    bool valid = false;
+    glm::vec3 local{0.f};
+};
+za::Vector<MuzzleOffset> muzzleOffsets; // slot * 2 + mirrored
+
+[[nodiscard]] glm::vec3 handMuzzle(const hands::State& hs, int h)
+{
+    const int slot = weapons::heldSlot(h);
+    if(slot < 0)
+    {
+        return hs.pos[h] + hands::forward(hs.rot[h]) * 8.f;
+    }
+    if(muzzleOffsets.size() <= static_cast<za::SizeT>(slot * 2 + 1))
+    {
+        muzzleOffsets.resize(slot * 2 + 2);
+    }
+    if(hs.muzzleValid[h])
+    {
+        glm::vec3 f, r, u;
+        hands::angleVectors(hs.visualRot[h], f, r, u);
+        const glm::vec3 d = hs.muzzle[h] - hs.pos[h];
+        muzzleOffsets[slot * 2 + (h == HAND_OFF ? 1 : 0)] = {true, {glm::dot(d, f), glm::dot(d, r), glm::dot(d, u)}};
+        return hs.muzzle[h];
+    }
+    // Carried off its handle: its tip as drawn (anywhere on it, it may never have been held by its handle).
+    glm::vec3 carriedPos, carriedRot, carriedTip;
+    bool carriedMirrored = false;
+    if(twohand::carrying(h) && view::carriedWeaponPose(h, carriedPos, carriedRot, carriedMirrored, carriedTip))
+    {
+        return carriedTip;
+    }
+    twohand::HeldAs held{hs.pos[h], hs.visualRot[h], h == HAND_OFF};
+    if(twohand::carrying(h) && twohand::carriedWeapon(hs, h, held))
+    {
+        const MuzzleOffset& same = muzzleOffsets[slot * 2 + (held.mirrored ? 1 : 0)];
+        const MuzzleOffset& other = muzzleOffsets[slot * 2 + (held.mirrored ? 0 : 1)];
+        if(same.valid || other.valid)
+        {
+            glm::vec3 local = same.valid ? same.local : other.local;
+            if(!same.valid)
+            {
+                local.y = -local.y; // held in the other hand: mirrored
+            }
+            return held.pos + hands::redirect(local, held.rot);
+        }
+    }
+    return hs.pos[h] + hands::forward(hs.rot[h]) * 8.f;
+}
+
+// The weapon posing mode's held move: the hands as they were when it began (buildMove, the client's frame).
+VrMove unposed;
+
+[[nodiscard]] VrMove buildMove()
+{
+    VrMove move;
+
+    const hands::State& hs = hands::current();
+    if(!hs.valid)
+    {
+        return move;
+    }
+
+    move.headAngles = hs.headAngles;
+    move.vrYaw = hands::playSpaceYaw();
+    move.origin = hs.playerOrigin;
+    move.headPos = hs.head;
+
+    // The server walks the player by this over its frame (units per second).
+    if(host_frametime > 0.0)
+    {
+        move.roomscaleMove = hands::takeRoomscaleMove() / static_cast<float>(host_frametime);
+    }
+
+    for(int h = 0; h < HAND_COUNT; h++)
+    {
+        VrHandMove& hand = move.hands[h];
+        hand.pos = hs.pos[h];
+        hand.tracked = hs.pos[h] - handpose::wallPush(h);
+        hand.rot = hs.rot[h];
+
+        // Every move carries a throw estimate: while grabbing, as if let go now (the helping
+        // hand of a two-handed throw); once let go, the one taken at the release, until the next
+        // grab (the server throws with the move that carries the release, or a later one).
+        const bool grabbing = handButtons(h).grab;
+        const double latest = throwing::latestTime(h);
+        if(wasGrabbing[h] && !grabbing)
+        {
+            // The grip's own release time, if it is this release (not a key's, nor a stale one).
+            const double released = throwing::releaseTime(h);
+            const double at =
+                released >= 0.0 && latest - released >= -0.05 && latest - released < 0.25 ? released : latest;
+            if(!held::bothHandsThrow(h, at, true, thrown[h])) // a prop held in both hands: its own motion
+            {
+                thrown[h] = throwing::estimateAt(h, at);
+            }
+            thrownValid[h] = true;
+
+            if(vr_debug_throw.value)
+            {
+                const throwing::Estimate& e = thrown[h];
+                Con_Printf("throw %s: %.2f m/s (%.2f %.2f %.2f), spin %.1f rad/s, hand now %.2f m/s\n",
+                    h == HAND_MAIN ? "main" : "off", glm::length(e.vel), e.vel.x, e.vel.y, e.vel.z,
+                    glm::length(e.angVel), glm::length(hs.vel[h]));
+                if(vr_debug_throw.value >= 2.f)
+                {
+                    Con_Printf("  released %.0f ms after the peak, sent %.0f ms after the release\n",
+                        (at - e.time) * 1000.0, (latest - at) * 1000.0);
+                }
+            }
+        }
+        if(grabbing)
+        {
+            thrownValid[h] = false;
+        }
+        wasGrabbing[h] = grabbing;
+
+        throwing::Estimate e;
+        if(thrownValid[h])
+        {
+            e = thrown[h];
+        }
+        else if(!held::bothHandsThrow(h, latest, false, e))
+        {
+            e = throwing::estimate(h);
+        }
+        hand.vel = hs.vel[h];
+        hand.velMag = glm::length(hs.vel[h]);
+        hand.throwVel = e.vel;
+        hand.angVel = e.angVel;
+        hand.throwFlick = e.flick;
+        hand.throwPos = e.pos;
+        hand.throwAge = static_cast<float>(za::max(0.0, latest - e.time));
+
+        move.hotspots[h] = static_cast<za::U8>(hs.hotspot[h]);
+
+        // Muzzles come from the weapon models (vr_view.cpp), as of the last rendered frame; a carried gun's from
+        // where it is drawn (handMuzzle).
+        move.muzzlePos[h] = handMuzzle(hs, h);
+
+        // Where its shots go: the aim turned by the weapon's Shot Pitch and Yaw (the drawn weapon doesn't move).
+        move.shotRot[h] = weapons::shotAngles(hs.rot[h], weapons::heldSlot(h), h == HAND_OFF);
+    }
+
+    move.headVel = hs.headVel;
+
+    // VR bits: current state only. The server fills in the "PREV" bits once per server
+    // frame, so that press edges survive several moves arriving in one frame.
+    int bits = 0;
+    const auto set = [&](bool on, int bit) {
+        if(on)
+        {
+            bits |= bit;
+        }
+    };
+    set(handButtons(HAND_OFF).grab, VRBITS0_OFFHAND_GRABBING);
+    set(handButtons(HAND_MAIN).grab, VRBITS0_MAINHAND_GRABBING);
+    set(handButtons(HAND_OFF).reload, VRBITS0_OFFHAND_RELOADING);
+    set(handButtons(HAND_MAIN).reload, VRBITS0_MAINHAND_RELOADING);
+    // (Not with the other hand on its barrel or anywhere on it: flick::allowed.)
+    set((handButtons(HAND_OFF).flickReload || flick::flicking(HAND_OFF)) && flick::allowed(HAND_OFF),
+        VRBITS0_OFFHAND_RELOADFLICKING);
+    set((handButtons(HAND_MAIN).flickReload || flick::flicking(HAND_MAIN)) && flick::allowed(HAND_MAIN),
+        VRBITS0_MAINHAND_RELOADFLICKING);
+    set(twohand::aiming(), VRBITS0_2H_AIMING);
+    set(teleport::update(hs, move.teleportTarget), VRBITS0_TELEPORTING);
+    move.vrBits0 = static_cast<za::U16>(bits);
+
+    if(offhandAttack || offhandAttackImpulse)
+    {
+        move.buttons |= QVR_BUTTON_OFFHANDATTACK;
+    }
+    offhandAttackImpulse = false;
+
+    if(vrActive())
+    {
+        move.buttons |= QVR_BUTTON_HANDSTRACKED;
+    }
+    // A hand holding the flashlight (or a chainsaw's cord) does not force grab.
+    move.sawCord = chainsaw::moveBits();
+    move.handDrop = weight::dropBits();
+    if(flashlight::holds(HAND_OFF) || chainsaw::holds(HAND_OFF))
+    {
+        move.buttons |= QVR_BUTTON_OFFHANDBUSY;
+    }
+    if(flashlight::holds(HAND_MAIN) || chainsaw::holds(HAND_MAIN))
+    {
+        move.buttons |= QVR_BUTTON_MAINHANDBUSY;
+    }
+    // The upper face buttons held (B/Y): the grappling hook reels in while its hand's is (QC vr_grapple.qc).
+    if(input::secondaryHeld(HAND_OFF))
+    {
+        move.buttons |= QVR_BUTTON_OFFHANDSECONDARY;
+    }
+    if(input::secondaryHeld(HAND_MAIN))
+    {
+        move.buttons |= QVR_BUTTON_MAINHANDSECONDARY;
+    }
+    // The lower ones (A/X): the hook unreels while its hand's is, in the air (QC vr_grapple.qc).
+    if(input::primaryHeld(HAND_OFF))
+    {
+        move.buttons |= QVR_BUTTON_OFFHANDPRIMARY;
+    }
+    if(input::primaryHeld(HAND_MAIN))
+    {
+        move.buttons |= QVR_BUTTON_MAINHANDPRIMARY;
+    }
+
+    // The weapon posing mode (vr_posing.cpp): the game sees the hands held still where they were when it began (with the
+    // player, who may walk round the weapon), their buttons as they were, no two-handed aim, no teleport and no attack:
+    // no shot, blow, grab, holster or throw while the hands pose.
+    if(posing::active())
+    {
+        const glm::vec3 walked = move.origin - unposed.origin;
+        for(int h = 0; h < HAND_COUNT; h++)
+        {
+            VrHandMove& hand = move.hands[h];
+            hand = unposed.hands[h];
+            hand.pos += walked;
+            hand.tracked += walked;
+            hand.throwPos += walked;
+            hand.vel = hand.throwVel = hand.angVel = hand.throwFlick = glm::vec3{0.f};
+            hand.velMag = 0.f;
+            move.hotspots[h] = unposed.hotspots[h];
+            move.muzzlePos[h] = unposed.muzzlePos[h] + walked;
+            move.shotRot[h] = unposed.shotRot[h];
+        }
+        move.vrBits0 = static_cast<za::U16>(unposed.vrBits0 & (VRBITS0_OFFHAND_GRABBING | VRBITS0_MAINHAND_GRABBING |
+                                                                     VRBITS0_OFFHAND_RELOADING | VRBITS0_MAINHAND_RELOADING));
+        move.buttons &= ~(QVR_BUTTON_OFFHANDATTACK | QVR_BUTTON_OFFHANDSECONDARY | QVR_BUTTON_MAINHANDSECONDARY |
+                          QVR_BUTTON_OFFHANDPRIMARY | QVR_BUTTON_MAINHANDPRIMARY);
+    }
+    else
+    {
+        unposed = move;
+    }
+
+    return move;
+}
+
+// ----------------------------------------------------------------------------
+// Per-entity VR data
+
+za::Vector<client::EntityVr> entityData;
+
+// vr_debug_item_sizes: each ammo or health box (a "maps/b_" brush model) as it is first drawn, and each change of its
+// drawn scale after, per entity: the frame it was last drawn on, its model and scale then.
+struct DrawnBox
+{
+    int frame{-1};
+    const qmodel_t* model{nullptr};
+    glm::vec3 scale{0.f};
+};
+za::Vector<DrawnBox> drawnBoxes;
+
+[[nodiscard]] bool vrProtocol()
+{
+    return (cl.protocolflags & PRFL_QUAKEVR) != 0;
+}
+
+[[nodiscard]] glm::vec3 readFloats3()
+{
+    glm::vec3 v;
+    for(int i = 0; i < 3; i++)
+    {
+        v[i] = MSG_ReadFloat();
+    }
+    return v;
+}
+
+[[nodiscard]] glm::vec3 readCoords3()
+{
+    glm::vec3 v;
+    for(int i = 0; i < 3; i++)
+    {
+        v[i] = MSG_ReadCoord(cl.protocolflags);
+    }
+    return v;
+}
+
+void parseParticle2()
+{
+    vec3_t org, dir;
+    for(int i = 0; i < 3; i++)
+    {
+        org[i] = MSG_ReadCoord(cl.protocolflags);
+    }
+    for(int i = 0; i < 3; i++)
+    {
+        dir[i] = MSG_ReadChar() * (1.f / 16.f);
+    }
+    using particles::Preset;
+    const auto preset = static_cast<Preset>(MSG_ReadByte());
+    const int count = MSG_ReadShort();
+
+    const glm::vec3 o{org[0], org[1], org[2]};
+    const glm::vec3 d{dir[0], dir[1], dir[2]};
+    if(gore::event(o, d, static_cast<int>(preset), count))
+    {
+        return; // the gore's (vr_gore.cpp): marks only
+    }
+    decals::fromEffect(o, d, preset, count);
+    // Route an explosion through its one common entry point, including the particle-off fallback.
+    // Otherwise spawn() makes physical debris and a fallback R_ParticleExplosion makes a second batch.
+    if(preset == Preset::Explosion)
+    {
+        R_ParticleExplosion(org);
+        return;
+    }
+    if(particles::spawn(o, d, preset, count))
+    {
+        return;
+    }
+
+    // Without Quake VR's particles (vr_particles 0): the old engine's particle presets,
+    // approximated with Quake's own effects and palette colours.
+    const auto puff = [&](int color, int n) { R_RunParticleEffect(org, dir, color, q_min(n, 255)); };
+    switch(preset)
+    {
+        case Preset::BulletPuff: puff(0, count); break;
+        case Preset::Blood: puff(73, count); break;
+        case Preset::Explosion: R_ParticleExplosion(org); break;
+        case Preset::Lightning: puff(225, count); break;
+        case Preset::Smoke: puff(6, count); break;
+        case Preset::Sparks: puff(111, count); break;
+        case Preset::GunSmoke: puff(4, q_max(count / 2, 1)); break;
+        case Preset::Teleport: R_TeleportSplash(org); break;
+        case Preset::GunPickup: puff(254, count); break;
+        case Preset::GunForceGrab: puff(208, count); break;
+        case Preset::LavaSpike: puff(235, count); break;
+        case Preset::BigSmoke: puff(6, count * 2); break;
+        case Preset::Splash: break; // Quake had none (vr_particles.cpp)
+        case Preset::WoodDust: puff(22, count * 2); break; // (the browns)
+        case Preset::ChainsawSmoke: break;                 // (too faint for Quake's dots)
+        default: puff(73, count); break;
+    }
+}
+
+void parsePrecacheModel()
+{
+    const int index = MSG_ReadShort();
+    const char* name = MSG_ReadString();
+
+    if(index <= 0 || index >= MAX_MODELS)
+    {
+        Host_Error("svc_quakevr: bad model precache index %d", index);
+    }
+
+    cl.model_precache[index] = Mod_ForName(name, false);
+}
+
+void parsePrecacheSound()
+{
+    const int index = MSG_ReadShort();
+    const char* name = MSG_ReadString();
+
+    if(index <= 0 || index >= MAX_SOUNDS)
+    {
+        Host_Error("svc_quakevr: bad sound precache index %d", index);
+    }
+
+    cl.sound_precache[index] = S_PrecacheSound(name);
+}
+
+// vr_particle_test <preset> [count]: a particle2 preset 64 units in front of the view (tuning); a splash (14) where
+// the view first meets a liquid's surface, if it does within 2048 units (going that way).
+void particleTest_f()
+{
+    if(Cmd_Argc() < 2 || cls.state != ca_connected)
+    {
+        Con_Printf("usage: vr_particle_test <preset 0..11> [count]\n");
+        return;
+    }
+    vec3_t fwd, right, up;
+    AngleVectors(r_refdef.viewangles, fwd, right, up);
+    const glm::vec3 eye{r_refdef.vieworg[0], r_refdef.vieworg[1], r_refdef.vieworg[2]};
+    const glm::vec3 f{fwd[0], fwd[1], fwd[2]};
+    glm::vec3 org = eye + f * 64.f;
+    glm::vec3 dir{0.f};
+    const auto preset = static_cast<particles::Preset>(Q_atoi(Cmd_Argv(1)));
+    if(preset == particles::Preset::Splash && cl.worldmodel)
+    {
+        const auto contents = [](const glm::vec3& p) {
+            vec3_t v{p.x, p.y, p.z};
+            return Mod_PointInLeaf(v, cl.worldmodel)->contents;
+        };
+        const auto liquid = [](int c) { return c == CONTENTS_WATER || c == CONTENTS_SLIME || c == CONTENTS_LAVA || (c <= CONTENTS_CURRENT_0 && c >= CONTENTS_CURRENT_DOWN); };
+        const bool startWet = liquid(contents(eye));
+        glm::vec3 last = eye;
+        for(float d = 4.f; d <= 2048.f; d += 4.f)
+        {
+            const glm::vec3 q = eye + f * d;
+            const int c = contents(q);
+            if(c == CONTENTS_SOLID || c == CONTENTS_SKY)
+            {
+                break;
+            }
+            if(liquid(c) != startWet)
+            {
+                glm::vec3 a = last, b = q; // a on the eye's side
+                for(int i = 0; i < 12; i++)
+                {
+                    const glm::vec3 mid = (a + b) * 0.5f;
+                    (liquid(contents(mid)) == startWet ? a : b) = mid;
+                }
+                org = (a + b) * 0.5f;
+                dir = f;
+                break;
+            }
+            last = q;
+        }
+    }
+    const int count = Cmd_Argc() > 2 ? Q_atoi(Cmd_Argv(2)) : 8;
+    if(!particles::spawn(org, dir, preset, count))
+    {
+        Con_Printf("vr_particle_test: Quake VR particles are off (vr_particles) or unavailable\n");
+    }
+}
+
+} // namespace
+
+namespace qvr::client
+{
+
+void init()
+{
+    teleport::init();
+    Cmd_AddCommand("vr_particle_test", particleTest_f);
+    shells::registerCommands();
+    explosiondebris::registerCommands();
+    fireparticles::registerCommands();
+    Cmd_AddCommand("vr_walltorch_tilt_test", walltorch::tiltTest);
+    shock::registerCommands();
+    weaponfx::registerCommands();
+    Cmd_AddCommand("+offhandattack", OffhandAttackDown_f);
+    Cmd_AddCommand("-offhandattack", OffhandAttackUp_f);
+    Cmd_AddCommand("+grableft", GrabLeftDown_f);
+    Cmd_AddCommand("-grableft", GrabLeftUp_f);
+    Cmd_AddCommand("+grabright", GrabRightDown_f);
+    Cmd_AddCommand("-grabright", GrabRightUp_f);
+    Cmd_AddCommand("+reloadleft", ReloadLeftDown_f);
+    Cmd_AddCommand("-reloadleft", ReloadLeftUp_f);
+    Cmd_AddCommand("+reloadright", ReloadRightDown_f);
+    Cmd_AddCommand("-reloadright", ReloadRightUp_f);
+    Cmd_AddCommand("+flickreloadleft", FlickReloadLeftDown_f);
+    Cmd_AddCommand("-flickreloadleft", FlickReloadLeftUp_f);
+    Cmd_AddCommand("+flickreloadright", FlickReloadRightDown_f);
+    Cmd_AddCommand("-flickreloadright", FlickReloadRightUp_f);
+    Cmd_AddCommand("+grabmain", GrabMainDown_f);
+    Cmd_AddCommand("-grabmain", GrabMainUp_f);
+    Cmd_AddCommand("+graboff", GrabOffDown_f);
+    Cmd_AddCommand("-graboff", GrabOffUp_f);
+    Cmd_AddCommand("+reloadmain", ReloadMainDown_f);
+    Cmd_AddCommand("-reloadmain", ReloadMainUp_f);
+    Cmd_AddCommand("+reloadoff", ReloadOffDown_f);
+    Cmd_AddCommand("-reloadoff", ReloadOffUp_f);
+}
+
+bool grabbing(int hand)
+{
+    return handButtons(hand).grab;
+}
+
+const EntityVr* entityVr(int num)
+{
+    if(!vrProtocol() || num < 0 || num >= static_cast<int>(entityData.size()))
+    {
+        return nullptr;
+    }
+
+    return &entityData[num];
+}
+
+} // namespace qvr::client
+
+extern "C" void VR_OnSetAngle(float yaw)
+{
+    hands::setServerYaw(yaw);
+}
+
+// The old engine drew the lightning gun's beam at half size and the grappling hook's at a
+// quarter, which suits VR's scale better.
+extern "C" float VR_BeamScale(qmodel_t* model)
+{
+    if(!vrProtocol() || !model)
+    {
+        return 1.f;
+    }
+    if(!strcmp(model->name, "progs/bolt2.mdl"))
+    {
+        return 0.5f;
+    }
+    if(!strcmp(model->name, "progs/beam.mdl"))
+    {
+        return 0.25f;
+    }
+    return 1.f;
+}
+
+// CL_Record_f, recording mid-game: the demo needs the VR state received so far.
+extern "C" void VR_WriteDemoState(sizebuf_t* msg)
+{
+    if(vrProtocol())
+    {
+        worldtext::clientWriteAll(msg);
+    }
+}
+
+extern "C" void VR_OnClientClearState()
+{
+    entityData.clear();
+    drawnBoxes.clear();
+    particles::clear();
+    decals::clear();
+    worldtext::clientReset();
+    throwing::reset();
+    thrownValid[0] = thrownValid[1] = false;
+    twohand::reset();
+    held::resetClientState();
+    flick::reset();
+    handpose::reset();
+    modelcollide::reset();
+    selfcollide::reset();
+    shells::clear();
+    explosiondebris::clear();
+    fireparticles::clear();
+    shock::clear();
+    weaponfx::clear();
+    wounds::clear();
+    rope::forget();
+    chainsaw::reset();
+    view::resetClientState();
+    painknock::reset();
+    hands::resetClientState();
+}
+
+extern "C" void VR_WriteMoveExtras(sizebuf_t* buf)
+{
+    if(vrProtocol())
+    {
+        writeVrMove(buf, buildMove());
+    }
+}
+
+extern "C" void VR_ParseEntityUpdate(int num, int bits)
+{
+    if(!vrProtocol())
+    {
+        return;
+    }
+
+    if(num >= static_cast<int>(entityData.size()))
+    {
+        entityData.resize(num + 1);
+    }
+
+    // Absent bits mean "zero": the server never puts these in baselines.
+    client::EntityVr& data = entityData[num];
+    data.scale = (bits & U_QVR_SCALE) ? readFloats3() : glm::vec3{0.f};
+    data.scaleOrigin = (bits & U_QVR_SCALEORIGIN) ? readCoords3() : glm::vec3{0.f};
+    data.offset = (bits & U_QVR_OFFSET) ? readCoords3() : glm::vec3{0.f};
+    data.noRotate = (bits & U_QVR_NOROTATE) != 0;
+    data.weaponUid = (bits & U_QVR_WEAPONUID) ? MSG_ReadLong() : 0;
+}
+
+extern "C" void VR_DebugDrawnBoxes(void)
+{
+    if(!vr_debug_item_sizes.value)
+    {
+        return;
+    }
+    for(int i = 0; i < cl_numvisedicts; i++)
+    {
+        const entity_t* ent = cl_visedicts[i];
+        const int num = static_cast<int>(ent - cl_entities);
+        if(num <= 0 || num >= cl.num_entities || !ent->model || strncmp(ent->model->name, "maps/b_", 7) != 0)
+        {
+            continue;
+        }
+        if(num >= static_cast<int>(drawnBoxes.size()))
+        {
+            drawnBoxes.resize(num + 1);
+        }
+        const glm::vec3 scale = glm::vec3{1.f} + (num < static_cast<int>(entityData.size()) ? entityData[num].scale : glm::vec3{0.f});
+        DrawnBox& box = drawnBoxes[num];
+        const bool first = box.frame != host_framecount - 1 || box.model != ent->model;
+        if(first || scale != box.scale)
+        {
+            Con_Printf("item size: %d %s %s at scale %.2f (frame %d, time %.3f)\n", num, ent->model->name,
+                first ? "first drawn" : "rescaled", scale.x, host_framecount, cl.time);
+        }
+        box.frame = host_framecount;
+        box.model = ent->model;
+        box.scale = scale;
+    }
+}
+
+extern "C" int VR_SuppressModelRotate(int num)
+{
+    return vrProtocol() && num >= 0 && num < static_cast<int>(entityData.size()) && entityData[num].noRotate;
+}
+
+extern "C" int VR_ParseServerMessage(int cmd)
+{
+    if(cmd != svc_quakevr || !vrProtocol())
+    {
+        return 0;
+    }
+
+    const int subcmd = MSG_ReadByte();
+    switch(subcmd)
+    {
+        case QVR_SVC_PARTICLE2: parseParticle2(); break;
+        case QVR_SVC_PRECACHE_MODEL: parsePrecacheModel(); break;
+        case QVR_SVC_PRECACHE_SOUND: parsePrecacheSound(); break;
+        case QVR_SVC_HAPTIC: input::parseHaptic(); break;
+        case QVR_SVC_HANDIMPACT: view::parseHandImpact(); break;
+        case QVR_SVC_WORLDTEXT_MAKE:
+        case QVR_SVC_WORLDTEXT_TEXT:
+        case QVR_SVC_WORLDTEXT_POS:
+        case QVR_SVC_WORLDTEXT_ANGLES:
+        case QVR_SVC_WORLDTEXT_HALIGN:
+        case QVR_SVC_WORLDTEXT_SCALE: worldtext::clientParse(subcmd); break;
+        case QVR_SVC_FLOATTEXT: worldtext::clientParseFloatText(); break;
+        case QVR_SVC_EJECT: shells::parseEject(); break;
+        case QVR_SVC_WOUND: wounds::parseEvent(); break;
+        case QVR_SVC_WOUNDCLEAR: wounds::parseClear(); break;
+        case QVR_SVC_WEAPONGONE: wounds::parseWeaponGone(); break;
+        case QVR_SVC_CATCHBLEND: drawblend::parseCatch(); break;
+        case QVR_SVC_ROPE: rope::parseCorners(); break;
+        case QVR_SVC_SHOCK: shock::parse(); break;
+        case QVR_SVC_FIRED: weaponfx::parseFired(); break;
+        case QVR_SVC_TRACER: weaponfx::parseTracer(); break;
+        default: Host_Error("svc_quakevr: unknown command %d", subcmd);
+    }
+
+    return 1;
+}
+
+extern "C" int VR_ParseBeamEntity(int ent)
+{
+    if(!vrProtocol())
+    {
+        return ent;
+    }
+    if(!(cl.protocolflags & PRFL_QUAKEVR_PROGS))
+    {
+        // Another mod's progs (compatibility mode) send no beam id; still keep Ironwail from
+        // snapping the player's beam to the view: it starts at the gun (vr_compat_muzzle), the
+        // main hand's (beam id 1).
+        return ent | (2 << 16);
+    }
+
+    // The QC sends a beam id so that one entity (dual-wielded lightning guns, grapple and
+    // weapon) can own several beams. Folding it into the key also stops Ironwail snapping
+    // the beam start to the player origin: VR beams start at the weapon muzzle.
+    int beamId = MSG_ReadByte();
+    // A grappling hook's slack rope (QC vr_grapple.qc GrappleTrail): ids 4 .. 255 are the rope of hand `id & 1` (id 2 or 3)
+    // with (id - 4) / 2 / 125 of its length slack; 2 and 3 a taut one.
+    float slack = 0.f;
+    if(beamId >= 4)
+    {
+        slack = static_cast<float>((beamId - 4) >> 1) / 125.f;
+        beamId = 2 + (beamId & 1);
+    }
+    const int key = ent | ((beamId + 1) << 16);
+    if(beamId == 2 || beamId == 3)
+    {
+        rope::setSlack(key, slack); // (vr_rope.cpp draws it)
+    }
+    return key;
+}
+
+// Dynamic lights that make shooting light up a room (vr_flash_scale, vr_explosion_light_scale,
+// vr_colored_lights): muzzle flashes bigger, fading out rather than blinking off, coloured by the
+// weapon (the lightning gun's blue, the nailguns' orange, ...); rockets and explosions warm. The
+// local player's muzzle flash lights up the gun (the main hand's, or the off hand's when the main
+// hand has none), not a point in front of the player's origin.
+// With DarkPlaces' falloff (vr_dlight_falloff) they are DarkPlaces' lights: brighter than 1 (the
+// shaders' falloff keeps them full out to about 40% of the radius), smaller; an explosion lights
+// what faces away from it a little, and shrinks at 700 units a second; a muzzle flash is white and
+// fades out in a twentieth of a second (vr_colored_lights keeps the colours, as bright).
+extern "C" void VR_TuneDlight(int kind, int ent, void* dlight)
+{
+    dlight_t* dl = static_cast<dlight_t*>(dlight);
+    const bool colored = vr_colored_lights.value != 0.f;
+    const bool darkplaces = vr_dlight_falloff.value != 0.f;
+    float brightness = 1.f; // a muzzle flash is dimmer than an explosion: it reaches far, not glaring
+    const auto color = [&](float r, float g, float b) {
+        if(colored)
+        {
+            dl->color[0] = r * brightness;
+            dl->color[1] = g * brightness;
+            dl->color[2] = b * brightness;
+        }
+    };
+    // DarkPlaces' colour; without colours, as bright in white.
+    const auto dpColor = [&](float r, float g, float b) {
+        const float grey = (r + g + b) / 3.f;
+        dl->color[0] = colored ? r : grey;
+        dl->color[1] = colored ? g : grey;
+        dl->color[2] = colored ? b : grey;
+    };
+
+    if(kind == QVR_DLIGHT_ROCKET)
+    {
+        if(darkplaces)
+        {
+            dl->radius = 200.f * za::max(0.f, vr_explosion_light_scale.value);
+            dpColor(3.f, 1.5f, 0.5f);
+            lighting::dlightLook(dl, 0.f, 0.f);
+            return;
+        }
+        dl->radius *= za::max(0.f, vr_explosion_light_scale.value) * 0.85f;
+        color(1.f, 0.65f, 0.35f);
+        return;
+    }
+    if(kind == QVR_DLIGHT_EXPLOSION)
+    {
+        const float k = za::max(0.f, vr_explosion_light_scale.value);
+        if(darkplaces)
+        {
+            dl->radius = 350.f * k;
+            dl->decay = 700.f * k;
+            dl->die = static_cast<float>(cl.time + 0.5);
+            dpColor(4.f, 2.f, 0.5f);
+            lighting::dlightLook(dl, 0.25f, 0.f);
+            return;
+        }
+        dl->radius *= k;
+        dl->decay *= k;
+        color(1.f, 0.72f, 0.42f);
+        return;
+    }
+
+    if(darkplaces)
+    {
+        // DarkPlaces' muzzle flash: white, four times full light, gone in a twentieth of a second.
+        dl->radius = 150.f * za::max(0.f, vr_flash_scale.value);
+        dl->die = static_cast<float>(cl.time + 0.05);
+        dl->decay = 0.f;
+        brightness = 4.f;
+        dl->color[0] = dl->color[1] = dl->color[2] = brightness;
+        lighting::dlightLook(dl, 0.f, 0.05f);
+    }
+    else
+    {
+        // A muzzle flash: bright at once, gone in about a tenth of a second.
+        dl->radius *= za::max(0.f, vr_flash_scale.value);
+        dl->die = cl.time + 0.12;
+        dl->decay = dl->radius * 6.f;
+        brightness = 0.75f;
+    }
+    color(1.f, 0.85f, 0.6f);
+
+    if(!vrProtocol() || ent != cl.viewentity)
+    {
+        return;
+    }
+    const hands::State& s = hands::current();
+    const int hand = s.muzzleValid[1] ? 1 : s.muzzleValid[0] ? 0 : -1;
+    if(hand < 0)
+    {
+        return;
+    }
+    // A little back from the muzzle, so that it is not inside the wall the gun touches; where the gun is drawn (held
+    // out of a monster: vr_model_collide).
+    const glm::vec3 p = s.muzzle[hand] + modelcollide::drawnOffset(hand) + selfcollide::drawnOffset(hand) - hands::forward(s.rot[hand]) * 4.f;
+    dl->origin[0] = p.x;
+    dl->origin[1] = p.y;
+    dl->origin[2] = p.z;
+
+    // The weapon's colour.
+    const qmodel_t* model = weapons::heldModel(hand);
+    const char* n = model ? model->name : "";
+    if(strstr(n, "v_light"))
+    {
+        color(0.55f, 0.7f, 1.f);
+    }
+    else if(strstr(n, "v_plasma"))
+    {
+        color(0.6f, 0.8f, 1.f);
+    }
+    else if(strstr(n, "v_laserg"))
+    {
+        color(1.f, 0.35f, 0.3f);
+    }
+    else if(strstr(n, "v_nail") || strstr(n, "v_lava"))
+    {
+        color(1.f, 0.65f, 0.35f);
+    }
+    else if(strstr(n, "v_rock") || strstr(n, "v_prox") || strstr(n, "v_multi"))
+    {
+        color(1.f, 0.55f, 0.3f);
+    }
+}
+
+// The rope of a grappling gun lying about (its hook's own beam: the server sends the gun's place as it has it): from the
+// muzzle of the gun as drawn, vr_grapple_rope_depth inside it. The gun: the grappling gun drawn nearest the beam's start
+// (`key`: the beam's), unless another gun's rope starts nearer it: that gun is the other rope's. (A gun just taken or
+// gone, its rope still drawn a moment, went from the gun lying nearest: a phantom rope from another gun to this hook,
+// NOTES.md vrfiringrange_2026-09-30_02-56-42.)
+namespace
+{
+// thrownGunRopeStart's memory (the client's frame).
+struct RopeStartState
+{
+    glm::vec3 lastOut{0.f}; // the start we put: the server's sent again only with its next beam
+    double logAt = 0.0;     // vr_grapple_debug 2's next print
+};
+RopeStartState ropeStart;
+} // namespace
+
+void thrownGunRopeStart(int key, float* start)
+{
+    const glm::vec3 s{start[0], start[1], start[2]};
+    const entity_t* gun = nullptr;
+    float best = 96.f;
+    for(int i = 1; i < cl.num_entities; i++)
+    {
+        const entity_t& e = cl_entities[i];
+        if(!e.model || e.model->type != mod_alias || e.msgtime != cl.mtime[0] || strcmp(e.model->name, "progs/v_grpple.mdl"))
+        {
+            continue;
+        }
+        const glm::vec3 at{e.origin[0], e.origin[1], e.origin[2]};
+        const float d = glm::distance(at, s);
+        if(d >= best)
+        {
+            continue;
+        }
+        bool others = false;
+        for(int k = 0; k < MAX_BEAMS && !others; k++)
+        {
+            const beam_t& b = cl_beams[k];
+            others = b.entity != key && b.model && b.starttime <= cl.time && b.endtime >= cl.time &&
+                     (b.entity >> 16) - 1 == 2 && (b.entity & 0xFFFF) != cl.viewentity &&
+                     glm::distance(at, glm::vec3{b.start[0], b.start[1], b.start[2]}) < d;
+        }
+        if(!others)
+        {
+            best = d;
+            gun = &e;
+        }
+    }
+    const int slot = gun ? weapons::slotForModel(gun->model) : -1;
+    if(slot < 0)
+    {
+        return;
+    }
+    const glm::vec3 handle{gun->origin[0], gun->origin[1], gun->origin[2]};
+    const glm::vec3 muzzle = view::entityAnchorPosition(*gun, false, 0.f,
+        static_cast<int>(weapons::value(slot, weapons::Key::MuzzleAnchorVertex)),
+        weapons::vec(slot, weapons::Key::MuzzleOffsetX, weapons::Key::MuzzleOffsetY, weapons::Key::MuzzleOffsetZ));
+    const glm::vec3 along = muzzle - handle;
+    const float len = glm::length(along);
+    const glm::vec3 at = len > 1e-3f ? muzzle - along * (za::max(0.f, vr_grapple_rope_depth.value) / len) : muzzle;
+    glm::vec3& lastOut = ropeStart.lastOut;
+    const bool fromServer = glm::distance(s, lastOut) > 0.01f;
+    lastOut = at;
+    if(vr_grapple_debug.value >= 2 && developer.value && fromServer)
+    {
+        double& logAt = ropeStart.logAt;
+        if(realtime >= logAt)
+        {
+            logAt = realtime + 0.5;
+            const glm::vec3 local = glm::transpose(held::axesFromAngles(gun->angles, false)) * (muzzle - handle);
+            Con_Printf("grapple: the gun lying about: its muzzle at %.2f %.2f %.2f on it (modelpoint's axes)\n",
+                static_cast<double>(local.x), static_cast<double>(local.y), static_cast<double>(local.z));
+            Con_Printf("grapple: the gun lying about: its rope from %.1f %.1f %.1f (the server's %.1f %.1f %.1f, %.1f away); the "
+                       "gun at %.1f %.1f %.1f, angles %.1f %.1f %.1f\n",
+                static_cast<double>(at.x), static_cast<double>(at.y), static_cast<double>(at.z), static_cast<double>(s.x),
+                static_cast<double>(s.y), static_cast<double>(s.z), static_cast<double>(glm::distance(at, s)),
+                static_cast<double>(handle.x), static_cast<double>(handle.y), static_cast<double>(handle.z),
+                static_cast<double>(gun->angles[0]), static_cast<double>(gun->angles[1]), static_cast<double>(gun->angles[2]));
+        }
+    }
+    start[0] = at.x;
+    start[1] = at.y;
+    start[2] = at.z;
+}
+
+// A hand's lightning (beam id 0: the off hand's, 1: the main hand's) lasts 0.2 s after the server last sent it: thrown,
+// dropped or holstered while firing, its gun left the hand and the beam went on from the empty hand (NOTES.md
+// vrfiringrange_2026-10-01_11-41-09). It ends as soon as the hand no longer holds the lightning gun.
+extern "C" int VR_BeamGone(int ent)
+{
+    const int id = (ent >> 16) - 1;
+    if(!vrProtocol() || !(cl.protocolflags & PRFL_QUAKEVR_PROGS) || id < 0 || id > 1 || (ent & 0xFFFF) != cl.viewentity)
+    {
+        return 0;
+    }
+    const qmodel_t* const held = weapons::heldModel(id);
+    if(held && !strcmp(held->name, "progs/v_light.mdl"))
+    {
+        return 0;
+    }
+    Con_DPrintf("beam: the %s hand's lightning ended: its gun left the hand\n", id == HAND_MAIN ? "main" : "off");
+    return 1;
+}
+
+// The player's own beams follow the gun as drawn, every frame, rather than where the server last
+// saw it (a few frames late, and stepping at the server's rate). Beam ids 0 and 1 (the off and
+// main hands' lightning) start at that hand's muzzle and aim along the hand, keeping their length;
+// 2 and 3 (the grappling hook's rope) start vr_grapple_rope_depth inside it and end at the hook, where it is drawn. A
+// grappling gun lying about: its rope from its muzzle as drawn (thrownGunRopeStart).
+extern "C" int VR_UpdateBeam(int ent, float* start, float* end)
+{
+    const int id = (ent >> 16) - 1;
+    if(!vrProtocol() || id < 0 || id > 3)
+    {
+        return 0;
+    }
+    if((ent & 0xFFFF) != cl.viewentity)
+    {
+        if(id == 2 && vr_grapple_rope_depth.value >= 0.f)
+        {
+            thrownGunRopeStart(ent, start);
+        }
+        return 0;
+    }
+
+    const int hand = id & 1;
+    const hands::State& s = hands::current();
+    if(s.muzzleValid[hand])
+    {
+        const glm::vec3 muzzle = s.muzzle[hand] + modelcollide::drawnOffset(hand) + selfcollide::drawnOffset(hand); // as drawn (vr_model_collide, vr_body_collide)
+        if(id < 2)
+        {
+            const float len = glm::distance(glm::vec3{start[0], start[1], start[2]}, glm::vec3{end[0], end[1], end[2]});
+            const glm::vec3 e = muzzle + hands::forward(weapons::shotAngles(s.rot[hand], weapons::heldSlot(hand), hand == HAND_OFF)) * len;
+            end[0] = e.x;
+            end[1] = e.y;
+            end[2] = e.z;
+        }
+        glm::vec3 from = muzzle;
+        if(id >= 2)
+        {
+            // The rope: a little inside the barrel (it comes out of the gun, not off its end).
+            from -= hands::forward(weapons::shotAngles(s.rot[hand], weapons::heldSlot(hand), hand == HAND_OFF)) *
+                    za::max(0.f, vr_grapple_rope_depth.value);
+        }
+        start[0] = from.x;
+        start[1] = from.y;
+        start[2] = from.z;
+    }
+    if(id < 2)
+    {
+        return 0;
+    }
+
+    // The rope's end: the hook as drawn (interpolated) rather than as last sent, the nearest hook
+    // to where the server put the end.
+    const entity_t* hook = nullptr;
+    float best = 48.f;
+    for(int i = 1; i < cl.num_entities; i++)
+    {
+        const entity_t& e = cl_entities[i];
+        if(!e.model || e.msgtime != cl.mtime[0] || strcmp(e.model->name, "progs/hook.mdl"))
+        {
+            continue;
+        }
+        const float d = glm::distance(glm::vec3{e.msg_origins[0][0], e.msg_origins[0][1], e.msg_origins[0][2]},
+            glm::vec3{end[0], end[1], end[2]});
+        if(d < best)
+        {
+            best = d;
+            hook = &e;
+        }
+    }
+    if(hook)
+    {
+        for(int k = 0; k < 3; k++)
+        {
+            end[k] += hook->origin[k] - hook->msg_origins[0][k];
+        }
+    }
+    return 1;
+}

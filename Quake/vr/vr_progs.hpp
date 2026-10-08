@@ -1,0 +1,144 @@
+// vr_progs.hpp -- Quake VR's view of the server QuakeC VM.
+//
+// The VR progs keep the vanilla system-defs layout (CRC 5927); everything VR-specific is an
+// ordinary QC field, global or function that the engine resolves by name when progs load.
+// A progs without them (e.g. vanilla id1) simply runs with VR gameplay disabled.
+
+#pragma once
+
+#include "vr_engine.hpp"
+
+namespace qvr::progs
+{
+
+inline constexpr int firstExtSpawnParm = 17;
+inline constexpr int lastExtSpawnParm = 50;
+inline constexpr int numExtSpawnParms = lastExtSpawnParm - firstExtSpawnParm + 1;
+
+// Offsets (in floats, from edict_t::v) of the VR entity fields; -1 when absent.
+struct FieldOffsets
+{
+#define QVR_FIELD(name) int name{-1};
+#include "vr_fields.inc"
+#undef QVR_FIELD
+};
+
+// The melee history's fields (QC vr_melee.qc: a hand's blow keeps its last poses in a ring; the melee builtins read it):
+// the arrays' first elements (FTEQCC names them "mh_hdt[0]"...), each VR_MELEE_HISTORY long (vr_melee_shared.h). `valid`
+// when all were found, the arrays that long.
+struct MeleeHistoryFields
+{
+    bool valid{false};
+    int hfar{-1};   // .vector mh_hfar[]: the far end's velocity at each pose
+    int hgrip{-1};  // .vector mh_hgrip[]: the grip's
+    int hwrist{-1}; // .vector mh_hwrist[]: the wrist's
+    int hdt{-1};    // .float mh_hdt[]: each pose's time step (0: none, the ring's end)
+    int hi{-1};     // .float mh_hi: the newest pose's index
+    int vgrip{-1};  // .vector mh_vgrip, mh_vfar: the grip's and the far end's velocity now
+    int vfar{-1};
+    int rgrip{-1};  // .vector mh_rgrip: the grip now (from the head, in the play space)
+};
+
+// Resolved for sv.qcvm each time progs are loaded.
+struct Bindings
+{
+    bool isVrProgs{false};
+    bool isAdVrProgs{false}; // AD adapter retains native item-bit weapon ids.
+    FieldOffsets fields;
+    MeleeHistoryFields melee;
+
+    func_t OnSpawnServerBeforeLoad{0};
+    func_t OnSpawnServerAfterLoad{0};
+    func_t OnLoadGame{0};
+    func_t Motion_Sample{0}; // the motion recorder's (QC vr_motion.qc)
+    func_t Motion_Equip{0};
+    func_t Dummy_Replay{0}; // a motion take's strike of the training dummy (QC vr_dummy.qc)
+    func_t Carry_Handtouch{0}; // a thing a hand can carry (QC vr_carry.qc VR_Carry_Setup): taken by the fist's touch
+    func_t Ragdoll_Handtouch{0}; // a ragdoll's limb under a hand (QC vr_carry.qc; vr_box3d.cpp gives it to a ragdoll)
+    // A carried prop's touch: QC forcegrabbable_touch and those that only call it (a rock's or a brick's, a crate's
+    // piece's, a thrown weapon's: vr_physics.cpp's touch spares the calls that can do nothing).
+    func_t propTouches[4]{};
+
+    float* spawnServerFromSaveFile{nullptr};
+    float* playerTimeOffset{nullptr}; // vr_player_time_offset: the player's clock ahead of time (vr_timescale.cpp)
+    float* extSpawnParms[numExtSpawnParms]{};
+};
+
+[[nodiscard]] const Bindings& bindings();
+
+[[nodiscard]] inline const FieldOffsets& fields()
+{
+    return bindings().fields;
+}
+
+// Field accessors. Callers must check the offset is valid (isVrProgs guarantees the fields
+// the engine needs; fall back gracefully for optional ones).
+[[nodiscard]] inline float* fieldPtr(edict_t* ent, int ofs)
+{
+    return reinterpret_cast<float*>(&ent->v) + ofs;
+}
+
+[[nodiscard]] inline float& fieldFloat(edict_t* ent, int ofs)
+{
+    return *fieldPtr(ent, ofs);
+}
+
+[[nodiscard]] inline int& fieldInt(edict_t* ent, int ofs) // func_t, string_t, entity
+{
+    return *reinterpret_cast<int*>(fieldPtr(ent, ofs));
+}
+
+[[nodiscard]] inline float fieldFloatOr(edict_t* ent, int ofs, float fallback)
+{
+    return ofs >= 0 ? fieldFloat(ent, ofs) : fallback;
+}
+
+// Optional fields: absent ones read as zero, and are not written.
+[[nodiscard]] inline glm::vec3 fieldVec(edict_t* ent, int ofs)
+{
+    if(ofs < 0)
+    {
+        return glm::vec3{0.f};
+    }
+    const float* v = fieldPtr(ent, ofs);
+    return {v[0], v[1], v[2]};
+}
+
+[[nodiscard]] inline func_t fieldFunc(edict_t* ent, int ofs)
+{
+    return ofs >= 0 ? static_cast<func_t>(fieldInt(ent, ofs)) : 0;
+}
+
+inline void setFieldVec(edict_t* ent, int ofs, const glm::vec3& v)
+{
+    if(ofs >= 0)
+    {
+        float* f = fieldPtr(ent, ofs);
+        f[0] = v.x;
+        f[1] = v.y;
+        f[2] = v.z;
+    }
+}
+
+inline void setFieldFloat(edict_t* ent, int ofs, float value)
+{
+    if(ofs >= 0)
+    {
+        fieldFloat(ent, ofs) = value;
+    }
+}
+
+// A function of the current qcvm by name (0 when absent).
+[[nodiscard]] func_t findFunction(const char* name);
+
+// Binds the VR builtins declared "= #0" in QC (vr_builtins.cpp).
+void bindBuiltins();
+
+// Clears per-map builtin state (world text, ...) when a new server spawns.
+void resetBuiltinState();
+// ED_Free (VR_OnEdictFree): a wounded entity's removal sent to the clients (QVR_SVC_WOUNDCLEAR).
+void onEdictFree(edict_t* ed);
+// vr_test_remove <entity number>: the entity removed, as QC's remove() (tests: its slot reused).
+void testRemove_f();
+
+} // namespace qvr::progs

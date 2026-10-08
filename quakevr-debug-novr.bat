@@ -1,1 +1,0 @@
-quakevr-debug.exe -novr

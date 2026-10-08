@@ -1,0 +1,41 @@
+// vr_anchor.hpp -- positions of individual alias model vertices ("anchor vertices").
+//
+// Weapon settings attach the hand, muzzle, weapon button and ammo text to vertices of the
+// weapon model. Their indices refer to the vertex order of QuakeSpasm's old triangle-strip
+// builder (BuildTris), which the old engine used to lay out pose data; Ironwail keeps the MDL's
+// original order. The strip order is rebuilt here from the model file to translate indices,
+// so existing weapon settings keep working.
+
+#pragma once
+
+#include "vr_engine.hpp"
+
+#include "Zancle/Container/Vector.hpp"
+
+
+namespace qvr::anchor
+{
+
+// Vertex position in the model's byte space (0..255 per axis, before scale/scale_origin), for
+// the entity's current frame blended towards frame 0 by `zeroBlend`.
+[[nodiscard]] glm::vec3 posedVertex(const entity_t& ent, int anchorIndex, float zeroBlend);
+
+// Pose index used for "zero blending" (frame 0, animated for frame groups).
+[[nodiscard]] int zeroPose(const aliashdr_t* hdr);
+
+// Every vertex of the entity's model in the model's byte space (as posedVertex): at rest (the zero pose) and as drawn
+// this frame (blended towards the zero pose by `zeroBlend`). False for a model without Quake vertices.
+[[nodiscard]] bool posedVertices(const entity_t& ent, float zeroBlend, za::Vector<glm::vec3>& rest, za::Vector<glm::vec3>& now);
+
+// Developer commands for making weapon settings (a model's anchor indices are not its file's vertex
+// indices): vr_anchor_info <model> <index> prints where an anchor index is, in the model's own
+// coordinates (as its file's frames: scale and origin applied); vr_anchor_nearest <model> <x> <y> <z>
+// prints the anchor index nearest a point.
+void registerCommands();
+
+// The game directory changed (VR_OnGameDirChanged): Mod_ResetAll reuses the models' slots for other models, and the
+// files are another game's; the models' strip orders, by model (and name: another game's model of the same name is
+// another model).
+void onGameDirChanged();
+
+} // namespace qvr::anchor

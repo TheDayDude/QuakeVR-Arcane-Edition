@@ -1,0 +1,1045 @@
+[
+  {
+    "model": "progs/mon_boil.mdl",
+    "verts": 339,
+    "poses": 70,
+    "rms": 4.349535625107554,
+    "counts": [
+      63,
+      92,
+      19,
+      20,
+      11
+    ]
+  },
+  {
+    "model": "progs/mon_bossboglord.mdl",
+    "verts": 648,
+    "poses": 94,
+    "rms": 2.4314526654166997,
+    "counts": [
+      54,
+      31,
+      75,
+      19,
+      34,
+      54,
+      25,
+      37,
+      51,
+      26,
+      33,
+      28,
+      31
+    ]
+  },
+  {
+    "model": "progs/mon_bosschthon.mdl",
+    "verts": 325,
+    "poses": 106,
+    "rms": 11.23183049440948,
+    "counts": [
+      86,
+      83,
+      80,
+      38,
+      38
+    ]
+  },
+  {
+    "model": "progs/mon_bosseidolon.mdl",
+    "verts": 1344,
+    "poses": 248,
+    "rms": 4.2643127145616155,
+    "counts": [
+      77,
+      85,
+      270,
+      63,
+      67,
+      62,
+      81,
+      45
+    ]
+  },
+  {
+    "model": "progs/mon_bossicegolem.mdl",
+    "verts": 427,
+    "poses": 251,
+    "rms": 2.923457080358388,
+    "counts": [
+      33,
+      27,
+      9,
+      15,
+      11,
+      9,
+      12,
+      14,
+      18,
+      14,
+      17,
+      14
+    ]
+  },
+  {
+    "model": "progs/mon_bossnour.mdl",
+    "verts": 224,
+    "poses": 153,
+    "rms": 2.172323592776817,
+    "counts": [
+      44,
+      43,
+      29,
+      17,
+      29,
+      15,
+      14,
+      12,
+      8,
+      13
+    ]
+  },
+  {
+    "model": "progs/mon_centurion.mdl",
+    "verts": 284,
+    "poses": 79,
+    "rms": 1.2073990075568104,
+    "counts": [
+      24,
+      73,
+      36,
+      13,
+      12,
+      12,
+      28,
+      12,
+      30,
+      12,
+      32
+    ]
+  },
+  {
+    "model": "progs/mon_dcrossbow.mdl",
+    "verts": 1120,
+    "poses": 256,
+    "rms": 1.6485379543954115,
+    "counts": [
+      14,
+      24,
+      118,
+      48,
+      62,
+      69,
+      37,
+      28,
+      29,
+      14,
+      17
+    ]
+  },
+  {
+    "model": "progs/mon_deflector.mdl",
+    "verts": 267,
+    "poses": 126,
+    "rms": 8.332881515168868,
+    "counts": [
+      26,
+      37,
+      55,
+      36,
+      4,
+      22,
+      26,
+      19,
+      12,
+      18,
+      12
+    ]
+  },
+  {
+    "model": "progs/mon_demon.mdl",
+    "verts": 143,
+    "poses": 69,
+    "rms": 2.2023671740557518,
+    "counts": [
+      14,
+      7,
+      29,
+      7,
+      9,
+      13,
+      9,
+      4,
+      13,
+      12,
+      4,
+      13,
+      9
+    ]
+  },
+  {
+    "model": "progs/mon_dfury.mdl",
+    "verts": 1376,
+    "poses": 255,
+    "rms": 1.0311625847597088,
+    "counts": [
+      45,
+      30,
+      125,
+      61,
+      12,
+      47,
+      22,
+      14,
+      47,
+      10,
+      13,
+      18,
+      33,
+      13
+    ]
+  },
+  {
+    "model": "progs/mon_dguard.mdl",
+    "verts": 585,
+    "poses": 256,
+    "rms": 1.050862788555586,
+    "counts": [
+      50,
+      18,
+      73,
+      20,
+      14,
+      24,
+      25,
+      18,
+      13,
+      18,
+      13
+    ]
+  },
+  {
+    "model": "progs/mon_dguardq.mdl",
+    "verts": 176,
+    "poses": 166,
+    "rms": 0.8611354908632061,
+    "counts": [
+      20,
+      4,
+      27,
+      10,
+      20,
+      8,
+      20,
+      25,
+      5,
+      8,
+      10,
+      8,
+      11
+    ]
+  },
+  {
+    "model": "progs/mon_dknight.mdl",
+    "verts": 911,
+    "poses": 244,
+    "rms": 1.1139462488515692,
+    "counts": [
+      28,
+      24,
+      123,
+      49,
+      15,
+      56,
+      29,
+      25,
+      14,
+      18,
+      13,
+      11,
+      16,
+      13
+    ]
+  },
+  {
+    "model": "progs/mon_dlord.mdl",
+    "verts": 245,
+    "poses": 166,
+    "rms": 0.8146788373499336,
+    "counts": [
+      18,
+      62,
+      23,
+      25,
+      26,
+      20,
+      25,
+      4,
+      8,
+      11,
+      4,
+      8,
+      11
+    ]
+  },
+  {
+    "model": "progs/mon_dog.mdl",
+    "verts": 655,
+    "poses": 140,
+    "rms": 1.0149008893424307,
+    "counts": [
+      38,
+      31,
+      239,
+      13,
+      30,
+      22,
+      16,
+      36,
+      34,
+      36,
+      34,
+      21
+    ]
+  },
+  {
+    "model": "progs/mon_dprince.mdl",
+    "verts": 911,
+    "poses": 244,
+    "rms": 1.1139462488515692,
+    "counts": [
+      28,
+      24,
+      123,
+      49,
+      15,
+      56,
+      29,
+      25,
+      14,
+      18,
+      13,
+      11,
+      16,
+      13
+    ]
+  },
+  {
+    "model": "progs/mon_drole.mdl",
+    "verts": 204,
+    "poses": 198,
+    "rms": 2.7836375887276477,
+    "counts": [
+      34,
+      39,
+      39,
+      13,
+      20,
+      8,
+      13,
+      20,
+      18
+    ]
+  },
+  {
+    "model": "progs/mon_dsergeant.mdl",
+    "verts": 1265,
+    "poses": 255,
+    "rms": 1.549247287462548,
+    "counts": [
+      41,
+      24,
+      121,
+      54,
+      26,
+      53,
+      29,
+      86,
+      4,
+      18,
+      13,
+      26,
+      74,
+      5
+    ]
+  },
+  {
+    "model": "progs/mon_eel.mdl",
+    "verts": 148,
+    "poses": 21,
+    "rms": 0.791809476562224,
+    "counts": [
+      23,
+      70,
+      28,
+      27
+    ]
+  },
+  {
+    "model": "progs/mon_enforcer.mdl",
+    "verts": 222,
+    "poses": 102,
+    "rms": 1.7507531007438848,
+    "counts": [
+      17,
+      67,
+      26,
+      12,
+      12,
+      13,
+      27,
+      13,
+      12,
+      11,
+      12
+    ]
+  },
+  {
+    "model": "progs/mon_fish.mdl",
+    "verts": 97,
+    "poses": 132,
+    "rms": 3.1086075247437406,
+    "counts": [
+      18,
+      22,
+      31,
+      26
+    ]
+  },
+  {
+    "model": "progs/mon_floyd.mdl",
+    "verts": 223,
+    "poses": 81,
+    "rms": 27.349512535006046,
+    "counts": [
+      223
+    ]
+  },
+  {
+    "model": "progs/mon_freddie.mdl",
+    "verts": 660,
+    "poses": 157,
+    "rms": 4.047371707359804,
+    "counts": [
+      70,
+      52,
+      31,
+      46,
+      129,
+      133,
+      61,
+      43,
+      4,
+      91
+    ]
+  },
+  {
+    "model": "progs/mon_fumigator.mdl",
+    "verts": 277,
+    "poses": 83,
+    "rms": 1.7328060213051533,
+    "counts": [
+      36,
+      89,
+      28,
+      8,
+      16,
+      13,
+      31,
+      8,
+      12,
+      16,
+      20
+    ]
+  },
+  {
+    "model": "progs/mon_gargoyle.mdl",
+    "verts": 338,
+    "poses": 166,
+    "rms": 3.039269716487971,
+    "counts": [
+      16,
+      13,
+      50,
+      16,
+      15,
+      14,
+      15,
+      7,
+      7
+    ]
+  },
+  {
+    "model": "progs/mon_gaunt.mdl",
+    "verts": 161,
+    "poses": 110,
+    "rms": 8.771650362837248,
+    "counts": [
+      24,
+      9,
+      66,
+      7,
+      20,
+      7,
+      17,
+      11
+    ]
+  },
+  {
+    "model": "progs/mon_golem.mdl",
+    "verts": 427,
+    "poses": 251,
+    "rms": 2.200819799407625,
+    "counts": [
+      33,
+      29,
+      17,
+      4,
+      14,
+      8,
+      12,
+      14,
+      17,
+      14,
+      17,
+      14
+    ]
+  },
+  {
+    "model": "progs/mon_hknight.mdl",
+    "verts": 250,
+    "poses": 166,
+    "rms": 0.8473704289142889,
+    "counts": [
+      21,
+      62,
+      23,
+      25,
+      26,
+      25,
+      25,
+      8,
+      11,
+      5,
+      8,
+      11
+    ]
+  },
+  {
+    "model": "progs/mon_hogre.mdl",
+    "verts": 1017,
+    "poses": 188,
+    "rms": 1.3501385970355038,
+    "counts": [
+      43,
+      17,
+      125,
+      30,
+      59,
+      14,
+      16,
+      12,
+      48,
+      14,
+      19,
+      10,
+      19
+    ]
+  },
+  {
+    "model": "progs/mon_hogreham.mdl",
+    "verts": 1306,
+    "poses": 161,
+    "rms": 5.293765541618977,
+    "counts": [
+      4,
+      43,
+      176,
+      15,
+      18,
+      4,
+      90,
+      12,
+      72,
+      29,
+      47,
+      29
+    ]
+  },
+  {
+    "model": "progs/mon_hogremac.mdl",
+    "verts": 1224,
+    "poses": 156,
+    "rms": 1.8495063520210573,
+    "counts": [
+      50,
+      31,
+      157,
+      29,
+      56,
+      16,
+      48,
+      68,
+      29,
+      29,
+      14,
+      11
+    ]
+  },
+  {
+    "model": "progs/mon_jim.mdl",
+    "verts": 458,
+    "poses": 66,
+    "rms": 2.4965624418768666,
+    "counts": [
+      259
+    ]
+  },
+  {
+    "model": "progs/mon_jimrock.mdl",
+    "verts": 547,
+    "poses": 66,
+    "rms": 2.639860667300841,
+    "counts": [
+      324
+    ]
+  },
+  {
+    "model": "progs/mon_judge.mdl",
+    "verts": 1016,
+    "poses": 234,
+    "rms": 1.7945027933282995,
+    "counts": [
+      32,
+      38,
+      143,
+      39,
+      60,
+      43,
+      63,
+      36,
+      4,
+      18,
+      27,
+      42,
+      20,
+      27
+    ]
+  },
+  {
+    "model": "progs/mon_justice.mdl",
+    "verts": 1008,
+    "poses": 245,
+    "rms": 1.624087430006312,
+    "counts": [
+      32,
+      39,
+      158,
+      26,
+      62,
+      41,
+      63,
+      32,
+      4,
+      18,
+      27,
+      39,
+      20,
+      27
+    ]
+  },
+  {
+    "model": "progs/mon_knight.mdl",
+    "verts": 268,
+    "poses": 163,
+    "rms": 0.814123977927896,
+    "counts": [
+      18,
+      14,
+      30,
+      16,
+      13,
+      16,
+      26,
+      16,
+      12,
+      13,
+      18
+    ]
+  },
+  {
+    "model": "progs/mon_lostsoul.mdl",
+    "verts": 213,
+    "poses": 76,
+    "rms": 2.703959015802268,
+    "counts": [
+      158
+    ]
+  },
+  {
+    "model": "progs/mon_minotaur.mdl",
+    "verts": 514,
+    "poses": 251,
+    "rms": 6.928214838618265,
+    "counts": [
+      23,
+      10,
+      83,
+      14,
+      5,
+      16,
+      12,
+      24,
+      18,
+      15,
+      13,
+      23
+    ]
+  },
+  {
+    "model": "progs/mon_ogre.mdl",
+    "verts": 169,
+    "poses": 147,
+    "rms": 1.2507672152926785,
+    "counts": [
+      14,
+      23,
+      10,
+      9,
+      20,
+      14,
+      40,
+      9,
+      11,
+      8,
+      11
+    ]
+  },
+  {
+    "model": "progs/mon_pyro.mdl",
+    "verts": 277,
+    "poses": 83,
+    "rms": 1.7328060213051533,
+    "counts": [
+      36,
+      89,
+      28,
+      8,
+      16,
+      13,
+      31,
+      8,
+      12,
+      16,
+      20
+    ]
+  },
+  {
+    "model": "progs/mon_scorpion.mdl",
+    "verts": 267,
+    "poses": 185,
+    "rms": 2.456209341490017,
+    "counts": [
+      27,
+      35,
+      7,
+      14,
+      18,
+      13,
+      6,
+      12,
+      14,
+      17
+    ]
+  },
+  {
+    "model": "progs/mon_seeker.mdl",
+    "verts": 317,
+    "poses": 247,
+    "rms": 4.21997559084809,
+    "counts": [
+      33,
+      31,
+      60,
+      23,
+      10,
+      36,
+      17,
+      15,
+      26,
+      22,
+      24,
+      18
+    ]
+  },
+  {
+    "model": "progs/mon_sentinel.mdl",
+    "verts": 263,
+    "poses": 17,
+    "rms": 3.9610474554809985,
+    "counts": [
+      99,
+      128,
+      18,
+      18
+    ]
+  },
+  {
+    "model": "progs/mon_shalrath.mdl",
+    "verts": 208,
+    "poses": 35,
+    "rms": 1.3026143350174377,
+    "counts": [
+      26,
+      72,
+      4,
+      8,
+      30,
+      9,
+      5,
+      50,
+      4
+    ]
+  },
+  {
+    "model": "progs/mon_shambler.mdl",
+    "verts": 648,
+    "poses": 94,
+    "rms": 2.4174163640567983,
+    "counts": [
+      47,
+      41,
+      69,
+      21,
+      35,
+      53,
+      26,
+      40,
+      51,
+      26,
+      33,
+      28,
+      28
+    ]
+  },
+  {
+    "model": "progs/mon_skullwiz.mdl",
+    "verts": 632,
+    "poses": 158,
+    "rms": 2.8966412531812726,
+    "counts": [
+      19,
+      8,
+      143,
+      23,
+      23,
+      26,
+      26,
+      19,
+      35,
+      14
+    ]
+  },
+  {
+    "model": "progs/mon_soldier.mdl",
+    "verts": 555,
+    "poses": 114,
+    "rms": 0.7910777038555855,
+    "counts": [
+      55,
+      34,
+      67,
+      58,
+      60,
+      26,
+      33,
+      18,
+      20,
+      18,
+      20
+    ]
+  },
+  {
+    "model": "progs/mon_spiderb.mdl",
+    "verts": 346,
+    "poses": 134,
+    "rms": 2.8326034948063525,
+    "counts": [
+      49,
+      74,
+      7,
+      12,
+      4,
+      8,
+      11
+    ]
+  },
+  {
+    "model": "progs/mon_spiderg.mdl",
+    "verts": 346,
+    "poses": 134,
+    "rms": 3.2392115389191067,
+    "counts": [
+      52,
+      68,
+      13,
+      4,
+      7,
+      4,
+      10,
+      7
+    ]
+  },
+  {
+    "model": "progs/mon_steelclaw.mdl",
+    "verts": 346,
+    "poses": 134,
+    "rms": 2.8326034948063525,
+    "counts": [
+      49,
+      74,
+      7,
+      12,
+      4,
+      8,
+      11
+    ]
+  },
+  {
+    "model": "progs/mon_swampling.mdl",
+    "verts": 80,
+    "poses": 73,
+    "rms": 1.4026841078841947,
+    "counts": [
+      16,
+      41,
+      4,
+      5,
+      4,
+      5,
+      5
+    ]
+  },
+  {
+    "model": "progs/mon_swamplingp.mdl",
+    "verts": 80,
+    "poses": 73,
+    "rms": 1.7030825424821754,
+    "counts": [
+      14,
+      39,
+      4,
+      5,
+      8,
+      5,
+      5
+    ]
+  },
+  {
+    "model": "progs/mon_tarbaby.mdl",
+    "verts": 130,
+    "poses": 61,
+    "rms": 11.759933617515717,
+    "counts": [
+      130
+    ]
+  },
+  {
+    "model": "progs/mon_voreling.mdl",
+    "verts": 80,
+    "poses": 73,
+    "rms": 1.402681036765852,
+    "counts": [
+      16,
+      41,
+      4,
+      5,
+      4,
+      5,
+      5
+    ]
+  },
+  {
+    "model": "progs/mon_vorelingp.mdl",
+    "verts": 80,
+    "poses": 73,
+    "rms": 1.7030820550626857,
+    "counts": [
+      14,
+      39,
+      4,
+      5,
+      8,
+      5,
+      5
+    ]
+  },
+  {
+    "model": "progs/mon_wizard.mdl",
+    "verts": 80,
+    "poses": 54,
+    "rms": 1.1623090245288037,
+    "counts": [
+      10,
+      20,
+      12,
+      4,
+      9,
+      4,
+      8,
+      8,
+      5
+    ]
+  },
+  {
+    "model": "progs/mon_wraith.mdl",
+    "verts": 212,
+    "poses": 87,
+    "rms": 2.7453399300272605,
+    "counts": [
+      22,
+      104,
+      43,
+      43
+    ]
+  },
+  {
+    "model": "progs/mon_zombie.mdl",
+    "verts": 177,
+    "poses": 198,
+    "rms": 0.7806616307502378,
+    "counts": [
+      24,
+      12,
+      40,
+      8,
+      12,
+      21,
+      20,
+      8,
+      12,
+      8,
+      12
+    ]
+  },
+  {
+    "model": "progs/mon_zombiek.mdl",
+    "verts": 161,
+    "poses": 253,
+    "rms": 1.2017353204279215,
+    "counts": [
+      4,
+      34,
+      21,
+      13,
+      13,
+      14,
+      15,
+      17,
+      8,
+      18,
+      4
+    ]
+  }
+]

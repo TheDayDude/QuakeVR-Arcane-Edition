@@ -11,11 +11,17 @@ I've taken the framework for VR weapons, physics and enemies and applied those t
 Additional features (WIP):
 Usable Crossbows, Widowmakers, Plasma Guns, and Shadow Axes
 
-## Building and installing
+TODO:
+Fix weapon textures
+Ogre Hammer
+Fury Knight's Swords
+Magic System (Tome + Empty Hand + Mana/Essence Ammo)
+Valve Finger Tracking compat
+Decapitation
+Crossbow bonus headshot damage
+Traps (Nail Bomb? Bear trap? Rune traps?)
 
-See [docs/BUILDING.md](docs/BUILDING.md) for Windows/Linux engine builds,
-AD gameplay compilation, dependencies, and installation into an existing game.
-Windows x64 has OpenXR headset support. Linux currently uses the mock VR backend.
+## Building and installing
 
 This repository contains source, required build dependencies, and the AD overlay.
 Full Quake/AD/QuakeVR game content and optional HD packs are supplied separately.

@@ -1,6 +1,6 @@
 # Quake VR: Arcane Edition
 
-This is an unofficial fork of Vittorio Romeo's [vr-ironwail](https://github.com/vittorioromeo/quakevr/tree/vr-ironwail) made to run the mod Arcane Dimensions.
+This is an unofficial fork of Vittorio Romeo's [vr-ironwail](https://github.com/vittorioromeo/quakevr/tree/vr-ironwail) made to run the mod [Arcane Dimensions](https://www.moddb.com/mods/arcane-dimensions).
 
 The base engine is [Ironwail](https://github.com/andrei-drexler/ironwail) and talks to your
 headset through [OpenXR](https://www.khronos.org/openxr/).

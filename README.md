@@ -9,7 +9,8 @@ Compatibility with AD:
 I've taken the framework for VR weapons, physics and enemies and applied those to all monsters in arcane dimensions.
 
 Additional features:
-WIP
+Usable Crossbows
+
 ## Building and installing
 
 See [docs/BUILDING.md](docs/BUILDING.md) for Windows/Linux engine builds,

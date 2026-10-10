@@ -283,6 +283,10 @@ extern "C" void VR_AliasInstance(const entity_t* e, const float matrix[16], cons
     const qmodel_t* source = ragdoll::sourceModel(e);
     const auto* skinhdr = source ? static_cast<const aliashdr_t*>(Mod_Extradata(const_cast<qmodel_t*>(source))) : hdr;
     out->retro[3] = standard ? VR_RetroLightSkinScale(skinhdr, e->skinnum) : 0.f; // retro lighting (vr_retrolight.cpp): its Quake texels' share
+    if(standard && VR_WeaponHD() && e->model && VR_IsWeaponModel(e->model->name))
+    {
+        out->retro[3] = -1.f; // weapon-only opt-out of the alias shader's stepped lighting/grid
+    }
 }
 
 // Muzzle flashes and the zero blend (round 20). A view model's flash (Quake's nailguns and launchers, the shotguns'

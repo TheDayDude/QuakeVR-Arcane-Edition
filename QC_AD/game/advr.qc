@@ -112,7 +112,10 @@ void(float h) ADVR_ReloadFrame = {
         (slot>=0 && (cvar("vr_reload_mode")==1 || slot==2 || slot==3)))ADVR_Reload(h);
 };
 entity(float h) ADVR_Hand = { if (h) return self.advr_main; return self.advr_off; };
-void(float h, entity r) ADVR_SetHand = { if (h) self.advr_main = r; else self.advr_off = r; };
+void(float h, entity r) ADVR_SetHand = {
+    if(r && r.advr_kind==ADVR_HAMMER){r.advr_hammer_time=0;r.advr_hammer_armed=0;}
+    if (h) self.advr_main = r; else self.advr_off = r;
+};
 vector(float h) ADVR_Pos = { if (h) return self.handpos; return self.offhandpos; };
 vector(float h) ADVR_Angles = { if (h) return self.handrot; return self.offhandrot; };
 float(float h) ADVR_Grip = { if (h) return (self.vrbits0 & 8) != 0; return (self.vrbits0 & 2) != 0; };
@@ -313,7 +316,7 @@ void(float h) ADVR_GripFrame = {
             // The sword's lower hilt is inside the generic hand-switch radius.
             // Prefer supporting it even before the client grip blend catches up.
             tmp=ADVR_Hand(1-h);
-            if(!r && (tmp.advr_kind==ADVR_SWORD || tmp.advr_kind==ADVR_HELLSWORD))return;
+            if(!r && (tmp.advr_kind==ADVR_SWORD || tmp.advr_kind==ADVR_HELLSWORD || tmp.advr_kind==ADVR_HAMMER))return;
             tmp=ADVR_Hand(1-h);ADVR_SetHand(1-h,r);ADVR_SetHand(h,tmp);return;
         }
         if(slot>=0) { tmp=self.advr_holster[slot];self.advr_holster[slot]=r;ADVR_SetHand(h,tmp); }
@@ -409,6 +412,7 @@ void(float h) ADVR_Melee = {
     local float speed,damage,w,nexttime,previous_time,dt;
     if(h) {pos=self.handpos;vel=self.handvel;nexttime=self.mainhand_melee_attack_finished;previous=self.advr_prevmain;previous_time=self.advr_prevmain_time;}
     else {pos=self.offhandpos;vel=self.offhandvel;nexttime=self.offhand_melee_attack_finished;previous=self.advr_prevoff;previous_time=self.advr_prevoff_time;}
+    if(ADVR_Hand(h).advr_kind==ADVR_HAMMER){ADVR_HammerFrame(h);return;}
     makevectors(ADVR_Angles(h));w=ADVR_Hand(h).advr_weapon;start=pos-v_forward*5;
     if(ADVR_Hand(h).advr_kind)pos=ADVR_WeaponTip(h);
     else if(w==IT_AXE)pos=pos+v_forward*28;else pos=pos+v_forward*8;

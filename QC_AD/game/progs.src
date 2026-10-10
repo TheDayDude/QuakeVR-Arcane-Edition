@@ -181,3 +181,7 @@ advr_combat.qc
 advr_ragdolls.qc
 advr_ragdoll_models.qc
 advr_ragdoll_tests.qc
+
+advr_hammer.qc
+advr_hammer_tests.qc
+advr_range_tests.qc

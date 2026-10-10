@@ -1374,7 +1374,7 @@ QVR_ALIAS_FS_FUNCTIONS // QVR: per-pixel lights, normal maps, ambient, wounds, m
 "	vec2 uv = in_texcoord;\n"
 "	vec3 dpdx = dFdx(in_pos), dpdy = dFdy(in_pos); // QVR: for the normal map (before any discard)\n"
 "	vec2 duvdx = dFdx(uv), duvdy = dFdy(uv);\n"
-"	if (RetroLight[5].z > 0.) // QVR: retro lighting (vr_retrolight.h): the skin's grid, in its Quake texels (Retro.w: their share of the texture's)\n"
+"	if (RetroLight[5].z > 0. && instances[in_instance].Retro.w >= 0.) // QVR: retro lighting (vr_retrolight.h): the skin's grid, in its Quake texels (Retro.w: their share of the texture's)\n"
 "	{\n"
 "		vec4 rl_r = instances[in_instance].Retro;\n"
 "		vec2 rl_size = vec2(textureSize(Tex, 0)) * (rl_r.w > 0.0 ? rl_r.w : 1.0);\n"

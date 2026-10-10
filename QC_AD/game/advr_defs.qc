@@ -231,7 +231,7 @@ void() ADVR_CorpseUpdate;
 void() ADVR_RagdollPrecache;
 
 // Per-record enemy weapons; native AD inventory bits remain unchanged.
-float ADVR_SWORD=1, ADVR_HELLSWORD=2, ADVR_SAW=3, ADVR_PLASMA=4, ADVR_AXE=5, ADVR_SSG=6, ADVR_WIDOWMAKER=7, ADVR_SHADOWAXE=8, ADVR_CROSSBOW=9;
+float ADVR_SWORD=1, ADVR_HELLSWORD=2, ADVR_SAW=3, ADVR_PLASMA=4, ADVR_AXE=5, ADVR_SSG=6, ADVR_WIDOWMAKER=7, ADVR_SHADOWAXE=8, ADVR_CROSSBOW=9, ADVR_HAMMER=10;
 .float advr_kind;
 .float advr_drop_done;
 .float advr_saw_audio[2];
@@ -281,3 +281,16 @@ void(float h,float pressed) ADVR_CrossbowFire;
 
 .float advr_loot_spawned;
 float(entity foe,float gib_no) ADVR_SkipWeaponGib;
+
+// Hammer state lives on records/monsters so saves and dual wielding stay independent.
+void(float h) ADVR_HammerFrame;
+void() ADVR_HammerDeath;
+float(entity e) ragdollknockdown = #0;
+float(entity e,float frameA,float frameB,vector mins,vector maxs,float range) ragdollgetup = #0;
+.float advr_hammer_down, advr_hammer_until, advr_hammer_solid, advr_hammer_move, advr_hammer_frame;
+.vector advr_hammer_mins, advr_hammer_maxs;
+.void() advr_hammer_resume;
+.float advr_hammer_time, advr_hammer_armed, advr_hammer_slam;
+.vector advr_hammer_tip;
+void() ADVR_RangeSetup;
+

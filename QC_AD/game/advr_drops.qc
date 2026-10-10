@@ -3,6 +3,7 @@
 // player's upgrade flags. Zero is the original AD pickup behaviour.
 string(entity r) ADVR_RecordModel = {
     if(!r)return "";
+    if(r.advr_kind==ADVR_HAMMER)return "progs/advr_hammer.mdl";
     if(r.advr_kind==ADVR_CROSSBOW)return "progs/advr_crossbow.mdl";
     if(r.advr_kind==ADVR_SWORD)return "progs/v_ksword.mdl";
     if(r.advr_kind==ADVR_HELLSWORD)return "progs/v_hksword.mdl";
@@ -48,7 +49,7 @@ float(entity foe,float roll,float choice) ADVR_LootType = {
     else if(c==CT_MONOGRE || c==CT_MONHOGRE){
         if(choice<0.5){w=IT_AXE;kind=ADVR_SAW;}else w=IT_GRENADE_LAUNCHER;
     }
-    else if(c==CT_MONHOGREHAM){w=IT_AXE;kind=ADVR_AXE;}
+    else if(c==CT_MONHOGREHAM){w=IT_AXE;kind=ADVR_HAMMER;}
     else if(c==CT_MONHOGREMAC){w=IT_GRENADE_LAUNCHER;}
     else if(c==CT_MONARMYPLASMA || c==CT_MONENFORCER || c==CT_MONELIMATOR || c==CT_MONDEFLECTOR || c==CT_MONCENTURION){w=IT_LIGHTNING;kind=ADVR_PLASMA;}
     else if(c==CT_MONDEFENDER){
@@ -87,6 +88,21 @@ void() ADVR_EnemyDrop = {
     if(QVR_AD_API!=1 || self.advr_drop_done)return;
     self.advr_drop_done=1;
     ADVR_SpawnLoot(self,ADVR_LootType(self,random(),random()));
+};
+
+// Range-only stock, spawned after the BSP entities and precaches are ready.
+// The saved stock markers avoid duplicates on load or player respawn.
+void() ADVR_RangeSetup = {
+    local entity marker,p;local float kind;
+    if(mapname!="ad_test11" || find(world,classname,"advr_range_stock"))return;
+
+    for(kind=ADVR_CROSSBOW;kind<=ADVR_HAMMER;kind=kind+1) {
+        marker=spawn();marker.classname="advr_range_stock";marker.advr_kind=kind;
+        if(kind==ADVR_CROSSBOW)setorigin(marker,'-96 64 40');else setorigin(marker,'96 64 40');
+        p=ADVR_SpawnLoot(marker,IT_AXE+kind*65536);
+        p.owner=world;p.advr_cooldown=0;p.velocity='0 0 0';p.avelocity='0 0 0';p.vr_spin='0 0 0';
+        p.angles='0 90 90';setorigin(p,marker.origin);marker.weaponinst=p.weaponinst;
+    }
 };
 
 // AD's w_* models are decorative weapon debris. The real drop replaces them,

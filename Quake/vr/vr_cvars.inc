@@ -1349,6 +1349,7 @@ QVR_CVAR(vr_retro_ab, "0", CVAR_NONE)                  // Debug A/B: 1 hides the
 QVR_CVAR(vr_model_light_parity, "1", CVAR_ARCHIVE)     // models as bright as the floor under them, on average (0: Quake's brighter models)
 QVR_CVAR(vr_viewmodel_minlight, "8", CVAR_ARCHIVE)     // least light on your hands and weapons (Quake's: 24)
 QVR_CVAR(vr_texture_smooth, "1", CVAR_ARCHIVE)         // smooth filtering: 1 replacement textures (textures/*.tga), 2 every texture, 0 as gl_texturemode
+QVR_CVAR(vr_weapon_hd, "1", CVAR_ARCHIVE)              // weapons use smooth filtering and bypass retro texture/lighting effects; preserves original artwork
 QVR_CVAR(vr_alpha_coverage, "1", CVAR_ARCHIVE)         // fences and grates (alpha-tested textures) keep their coverage in their mips (no thinning out with distance); with MSAA (vid_fsaa) their edges smoothed by alpha to coverage
 QVR_CVAR(vr_bloom_white, "0.5", CVAR_ARCHIVE)          // bloom of white and pale lights, times vr_bloom
 QVR_CVAR(vr_bloom_color, "1.5", CVAR_ARCHIVE)          // bloom of coloured lights (red buttons, blue panels), times vr_bloom

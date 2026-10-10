@@ -88,6 +88,7 @@ void(entity targ, entity attacker) Killed =
 			self.th_die ();
 		}
 	}		
+	if(self.advr_hammer_down)ADVR_HammerDeath();
 	// Restore self
 	self = oself;
 };
@@ -383,6 +384,8 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 	}
 	
 	//----------------------------------------------------------------------
+	// Physical knockdowns remain damageable; pain/target changes must not replace recovery.
+	if (targ.advr_hammer_down) return;
 	// Switch self (foundtarget and pain function need self correct)
 	// self restored before end of function
 	oldself = self;

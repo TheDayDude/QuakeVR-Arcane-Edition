@@ -3016,8 +3016,26 @@ void updateRecoveries()
         {
             return false; // (no floor near the body's: a ledge, a drop, a step too high)
         }
-        vec3_t o{c.x, c.y, tr.endpos[2] - mins.z + 0.25f};
         vec3_t lo{mins.x, mins.y, mins.z}, hi{maxs.x, maxs.y, maxs.z};
+        vec3_t flat{c.x, c.y, tr.endpos[2] - mins.z + 0.25f};
+        const trace_t flatBox = SV_Move(flat, lo, hi, flat, MOVE_NORMAL, ent);
+        if(!flatBox.startsolid && !flatBox.allsolid)
+        {
+            out = glm::vec3{flat[0], flat[1], flat[2]};
+            return true; // Keep tight, flat-floor spaces that cannot fit the raised probe.
+        }
+        // A point floor probe alone places a standing box inside the uphill side
+        // of a ramp (or the next stair). Settle the complete box onto the floor.
+        vec3_t top{c.x, c.y, tr.endpos[2] - mins.z + 18.f};
+        vec3_t bottom{c.x, c.y, tr.endpos[2] - mins.z - 24.f};
+        const trace_t landing = SV_Move(top, lo, hi, bottom, MOVE_NORMAL, ent);
+        if(landing.startsolid || landing.allsolid || landing.fraction >= 1.f || landing.plane.normal[2] < 0.7f ||
+            (landing.ent && landing.ent != qcvm->edicts && landing.ent->v.solid != SOLID_BSP) ||
+            za::abs(landing.endpos[2] + mins.z - floorZ) > 24.f)
+        {
+            return false;
+        }
+        vec3_t o{landing.endpos[0], landing.endpos[1], landing.endpos[2] + 0.25f};
         const trace_t box = SV_Move(o, lo, hi, o, MOVE_NORMAL, ent);
         if(box.startsolid || box.allsolid)
         {

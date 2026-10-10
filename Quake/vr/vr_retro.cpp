@@ -552,7 +552,7 @@ constexpr const char* itemFiles[] = {"armor.", "backpack.", "w_s_key.", "w_g_key
     {
         return Category::Gibs;
     }
-    if(startsWith(f, "v_") || startsWith(f, "g_"))
+    if(VR_IsWeaponModel(m->name))
     {
         return Category::Weapons;
     }
@@ -698,6 +698,7 @@ bool bodyParts(const qmodel_t* model, float out[4])
     {
         return 0;
     }
+    if(VR_WeaponHD() && VR_IsWeaponModel(e->model->name)) { return 0; }
     if(isBody(e))
     {
         return bodySet(modelOverride(e));
@@ -1717,4 +1718,20 @@ extern "C" void VR_RetroAlias(const entity_t* e, const void* aliashdr, int stand
             bodyParts(e->model, part);
         }
     }
+}
+
+// Shared with texture filtering so an AD conversion is never mistaken for gear.
+extern "C" int VR_IsWeaponModel(const char* name)
+{
+    if(!name) { return 0; }
+    const char* slash = strrchr(name, '/');
+    const char* file = slash ? slash + 1 : name;
+    return !strncmp(file, "v_", 2) || !strncmp(file, "g_", 2) ||
+        !strcmp(file, "advr_hammer.mdl") || !strcmp(file, "advr_crossbow.mdl") || !strcmp(file, "advr_plasma.mdl") ||
+        !strcmp(file, "advr_widowmaker.mdl") || !strcmp(file, "advr_shadowaxe.mdl");
+}
+
+extern "C" int VR_WeaponHD(void)
+{
+    return vr_weapon_hd.value != 0.f;
 }

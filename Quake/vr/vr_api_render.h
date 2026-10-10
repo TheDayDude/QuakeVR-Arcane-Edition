@@ -145,6 +145,8 @@ float VR_RetroLightSkinScale (const void *aliashdr, int skinnum);	// ... a Quake
 float VR_PostProcessBloom (void);								// GL_PostProcess: an eye's glow bound to texture unit 2, and how much of it to add (0: none; negative: by one tap, vr_bloom_fast)
 void VR_PostProcessGamma (float *gamma, float *contrast);	// GL_PostProcess: while rendering an eye, the headset's (vr_gamma, vr_contrast)
 int VR_TextureSmoothing (void);							// TexMgr_ApplySettings: 1 replacement textures smooth, 2 all (vr_texture_smooth)
+int VR_WeaponHD (void); // weapon-only smooth filtering and retro bypass (vr_weapon_hd)
+int VR_IsWeaponModel (const char *name); // base and AD VR models, including held/holstered/dropped forms
 int VR_NormalMaps (void);								// Mod_LoadTextures, skins: nonzero to make normal maps (vr_normalmaps)
 int VR_AlphaMipCoverage (void);							// TexMgr_LoadImage32: nonzero to keep alpha-tested textures' coverage in their mips (vr_alpha_coverage)
 int VR_AlphaToCoverage (void);							// alpha-tested draws (r_world.c, r_alias.c): nonzero for alpha to coverage (vr_alpha_coverage, with MSAA)

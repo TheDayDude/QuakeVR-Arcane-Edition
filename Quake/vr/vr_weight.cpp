@@ -631,6 +631,11 @@ void test_f()
     };
     za::Vector<TestCase> all(cases, cases + za::getArraySize(cases));
     all.emplaceBackRange(emptyCases, za::getArraySize(emptyCases));
+    if(weapons::slotForName("progs/advr_hammer.mdl") == 28)
+    {
+        all.emplaceBack(gun("AD hammer 1H", 28, 0.f, 1.f));
+        all.emplaceBack(gun("AD hammer 2H", 28, 1.f, 1.f));
+    }
     for(const TestCase& tc : all)
     {
         for(const float fps : rates)

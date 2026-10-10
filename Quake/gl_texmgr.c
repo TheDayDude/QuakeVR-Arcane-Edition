@@ -108,6 +108,7 @@ static GLuint gl_samplers[NUM_GLMODES * 2]; // x2: nomip + mip
 
 texfilter_t gl_texfilter;
 static int gl_texfilter_smooth; // QVR: VR_TextureSmoothing () as applied
+static int gl_texfilter_weapon_hd; // weapon-only smoothing, updated live
 
 #define GLMODE_SMOOTH 5 // QVR: GL_LINEAR_MIPMAP_LINEAR
 
@@ -120,6 +121,8 @@ or every mipmapped texture is (2); Quake's own follow gl_texturemode.
 */
 static int TexMgr_FilterMode (gltexture_t *glt)
 {
+	if (gl_texfilter_weapon_hd && glt->owner && VR_IsWeaponModel (glt->owner->name))
+		return GLMODE_SMOOTH;
 	if (!(glt->flags & TEXPREF_MIPMAP) || gl_texfilter_smooth <= 0)
 		return gl_texfilter.mode;
 	if (gl_texfilter_smooth >= 2)
@@ -227,8 +230,9 @@ static void TexMgr_SetFilterModes (gltexture_t *glt)
 	}
 	else
 	{
-		glTexParameterf(glt->target, GL_TEXTURE_MAG_FILTER, glmodes[gl_texfilter.mode].magfilter);
-		glTexParameterf(glt->target, GL_TEXTURE_MIN_FILTER, glmodes[gl_texfilter.mode].magfilter);
+		int mode = TexMgr_FilterMode (glt);
+		glTexParameterf(glt->target, GL_TEXTURE_MAG_FILTER, glmodes[mode].magfilter);
+		glTexParameterf(glt->target, GL_TEXTURE_MIN_FILTER, glmodes[mode].magfilter);
 	}
 
 	if (glt->flags & TEXPREF_CLAMP)
@@ -369,11 +373,13 @@ void TexMgr_ApplySettings (void)
 	gltexture_t	*glt;
 
 	int			prevsmooth = gl_texfilter_smooth; // QVR
+	int			prevweaponhd = gl_texfilter_weapon_hd;
 
 	gl_texfilter.mode		= glmode_idx;
 	gl_texfilter.anisotropy	= CLAMP (1.f, gl_texture_anisotropy.value, gl_max_anisotropy);
 	gl_texfilter.lodbias	= lodbias;
 	gl_texfilter_smooth		= TexMgr_UsesFilterOverride () ? 0 : VR_TextureSmoothing (); // QVR
+	gl_texfilter_weapon_hd = VR_WeaponHD ();
 
 	// if softemu is either 2 & 3 or r_softemu_lightmap_banding is > 0 we override the filtering mode, unless it's GL_NEAREST
 	if (gl_texfilter.mode != 0 && TexMgr_UsesFilterOverride ())
@@ -387,7 +393,7 @@ void TexMgr_ApplySettings (void)
 	if (gl_texfilter.mode		== prev.mode &&
 		gl_texfilter.anisotropy	== prev.anisotropy &&
 		gl_texfilter.lodbias	== prev.lodbias &&
-		gl_texfilter_smooth		== prevsmooth) // QVR
+		gl_texfilter_smooth		== prevsmooth && gl_texfilter_weapon_hd == prevweaponhd) // QVR
 		return;
 
 	if (gl_bindless_able)
@@ -399,6 +405,38 @@ void TexMgr_ApplySettings (void)
 		TexMgr_SetFilterModes (glt);
 
 	Sbar_Changed (); //sbar graphics need to be redrawn with new filter mode
+}
+
+// Verify the actual sampler handles (bindless) or GL texture state (classic).
+static void TexMgr_WeaponCheck_f (void)
+{
+	gltexture_t *glt;
+	int checked = 0, failures = 0;
+	TexMgr_ApplySettings ();
+	for (glt = active_gltextures; glt; glt = glt->next)
+	{
+		int smooth;
+		if (!glt->owner || !VR_IsWeaponModel (glt->owner->name)) continue;
+		if (glt->bindless_handle &&
+			glt->bindless_handle != GL_GetTextureHandleARBFunc (glt->texnum) &&
+			!(glt->flags & (TEXPREF_NEAREST | TEXPREF_LINEAR)))
+		{
+			int index = GLMODE_SMOOTH * 2 + ((glt->flags & TEXPREF_MIPMAP) ? 1 : 0);
+			smooth = glt->bindless_handle == GL_GetTextureSamplerHandleARBFunc (glt->texnum, gl_samplers[index]);
+		}
+		else
+		{
+			GLint mag;
+			GL_Bind (GL_TEXTURE0, glt);
+			glGetTexParameteriv (glt->target, GL_TEXTURE_MAG_FILTER, &mag);
+			smooth = mag == GL_LINEAR;
+		}
+		Con_Printf ("WEAPON FILTER %s: %s %dx%d %s\n", (!VR_WeaponHD () || smooth) ? "PASS" : "FAIL",
+			glt->name, glt->width, glt->height, smooth ? "smooth" : "nearest");
+		checked++;
+		failures += VR_WeaponHD () && !smooth;
+	}
+	Con_Printf ("WEAPON FILTER CHECK: %d textures, %d failures, HD %d\n", checked, failures, VR_WeaponHD ());
 }
 
 /*
@@ -982,6 +1020,7 @@ void TexMgr_Init (void)
 	Cvar_RegisterVariable (&r_softemu_dither_texture);
 	Cmd_AddCommand ("gl_describetexturemodes", &TexMgr_DescribeTextureModes_f);
 	cmd = Cmd_AddCommand ("imagelist", &TexMgr_Imagelist_f);
+	Cmd_AddCommand ("vr_weapon_texture_check", &TexMgr_WeaponCheck_f);
 	if (cmd)
 		cmd->completion = TexMgr_Imagelist_Completion_f;
 	cmd = Cmd_AddCommand ("imagedump", &TexMgr_Imagedump_f);

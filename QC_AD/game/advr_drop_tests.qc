@@ -58,7 +58,7 @@ void() ADVR_TestDrops = {
     ADVR_Assert(ADVR_LootType(foe,0.49,0.75)==IT_GRENADE_LAUNCHER,"ogre launcher alternative");
     ADVR_Assert(!ADVR_LootType(foe,0.5,0),"ogre half chance");
     ADVR_TestLootClass(foe,CT_MONHOGRE,IT_AXE+ADVR_SAW*65536);
-    ADVR_TestLootClass(foe,CT_MONHOGREHAM,IT_AXE+ADVR_AXE*65536);
+    ADVR_TestLootClass(foe,CT_MONHOGREHAM,IT_AXE+ADVR_HAMMER*65536);
     ADVR_TestLootClass(foe,CT_MONHOGREMAC,IT_GRENADE_LAUNCHER);
     ADVR_TestLootClass(foe,CT_MONARMYPLASMA,IT_LIGHTNING+ADVR_PLASMA*65536);
     ADVR_TestLootClass(foe,CT_MONENFORCER,IT_LIGHTNING+ADVR_PLASMA*65536);

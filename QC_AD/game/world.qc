@@ -463,6 +463,10 @@ void() worldspawn =
     precache_model("progs/v_hksword.mdl");
     precache_model("progs/v_chainsaw.mdl");
     precache_model("progs/advr_crossbow.mdl");
+    precache_model("progs/advr_hammer.mdl");
+    precache_model(MODEL_PROJ_RINGSHOCK);
+    precache_sound("ogre/ham_wave.wav");
+    precache_sound(GIB_SOUND_HEAVY);
     precache_model(MODEL_PROJ_BOLT1);
     precache_sound("weapons/crossbow_fire.wav");
     precache_sound("weapons/bolt_hit1.wav");
@@ -822,6 +826,7 @@ void() worldspawn =
 //======================================================================
 void() StartFrame =
 {
+    ADVR_RangeSetup();
 	skill = cvar("skill");
 	developer = cvar("developer");
 	teamplay = cvar("teamplay");

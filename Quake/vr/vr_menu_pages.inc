@@ -565,6 +565,8 @@ void resetHandMoves()
         cycle("Anti-aliasing", "vid_fsaa", {{0.f, "Off"}, {2.f, "2x"}, {4.f, "4x"}, {8.f, "8x"}}).help("Multisampling: smoother edges, some GPU time."),
         cycle("Smooth Textures", "vr_texture_smooth", {{0.f, "As gl_texturemode"}, {1.f, "Replacements"}, {2.f, "All"}})
             .help("Smooth filtering for high-resolution replacement textures, or for all textures."),
+        toggle("HD Weapon Rendering", "vr_weapon_hd")
+            .help("Smooth weapon skins and remove retro texture blocks and stepped lighting from held, holstered and dropped weapons. Uses the existing artwork; other graphics settings stay as selected."),
         toggle("Fence Coverage", "vr_alpha_coverage").help("Fences and grates keep their bars at a distance instead of thinning out and crawling; with Anti-aliasing (MSAA) their edges are smoothed too."),
         toggle("Relit Maps", "vr_relit_maps").help("Maps re-lit with shadows, ambient occlusion and colour, if made (Misc/quakevr/relight_maps.py). Next map."),
         open("Headset Gamma: VR Settings", pageIndex(pageMain)).help("The headset's gamma (its brightness) is on VR Settings."),

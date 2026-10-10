@@ -2249,7 +2249,7 @@ SPECULAR_AA_FUNCTIONS
 "	float occlusion = in_vao * DynamicAO(in_pos + EyePos, AONormal(n, in_bumplight.xyz), instances[in_instance].AO.x, in_coord, in_depth);\n" \
 "	vec3 own_light = in_color.rgb * ModelBumpShade(n, bumped) * ModelAmbient(n, bumped) * occlusion; // QVR\n" \
 "	vec3 dyn_light = ModelDynamicLights(n, bumped, spec) * sqrt(in_vao); // QVR\n" \
-"	if (RetroLight[5].z > 0.) // QVR: retro lighting's levels (vr_retrolight.h; no derivatives after the discard)\n" \
+"	if (RetroLight[5].z > 0. && instances[in_instance].Retro.w >= 0.) // QVR: retro lighting's levels (vr_retrolight.h; no derivatives after the discard)\n" \
 "	{\n" \
 "#if ALPHATEST\n" \
 "		RetroLightModel(own_light, dyn_light, false);\n" \

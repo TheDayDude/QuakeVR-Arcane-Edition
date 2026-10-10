@@ -1017,6 +1017,15 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "widowview")) fixture = "ADVR_TestWidowView";
         else if(!strcmp(Cmd_Argv(1), "grabflying")) fixture = "ADVR_TestGrabFlying";
         else if(!strcmp(Cmd_Argv(1), "stickygrip")) fixture = "ADVR_TestStickyGrip";
+        else if(!strcmp(Cmd_Argv(1), "hammer")) fixture = "ADVR_TestHammer";
+        else if(!strcmp(Cmd_Argv(1), "hammerview")) fixture = "ADVR_TestHammerView";
+        else if(!strcmp(Cmd_Argv(1), "hammerdown")) fixture = "ADVR_TestHammerDown";
+        else if(!strcmp(Cmd_Argv(1), "hammerstate")) fixture = "ADVR_TestHammerState";
+        else if(!strcmp(Cmd_Argv(1), "hammerup")) fixture = "ADVR_TestHammerUp";
+        else if(!strcmp(Cmd_Argv(1), "hammerkill")) fixture = "ADVR_TestHammerKill";
+        else if(!strcmp(Cmd_Argv(1), "hammerdead")) fixture = "ADVR_TestHammerDead";
+        else if(!strcmp(Cmd_Argv(1), "hammergrip")) fixture = "ADVR_TestHammerGrip";
+        else if(!strcmp(Cmd_Argv(1), "range")) fixture = "ADVR_TestRange";
         else if(!strcmp(Cmd_Argv(1), "crossbow")) fixture = "ADVR_TestCrossbow";
         else if(!strcmp(Cmd_Argv(1), "crossbowsaved")) fixture = "ADVR_TestCrossbowSaved";
         else if(!strcmp(Cmd_Argv(1), "crossbowview")) fixture = "ADVR_TestCrossbowView";
@@ -1178,6 +1187,55 @@ void adCrossbowDefaults()
     Cvar_SetValueQuick(&adCrossbowVersion, 4.f);
     weapons::resetCaches();
 }
+cvar_t adHammerVersion{"advr_hammer_version", "0", CVAR_ARCHIVE};
+void adHammerDefaults()
+{
+    if(adHammerVersion.value >= 4.f) return;
+    if(adHammerVersion.value >= 3.f)
+    {
+        Cvar_SetValueQuick(weapons::cvar(28, weapons::Key::HandOnlyY), -0.6f);
+        Cvar_SetValueQuick(&adHammerVersion, 4.f);
+        weapons::resetCaches();
+        return;
+    }
+    if(adHammerVersion.value >= 2.f)
+    {
+        Cvar_SetValueQuick(weapons::cvar(28, weapons::Key::HandOnlyX), 2.f);
+        Cvar_SetValueQuick(weapons::cvar(28, weapons::Key::HandOnlyY), -0.6f);
+        Cvar_SetValueQuick(weapons::cvar(28, weapons::Key::Hotspot1VisualX), 2.f);
+        Cvar_SetValueQuick(&adHammerVersion, 4.f);
+        weapons::resetCaches();
+        return;
+    }
+    using weapons::Key;
+    if(adHammerVersion.value >= 1.f)
+    {
+        // The mesh now grips at mid-handle, with support below it. Migrate only
+        // its geometry calibration, retaining the user's weight/effect tuning.
+#define AD_HAMMER_SETTING(key, value) \
+        if constexpr(Key::key == Key::MuzzleAnchorVertex || Key::key == Key::MuzzleOffsetX || \
+            Key::key == Key::MuzzleOffsetY || Key::key == Key::MuzzleOffsetZ || \
+            Key::key == Key::Hotspot1X || Key::key == Key::Hotspot1Y || Key::key == Key::Hotspot1Z || \
+            Key::key == Key::HandOnlyX || Key::key == Key::HandOnlyY || Key::key == Key::Hotspot1VisualX) \
+            Cvar_SetValueQuick(weapons::cvar(28, Key::key), value);
+#include "vr_ad_hammer.inc"
+#undef AD_HAMMER_SETTING
+        if(weapons::value(28, Key::Balance) == 55.f)
+            Cvar_SetValueQuick(weapons::cvar(28, Key::Balance), 30.f);
+        Cvar_SetValueQuick(&adHammerVersion, 4.f);
+        weapons::resetCaches();
+        return;
+    }
+    weapons::stopInheriting(28);
+    for(int k = 0; k < static_cast<int>(Key::Count); ++k)
+        Cvar_SetQuick(weapons::cvar(28, static_cast<Key>(k)), weapons::cvar(8, static_cast<Key>(k))->string);
+    Cvar_SetQuick(weapons::cvar(28, Key::ID), "progs/advr_hammer.mdl");
+#define AD_HAMMER_SETTING(key, value) Cvar_SetValueQuick(weapons::cvar(28, Key::key), value);
+#include "vr_ad_hammer.inc"
+#undef AD_HAMMER_SETTING
+    Cvar_SetValueQuick(&adHammerVersion, 4.f);
+    weapons::resetCaches();
+}
 cvar_t adRagdollTest{"advr_ragdoll_test", "0"}; // developer fixture assets only
 cvar_t adGrabVersion{"advr_forcegrab_version", "0", CVAR_ARCHIVE};
 void adGrabDefaults()
@@ -1190,7 +1248,7 @@ void adGrabDefaults()
 }
 void adDefaults_f()
 {
-    adGrabDefaults(); adCrossbowDefaults();
+    adGrabDefaults(); adCrossbowDefaults(); adHammerDefaults();
     if(cmd_source != src_command) return;
     if(adSettingsVersion.value >= 2.f) { adPlasmaDefaults(); adWidowDefaults(); adShadowDefaults(); return; }
     if(adSettingsVersion.value >= 1.f)
@@ -1241,6 +1299,7 @@ void init()
     Cvar_RegisterVariable(&adWidowModelVersion);
     Cvar_RegisterVariable(&adGrabVersion);
     Cvar_RegisterVariable(&adCrossbowVersion);
+    Cvar_RegisterVariable(&adHammerVersion);
     Cvar_RegisterVariable(&adShadowModelVersion);
     Cvar_RegisterVariable(&adRagdollTest);
     Cmd_AddCommand("advr_defaults", adDefaults_f);

@@ -1,7 +1,7 @@
 // One whitelist for guarding and projectile batting; add future melee kinds here.
 float(entity r) ADVR_CanParry = {
     if(!r || r.advr_weapon!=IT_AXE)return 0;
-    if(r.advr_kind==ADVR_SWORD || r.advr_kind==ADVR_HELLSWORD || r.advr_kind==ADVR_AXE || r.advr_kind==ADVR_SHADOWAXE)return 1;
+    if(r.advr_kind==ADVR_SWORD || r.advr_kind==ADVR_HELLSWORD || r.advr_kind==ADVR_AXE || r.advr_kind==ADVR_SHADOWAXE || r.advr_kind==ADVR_HAMMER)return 1;
     if(r.advr_kind)return 0; // Chainsaw is deliberately excluded.
     return !(self.moditems & IT_UPGRADE_GHOOK); // Ordinary axe or Shadow Axe, not the grapple.
 };
@@ -43,6 +43,7 @@ void() ADVR_ThrownHit = {
     base=20;if(self.advr_weapon==IT_AXE)base=35;
     if(self.weaponinst.advr_kind==ADVR_SWORD || self.weaponinst.advr_kind==ADVR_HELLSWORD)base=60;
     if(self.weaponinst.advr_kind==ADVR_SAW)base=50;
+    if(self.weaponinst.advr_kind==ADVR_HAMMER)base=65;
     damage=damage*base*weaponvalue(self.model,"w_throwdmg")*weightdamage(mass)*max(0,cvar("vr_weapon_throw_damage_mult"));
     if(damage<=0)return;
     SpawnBlood(other,self.origin,self.velocity,damage);

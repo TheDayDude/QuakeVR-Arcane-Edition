@@ -20,10 +20,3 @@ Valve Finger Tracking compat
 Decapitation
 Crossbow bonus headshot damage
 Traps (Nail Bomb? Bear trap? Rune traps?)
-
-## Building and installing
-
-This repository contains source, required build dependencies, and the AD overlay.
-Full Quake/AD/QuakeVR game content and optional HD packs are supplied separately.
-See [LICENSE.txt](LICENSE.txt), [credits](docs/vr-port/CREDITS.md), and the original
-AD notices under `QC_AD/` for attribution and distribution terms.

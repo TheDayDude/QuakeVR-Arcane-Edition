@@ -4503,7 +4503,9 @@ void setupHolsters(const hands::State& s, bool queueTexts)
         }
 
         view::ViewEntity& ve = entities.holster[h];
-        place(ve, model, pose.weaponPos, pose.weaponAngles, holsteredGrappleOut(model, pose.weaponPos) ? 2 : 0, mirrored);
+        const int idleFrame = model && !strcmp(model->name, "progs/advr_crossbow.mdl") && clip > 0
+                                  ? 4 : holsteredGrappleOut(model, pose.weaponPos) ? 2 : 0;
+        place(ve, model, pose.weaponPos, pose.weaponAngles, idleFrame, mirrored);
         highlight(ve, hover);
         // Just holstered: eased from the hand into the holster (vr_drawblend.cpp).
         drawblend::holster(s, stat, model ? &ve.ent : nullptr, !previewHere && !posedHere);

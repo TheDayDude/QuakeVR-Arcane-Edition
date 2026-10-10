@@ -36,7 +36,7 @@ out=ROOT/'QC_AD/runtime/progs/advr_widowmaker.mdl';out.write_bytes(m.to_bytes())
 out.with_name(out.name+'_0_norm.png').unlink(missing_ok=True) # old fallback UVs do not match
 check=mdl.Model(out.read_bytes());assert check.skins==original_skins and check.tris==original_tris
 order=mdl.strip_order(m.tris);actual=[m.place(v) for v in m.pose_bytes()[0]]
-settings=dict(Scale=1,OffsetX=0,OffsetY=0,OffsetZ=0,Pitch=-7,Yaw=0,Roll=0,ZeroBlend=0,TwoHZeroBlend=0)
+settings=dict(Scale=1,OffsetX=0,OffsetY=0,OffsetZ=1.1,Pitch=-7,Yaw=0,Roll=0,ZeroBlend=0,TwoHZeroBlend=0)
 # Anchor indices are strip-order indices, NOT the source vertex indices.
 # Anchor extra offsets use default world units (modelScale / offsetScale = 7/6).
 def anchor(key,offsetkeys,point):

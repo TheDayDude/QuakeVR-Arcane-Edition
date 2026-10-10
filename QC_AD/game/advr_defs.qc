@@ -171,7 +171,7 @@ float parm17,parm18,parm19,parm20,parm21,parm22,parm23,parm24,parm25;
 .float advr_reload_until;
 .float advr_hover[2];
 .float advr_hover_next[2];
-float parm26,parm27,parm28,parm29,parm30,parm31,parm32,parm33,parm34;
+float parm26,parm27,parm28,parm29,parm30,parm31,parm32,parm33,parm34,parm35;
 void(entity r) ADVR_InitClip;
 entity(float h) ADVR_Hand;
 float(float h) ADVR_Holster;
@@ -231,7 +231,7 @@ void() ADVR_CorpseUpdate;
 void() ADVR_RagdollPrecache;
 
 // Per-record enemy weapons; native AD inventory bits remain unchanged.
-float ADVR_SWORD=1, ADVR_HELLSWORD=2, ADVR_SAW=3, ADVR_PLASMA=4, ADVR_AXE=5, ADVR_SSG=6, ADVR_WIDOWMAKER=7, ADVR_SHADOWAXE=8;
+float ADVR_SWORD=1, ADVR_HELLSWORD=2, ADVR_SAW=3, ADVR_PLASMA=4, ADVR_AXE=5, ADVR_SSG=6, ADVR_WIDOWMAKER=7, ADVR_SHADOWAXE=8, ADVR_CROSSBOW=9;
 .float advr_kind;
 .float advr_drop_done;
 .float advr_saw_audio[2];
@@ -272,3 +272,12 @@ entity(float h) ADVR_FGPulled;
 void(float h,entity e,float locked) ADVR_FGSet;
 
 void(float hand, entity e, vector org, vector ang) catchblend = #0;
+
+.float advr_crossbolt;
+void(float h,float pressed) ADVR_CrossbowFire;
+
+// Bolts are an exclusive reserve; chambered bolts live in wi_clip.
+.float advr_bolts, advr_bolt_pack;
+
+.float advr_loot_spawned;
+float(entity foe,float gib_no) ADVR_SkipWeaponGib;

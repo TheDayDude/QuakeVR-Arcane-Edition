@@ -1,160 +1,110 @@
-# Building Quake VR from source
+# Building Quake VR: Arcane Edition
 
-How to build the engine, the QuakeC and the release package, and what the tool scripts in `Misc/quakevr/` do. To
-understand the code, start with [vr-port/PLAN.md](vr-port/PLAN.md) (design and status) and
-[vr-port/PORTING.md](vr-port/PORTING.md).
+## Supported targets
 
-## What you need
+- Windows x64: engine with the OpenXR headset backend.
+- Linux x86-64: engine with the mock VR backend. The current OpenXR backend uses
+  Windows WGL; this cleanup does not add Linux headset support.
 
-- **Windows x64** and **Visual Studio 2022** with the C++ desktop workload and its **C++ Clang tools for Windows**
-  (the ClangCL toolset: the whole engine is built by clang-cl and linked by lld-link). The VR code is C++23, and the
-  engine is C (C11).
-- **[FTEQCC](https://www.fteqcc.org/)** (`fteqcc64.exe`) to compile the QuakeC.
-- **Python 3**, only for the tool scripts.
-- Your Quake folder (with `id1`) to run the game.
+Use CMake 3.21 or newer and a C++23 compiler. Windows requires clang-cl, not
+MSVC cl.exe. LLVM 20.1.8 was used for the local Windows build. Linux requires
+GCC or Clang with C++23 support; its build has not been validated on this machine.
 
-Everything else is in the repository: the OpenXR loader and headers (`Windows/OpenXR`), SDL2 and the codec
-libraries (`Windows/`), GLM (`Quake/vr/external/glm`) and Zancle (`Quake/vr/external/zancle`: the containers, strings
-and utilities the VR code is written on, instead of the C++ standard library).
+## Windows engine
 
-## Where things are
+Install Visual Studio 2022's C++ desktop workload, a Windows SDK, CMake/Ninja,
+and LLVM with clang-cl and lld-link. The required SDL2, OpenXR and audio/curl
+headers and Windows libraries are kept under `Windows/`.
 
-| Path | What |
-|---|---|
-| `Quake/` | The Ironwail engine (0.8.2). Changes to it are small hooks marked `// QVR`, so `git grep QVR` shows the engine's whole footprint. |
-| `Quake/vr/` | The VR module (C++23, on Zancle): OpenXR and mock backends, rendering, input, body, physics, menus, effects. The engine sees only `vr_api.h`. |
-| `Quake/vr/vr_cvars.inc` | Every `vr_*` variable, with its default and a comment |
-| `QC/` | Quake VR's QuakeC (Quake, Scourge of Armagon and Dissolution of Eternity in one progs, plus FrikBot) |
-| `quakevr/` | The game folder: models, sounds, textures, Quake VR's maps, configs. `progs.dat` is built here. |
-| `Misc/quakevr/` | Tool scripts (see below) and the source models they work on |
-| `Windows/package-quakevr.ps1` | Builds the release package |
-| `docs/vr-port/` | Developer notes: the plan, the playtest guide, research, and the notes of each feedback round |
+In PowerShell:
 
-## Building the engine
-
-Open `Windows\VisualStudio\ironwail.sln` and build **Release | x64**, or from a developer prompt:
-
-```
-msbuild Windows\VisualStudio\ironwail.sln -p:Configuration=Release -p:Platform=x64 -m
+```powershell
+./QC_AD/build-engine.ps1 -LlvmBin 'C:\path\to\LLVM\bin'
 ```
 
-The output is `Windows\VisualStudio\Build-ironwail\bin\x64\Release\ironwail.exe`, with `openxr_loader.dll` and the
-other DLLs next to it.
+The helper discovers Visual Studio and SDK versions. Use `-BuildDirectory` to
+choose a different output directory. Output: `build/windows/ironwail.exe` and
+its DLL dependencies. Copy the DLLs too, including `zlib1.dll`.
 
-**Release flags** (`ironwail.vcxproj` and `quakevr.props`, the same for the engine's C and the VR module's C++; clang-cl
-takes MSVC's flags):
+Alternatively, from an x64 Visual Studio developer shell with LLVM on PATH:
 
-| Flags | Why |
-|---|---|
-| `/O2 /Ot /Oi /GF` | Full speed optimisation, intrinsics, pooled strings |
-| `/Ob3` | More inlining than `/O2`'s `/Ob2` |
-| `-flto=thin` + `/lldltocache` | ThinLTO: link-time (whole-program) optimisation across all files, in parallel; its cache (`Windows/VisualStudio/Build-ironwail/x64/Release/lto.cache`, at most 1 GB) makes the link after editing one file re-optimise only what changed (a one-file Release build takes 2-5 s) |
-| `/Gy /Gw` + `/OPT:REF /OPT:ICF` | Every function and global in its own section, so the linker drops the unused ones and merges identical ones |
-| `/GS-`, `/sdl-`, no `/guard:cf` | No stack cookies or control-flow checks: a game, not a security boundary |
-| `/fp:precise` | Kept everywhere. The engine's physics, NaN checks and demos rely on it, and `/fp:fast` in the VR module alone measured no gain |
-| no `/arch` (SSE2, the x64 baseline) | Runs on any x64 CPU. `/arch:AVX2` measured no gain |
-| `/Z7` + `/DEBUG` | A `.pdb` for crash dumps (the debug information is in the objects, gathered by the linker). It does not change the code |
-
-The frame is not CPU-bound (about 0.35 ms of CPU a frame on the development PC), so these flags make little
-difference to the frame rate. ROUND19.md ("Build flags") has the measurements. SDL2, the codecs, curl and the OpenXR
-loader are prebuilt DLLs, used as they are.
-
-Debugging in Visual Studio works as with MSVC (breakpoints, stepping, watches, `ironwail.natvis`), but there is no
-**Edit and Continue**: clang-cl can't. Precompiled headers (`quakedef.h`, the C files) work and save about a sixth of a
-clean build.
-
-**Zancle** (`Quake/vr/external/zancle`, its README) is built as its own static library (`zancle.vcxproj`, CMake's
-`qvr_zancle`, the Makefiles' `ZANCLE_CXXFLAGS`). In Release it is optimised with its asserts off (`NDEBUG`), as the
-engine. In Debug the switch **`QVR_ZANCLE_DEBUG`** chooses:
-
-| | Zancle's library in Debug |
-|---|---|
-| `QVR_ZANCLE_DEBUG` on (the default while the migration to Zancle settles) | Built as the engine's Debug: unoptimised, `_DEBUG`, Zancle's asserts on. A failed `ZA_ASSERT`, in Zancle's sources or the VR code, calls `vr_zancle.cpp`'s handler: a Quake error (a test run's crash report) |
-| `QVR_ZANCLE_DEBUG` off | Optimised, its asserts off (`NDEBUG`), as in Release: a faster Debug build; the asserts still run in the VR code's own files (the headers follow the engine's settings) |
-
-Set it with `msbuild ... -p:QVR_ZANCLE_DEBUG=false` (an MSBuild property: `zancle.vcxproj` defaults it to `true`),
-`cmake -DQVR_ZANCLE_DEBUG=OFF`, or `make DEBUG=1 QVR_ZANCLE_DEBUG=0`.
-
-**CMake** also works, for development: the top-level `CMakeLists.txt` includes `Quake/vr/vr.cmake`, which adds the
-VR module and, on Windows x64, OpenXR. On Windows configure it for clang-cl (`-T ClangCL`); MSVC's `cl` stops with a
-message.
-
-**Other platforms:** the Makefile builds (Linux, macOS, MinGW) compile the VR module with the mock backend only. The
-OpenXR backend binds to OpenGL through WGL, so there is no VR outside Windows x64 yet.
-
-## Building the QuakeC
-
-```
-set FTEQCC=C:\path\to\fteqcc64.exe
-QC\build.bat
+```powershell
+cmake -S . -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+cmake --build build/windows --parallel
 ```
 
-This writes `quakevr\progs.dat` (`QC/build.sh` does the same elsewhere). A new engine with old progs, or the other
-way round, can break level changes and saves, so rebuild both together.
+## Linux engine
 
-## Building the release package
+Install CMake, Ninja, a current C++23 compiler, pkg-config, SDL2 development
+files and OpenGL development files. Debian/Ubuntu package names for the library
+prerequisites are `libsdl2-dev libgl1-mesa-dev`. Optional audio/download support
+uses `libcurl4-openssl-dev libvorbis-dev libmpg123-dev libopusfile-dev libflac-dev`.
 
-```
-powershell -ExecutionPolicy Bypass -File Windows\package-quakevr.ps1 [-Build] [-Fteqcc C:\path\to\fteqcc64.exe]
-```
-
-- `-Build` builds the solution (Release | x64) first. Without it, the script uses the last build.
-- `-Fteqcc` is the compiler. The script falls back to the `FTEQCC` environment variable, then to `fteqcc64` on
-  `PATH`. The QuakeC is always compiled fresh.
-- The result is `dist\QuakeVR\` and `dist\QuakeVR.zip`. They contain the engine's `.exe`, `.dll` and `.pak` files,
-  the `quakevr` folder, `QuakeVR.bat` (`ironwail.exe -game quakevr %*`), and a short `README-QuakeVR.txt`.
-- The script copies `quakevr` as it is on disk, leaving out player files: `ironwail.cfg`, `config.cfg`,
-  `autoexec.cfg`, `history.txt`, `qconsole.log`, saves and demos, and the `screenshots`, `notes`, `profile`,
-  `autosave` and `eyeshots` folders. It also leaves out **`relit`**: the relit maps are id Software's maps and must
-  never be redistributed. Anything else in the folder is copied, so package from a clean game folder.
-- It adds the relighting scripts (`relight_maps.py`, `vis_maps.py`, `quakepak.py`, `relight_textures.cfg`) in
-  `quakevr\tools\`, so players can relight their own maps without the repository
-  ([RELIGHTING.md](RELIGHTING.md)). From there, the script's default output is the installed `quakevr\relit`.
-- The release is too large for a GitHub release, so it is published on [vittorioromeo.com](https://vittorioromeo.com).
-
-## Running from the repository
-
-Link the repository's game folder into your Quake folder, so that edits and rebuilt progs are picked up directly:
-
-```
-mklink /J "C:\...\Quake\quakevr" "C:\path\to\repo\quakevr"
-ironwail.exe -basedir "C:\...\Quake" -game quakevr
+```sh
+cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+cmake --build build/linux --parallel
 ```
 
-`-condebug` writes the console to `qconsole.log`. Keep the command line short: Ironwail loses `+command` arguments
-beyond 256 characters. Use an `autoexec.cfg` for long test setups.
+Use `gcc` and `g++` instead if preferred. Output: `build/linux/ironwail`.
+The existing `Quake/Makefile` is retained as an alternative build path.
 
-## Testing without a headset
+## AD gameplay (both platforms)
 
-`vr_backend mock; vr_enabled 1` runs everything with a pretend headset, driven from the console:
+Install FTEQCC separately. The AD gameplay manifest is `QC_AD/game/progs.src`;
+it is self-contained and does not need the original QuakeVR `QC/` directory.
 
-- `vr_mock_hand <main|off|head> <x> <y> <z> [<pitch> <yaw> <roll>]` and `vr_mock_look <pitch> <yaw>` pose it;
-- `vr_mock_button <main|off> <trigger|grip|primary|secondary|stickclick|menu> <0|1>` and
-  `vr_mock_stick <main|off> <x> <y>` press the controls;
-- `vr_mock_swing <period>` swings the main hand, for throwing tests;
-- `vr_mock_play <file>` plays a scripted motion (see the comment in `Quake/vr/vr_backend_mock.cpp`).
+```powershell
+./QC_AD/build-port.ps1 -Fteqcc 'C:\path\to\fteqcc64.exe'
+```
 
-[vr-port/TESTING.md](vr-port/TESTING.md) has more, including profiling.
+```sh
+FTEQCC=/path/to/fteqcc sh QC_AD/build-port.sh
+```
 
-## Tool scripts (`Misc/quakevr/`)
+Both write `QC_AD/advr-progs.dat`. This generated binary is not checked in.
+Developer fixtures in `QC_AD/tests` are retained because they test the AD port.
+They need a complete playable installation; they cannot run with source alone.
 
-All of them are Python 3. Run them from the repository root. Each script's header comment documents it fully.
+## Runtime content and installation
 
-| Script | What it does |
-|---|---|
-| `relight_maps.py` | Relights the player's own id1, hipnotic and rogue maps with ericw-tools `light` (2.0.0-alpha11) into `quakevr/relit/`, with lights for glowing textures and light fixtures (`relight_textures.cfg`), deluxemaps and a light grid; optionally water-vises them. Shipped in the package's `quakevr\tools\`. See [RELIGHTING.md](RELIGHTING.md). |
-| `vis_maps.py` | Adds water-vis data (from the VisPatch `.vis` files) to relit or original maps, or checks which maps have it |
-| `relight_quakevr_maps.py` | Relights Quake VR's own maps (tutorial, firing range) in place; they are committed |
-| `make_spawn_buttons.py` | Builds the brush models (panel, button) of the firing range's second row of monster buttons, which its entity file places (ericw-tools `qbsp` and `light`); they are committed |
-| `transcribe_notes.py` | Transcribes voice notes with faster-whisper into `quakevr/notes/NOTES.md` |
-| `make_vrbody.py`, `make_pauldron.py`, `make_gadget.py`, `make_holster.py`, `make_flashlight.py`, `make_shell.py`, `make_swords.py` | Generate the body, pauldrons, wrist gadget, holsters, flashlight, shell casing and knights' swords models (with `mdlgen.py`) |
-| `improve_weapons*.py`, `recolor_shotgun_sight.py`, `taper_hand.py`, `make_bloody_hands.py` | Rework the weapon and hand models (grips, trigger guards, details, sights, damage skins) from the sources in `src_models/` |
-| `make_detail.py`, `make_grades.py`, `make_sounds.py` | Generate the detail textures, the colour grades and the synthesised sounds |
-| `quakepak.py` | Reads Quake's `.pak` files (used by the others) |
+This is a source-only repository. Supply your existing Quake installation with
+`id1`, QuakeVR's `quakevr` assets, and a complete Arcane Dimensions `ad` folder.
+HD packs are optional and are not included. The AD-specific overlay assets and
+launch/configuration files remain in `QC_AD/runtime`.
 
-## Contributing
+On Windows, after building gameplay and the engine:
 
-Changes to Ironwail's own files should stay small hooks marked `// QVR`, with the logic in `Quake/vr/`, so that
-upstream Ironwail updates keep merging cleanly. Gameplay rule changes are opt-in variables, so the engine still
-plays vanilla Quake with `vr_enabled 0`. When something new is used or learned from, add it to
-[vr-port/CREDITS.md](vr-port/CREDITS.md). The principles are in [vr-port/PLAN.md](vr-port/PLAN.md).
+```powershell
+./QC_AD/install-runtime.ps1 -GameDirectory 'C:\Games\QuakeVR' -Engine './build/windows/ironwail.exe'
+```
+
+The installer copies the AD overlay and engine; copy the engine build's DLLs
+alongside it. Launch `QuakeVR-AD.bat`. On Linux copy `advr-progs.dat` to
+`advr/progs.dat`, overlay `QC_AD/runtime/progs`, `advr_start.cfg` and `default.cfg`
+into `advr`, then run from the game directory:
+
+```sh
+./ironwail -game quakevr -game ad -game advr -vrmock +exec advr_start.cfg
+```
+
+Steam Audio is optional. Its headers and notices remain under
+`Quake/vr/external/steamaudio`; obtain the matching runtime using that directory's
+README and put `phonon.dll` (Windows) or `libphonon.so` (Linux) beside the engine.
+Without it the engine uses its normal audio fallback.
+
+## Regenerating models and rig tables
+
+The engine builds directly from checked-in generated tables. Regeneration is
+optional and requires the original installed models plus Python and NumPy
+(and Pillow for scripts that generate previews). `QC_AD/tools` contains the AD
+converters. The two MDL readers they import remain under `Misc/quakevr`.
+
+```sh
+python QC_AD/tools/make_ragdolls.py /path/to/game/ad --base-models /path/to/game/quakevr/progs
+python QC_AD/tools/make_weapon_meshes.py /path/to/game/ad
+```
+
+Retain `LICENSE.txt`, dependency notices, `docs/vr-port/CREDITS.md`, and the AD
+readme/credits/changelog when redistributing this source. The AD readme contains
+its source and asset terms; asset terms are not replaced by the engine license.

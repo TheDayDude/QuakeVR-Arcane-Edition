@@ -412,6 +412,7 @@ void() TouchGib =
 //======================================================================
 void(float gib_no, float gib_qty) ThrowGib =
 {
+    if(ADVR_SkipWeaponGib(self,gib_no))return;
 	
 	while (gib_qty > 0) {
 		gibitem = spawn();

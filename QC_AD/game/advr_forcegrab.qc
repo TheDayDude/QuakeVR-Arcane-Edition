@@ -1,4 +1,4 @@
-// AD weapons: trigger selects, grip locks, backward/upward flick launches.
+// AD weapons: trigger selects; a backward/upward flick launches. Grip only catches.
 // Publish the original fg fields so the engine renders its beam and outline.
 entity(float h) ADVR_FGTarget = {if(h)return self.mainhand_fgtarget;return self.offhand_fgtarget;};
 entity(float h) ADVR_FGPulled = {if(h)return self.mainhand_fgpulled;return self.offhand_fgpulled;};
@@ -57,7 +57,7 @@ void() ADVR_FGFlight = {
         self=e;return;
     }
     remaining=e.advr_fg_arrive-time;
-    if(remaining<=0.001 || !ADVR_Grip(h)){
+    if(remaining<=0.001){
         ADVR_FGRestore(e);ADVR_FGSet(h,world,0);self=e;return;
     }
     // Reject a newly obstructed path instead of pulling a weapon through a wall.
@@ -90,12 +90,9 @@ void(float h) ADVR_ForceGrab = {
     if(h)self.mainhand_fgpulled=world;else self.offhand_fgpulled=world;
     old=ADVR_FGTarget(h);
     if(!cvar("vr_forcegrab_mode") || ADVR_Hand(h) || !trigger || self.advr_fg_rearm[h]){ADVR_FGSet(h,world,0);return;}
-    if(ADVR_Grip(h)){
-        // Acquire only with an open hand. Grip preserves that target while the wrist turns.
-        if(!ADVR_FGEligible(old) || !ADVR_FGVisible(h,old)){ADVR_FGSet(h,world,0);return;}
-        ADVR_FGSet(h,old,1);
-        if(ADVR_FGFlicked(h,old))ADVR_FGLaunch(h,old);
-        return;
+    // Use the previous aim target during the flick, even as the wrist turns off it.
+    if(ADVR_FGEligible(old) && ADVR_FGVisible(h,old) && ADVR_FGFlicked(h,old)){
+        ADVR_FGLaunch(h,old);return;
     }
     pos=ADVR_Pos(h);makevectors(ADVR_Angles(h));dir=v_forward;
     score=cos(bound(1,cvar("vr_forcegrab_cone"),60)*0.01745329);best=world;

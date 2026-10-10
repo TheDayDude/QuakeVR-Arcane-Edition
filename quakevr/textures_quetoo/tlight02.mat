@@ -1,8 +1,0 @@
-{
-	diffusemap quake/tlight02
-	{
-		texture quake/tlight02_luma
-		blend src_alpha one
-		pulse 0.50
-	}
-}

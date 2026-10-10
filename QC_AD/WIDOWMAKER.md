@@ -44,10 +44,12 @@ strip-order anchor indices, requiring muzzle/button/display recalibration.
 eight-shot capacity, partial-magazine lockout, holster versus flick reload,
 drop/catch, map parameters, and the existing save/load and combat regressions.
 
-## Grip and recoil revision 3
+## Grip and recoil revision 4
 
 The main grip is about 4 cm farther forward and 2 cm higher relative to the gun; the support grip rises about 3 cm relative to the mesh. The wrist-flick visual spin is disabled; reload behavior remains unchanged.
 
 Recoil strength is now 7 with a 0.95-second transient return. Full second-hand support scales each shot to 45% strength (3.15). In addition, shots accumulate an upward offset (7 degrees unsupported, 3.15 supported, capped at 25). This offset waits 0.65 seconds after a shot before recovering at 1.5 degrees per second. Physically lowering the controller counters the rise. Both the transient and lingering rise affect actual shot direction and the drawn weapon; the headset view is unaffected. Switching away clears the effect. Other weapons retain their original visual recoil behavior.
 
 `tests/forcegrab-visual-test.cfg` checks actual shot direction after the transient has ended in each stance, plus force-grab selection and a real-time flick/catch. `advr_selftest nailspin` exercises Super Nailgun frame cycling in both hands.
+
+Revision 4 lowers the main hand about two finger widths relative to the trigger (model OffsetZ +1.1). The support grip follows the mesh and retains its relative placement. Recoil and reloading are unchanged from revision 3.

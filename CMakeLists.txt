@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.21)
 include(${CMAKE_CURRENT_SOURCE_DIR}/Misc/cmake/ExtractVersion.cmake)
 project(ironwail VERSION ${IRONWAIL_VERSION})
 
@@ -85,7 +85,7 @@ else()
 	target_compile_definitions(ironwail PRIVATE WITHOUT_CURL)
 endif()
 
-if (OpenGL::OpenGL)
+if (TARGET OpenGL::OpenGL)
 	target_link_libraries(ironwail PRIVATE OpenGL::OpenGL)
 else()
 	target_link_libraries(ironwail PRIVATE OpenGL::GL)

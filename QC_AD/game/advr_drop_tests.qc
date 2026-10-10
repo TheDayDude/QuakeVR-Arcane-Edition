@@ -8,9 +8,32 @@ void(entity foe,float c,float packed) ADVR_TestLootClass = {
     foe.classtype=c;
     ADVR_Assert(ADVR_LootType(foe,0,0)==packed,"enemy class yields expected weapon");
 };
+void() ADVR_TestDropDebris = {
+    local entity actor,foe,e;local float n,i;
+    actor=self;foe=spawn();foe.classtype=CT_MONARMY;setorigin(foe,self.origin+'0 80 0');
+    foe.gib1mdl=foe.gib2mdl=foe.gib3mdl=foe.gib4mdl=foe.gib5mdl="progs/w_soldiergun.mdl";
+    ADVR_SpawnLoot(foe,IT_SHOTGUN);
+    ADVR_Assert(foe.advr_loot_spawned,"successful usable drop marks debris replacement");
+    for(i=11;i<=15;i=i+1){
+        ADVR_Assert(ADVR_SkipWeaponGib(foe,i),"all custom weapon debris slots are suppressed");
+        self=foe;ThrowGib(i,2);self=actor;
+    }
+    e=find(world,classname,"item_gib");while(e){ADVR_Assert(e.owner!=foe,"no decorative weapon entity spawned");e=find(e,classname,"item_gib");}
+    foe.gib1mdl=GIB1_BLOOD;
+    ADVR_Assert(!ADVR_SkipWeaponGib(foe,11) && !ADVR_SkipWeaponGib(foe,1) && !ADVR_SkipWeaponGib(foe,25),"body and head gibs are retained");
+    self=foe;ThrowGib(11,1);self=actor;
+    ADVR_Assert(gibitem.owner==foe && gibitem.model==GIB1_BLOOD,"flesh debris still spawns");remove(gibitem);
+    foe.advr_loot_spawned=0;foe.gib1mdl="progs/w_soldiergun.mdl";
+    ADVR_Assert(!ADVR_SkipWeaponGib(foe,11),"no usable drop leaves native debris intact");
+    self=foe;ThrowGib(11,1);self=actor;
+    ADVR_Assert(gibitem.owner==foe && gibitem.model==foe.gib1mdl,"unreplaced decorative weapon still spawns");remove(gibitem);
+    remove(foe);
+    bprint("ADVR DROP DEBRIS PASS: weapon slots suppressed after loot, flesh/head and no-loot debris retained\n");
+};
 void() ADVR_TestDrops = {
     local entity actor,foe,p,r,target,missile;
     local float n,i,hp,mods;
+    ADVR_TestDropDebris();
     actor=self;ADVR_Reset();self.advr_initialized=1;self.health=1000;self.flags=FL_CLIENT|FL_GODMODE;
     self.items=IT_AXE|IT_SHOTGUN|IT_SUPER_SHOTGUN|IT_LIGHTNING|IT_GRENADE_LAUNCHER;
     self.moditems=0;self.ammo_shells=40;self.ammo_cells=40;self.ammo_rockets=20;
@@ -56,7 +79,7 @@ void() ADVR_TestDrops = {
         foe.flags=foe.flags|FL_MONSTER;foe.solid=SOLID_SLIDEBOX;foe.movetype=MOVETYPE_STEP;
         foe.health=10;foe.takedamage=DAMAGE_AIM;foe.nextthink=time+600;
         n=ADVR_TestDropCount();T_Damage(foe,actor,actor,11+i*1000,NOARMOR);
-        ADVR_Assert(ADVR_TestDropCount()==n+1,"native death or overkill drops one shotgun");
+        ADVR_Assert(ADVR_TestDropCount()==n+1 && foe.advr_loot_spawned,"native death or overkill drops one shotgun and replaces weapon debris");
         self=foe;ADVR_EnemyDrop();self=actor;
         ADVR_Assert(ADVR_TestDropCount()==n+1,"repeated death cannot duplicate loot");
         remove(foe);
@@ -284,18 +307,20 @@ void() ADVR_TestForceGrab = {
         setorigin(e,ADVR_Pos(h)+'80 0 0');e.velocity='0 0 0';
         self.button0=self.button3=1;ADVR_ForceGrab(h);
         ADVR_Assert(ADVR_FGTarget(h)==e && !e.fg_state && e.velocity=='0 0 0',"trigger selects and highlights without moving weapon");
-        self.handvel=self.offhandvel='-3 0 3';ADVR_ForceGrab(h);
-        ADVR_Assert(!e.fg_state,"flick without grip never launches");
         self.handvel=self.offhandvel='0 0 0';if(h)self.vrbits0=16384|8;else self.vrbits0=16384|2;
         ADVR_ForceGrab(h);ADVR_Assert(!e.fg_state,"grip without flick locks but never launches");
         self.button0=self.button3=0;ADVR_ForceGrab(h);ADVR_Assert(!ADVR_FGTarget(h),"trigger release cancels selection");
         self.vrbits0=16384;self.button0=self.button3=1;ADVR_ForceGrab(h);
-        if(h)self.vrbits0=16384|8;else self.vrbits0=16384|2;
+        self.vrbits0=16384;
         self.handvel=self.offhandvel='-3 0 3';ADVR_ForceGrab(h);
-        ADVR_Assert(e.fg_state==1 && ADVR_FGPulled(h)==e && e.solid==SOLID_NOT,"grip plus flick starts tracked flight");
+        ADVR_Assert(e.fg_state==1 && ADVR_FGPulled(h)==e && e.solid==SOLID_NOT,"trigger plus flick starts flight with an open hand");
+        self.button0=self.button3=0;ADVR_ForceGrab(h);
         self=e;ADVR_FGFlight();self=actor;
-        ADVR_Assert(vlen(e.velocity)>0,"flight think drives weapon toward hand");
+        ADVR_Assert(e.fg_state==1 && vlen(e.velocity)>0,"flight continues with trigger and grip both released");
         setorigin(e,e.origin+ADVR_Pos(h)-forcegrabpoint(e));self=e;ADVR_FGFlight();self=actor;
+        ADVR_Assert(!ADVR_Hand(h) && e.fg_state==1,"nearby weapon cannot catch into an open hand");
+        if(h)self.vrbits0=16384|8;else self.vrbits0=16384|2;
+        self.button0=self.button3=1;self=e;ADVR_FGFlight();self=actor;
         ADVR_Assert(ADVR_Hand(h)==r && !ADVR_FGPulled(h),"flight catches original record in correct hand");
         ammo=self.ammo_shells;r.advr_cooldown=0;ADVR_Fire(h);
         ADVR_Assert(self.ammo_shells==ammo && self.advr_fg_rearm[h],"held selection trigger cannot fire caught gun");
@@ -311,7 +336,9 @@ void() ADVR_TestForceGrab = {
     ADVR_Assert(ADVR_FGEligible(e),"ordinary map weapon is eligible");
     self.vrbits0=16384|8;ADVR_FGLaunch(1,e);self.vrbits0=16384;
     self=e;ADVR_FGFlight();self=actor;
-    ADVR_Assert(!e.fg_state && e.movetype==MOVETYPE_TOSS && e.solid==SOLID_TRIGGER && !self.mainhand_fgpulled,"releasing grip safely cancels flight and restores pickup");
+    ADVR_Assert(e.fg_state==1,"native pickup keeps flying without grip");
+    e.advr_fg_arrive=time-0.01;self=e;ADVR_FGFlight();self=actor;
+    ADVR_Assert(!e.fg_state && e.movetype==MOVETYPE_TOSS && e.solid==SOLID_TRIGGER && !self.mainhand_fgpulled,"missed catch restores the native pickup");
     self.vrbits0=16384|8;ADVR_FGLaunch(1,e);
     setorigin(e,e.origin+self.handpos-forcegrabpoint(e));self=e;ADVR_FGFlight();self=actor;
     ADVR_Assert(self.advr_main.advr_weapon==IT_SHOTGUN && self.advr_fg_rearm[1],"native weapon callback catches safely into selected hand");
@@ -319,7 +346,7 @@ void() ADVR_TestForceGrab = {
     self.advr_main=world;self.button0=1;self.vrbits0=16384;cvar_set("vr_forcegrab_mode","0");ADVR_ForceGrab(1);
     ADVR_Assert(!self.mainhand_fgtarget,"disabled force grab clears pointer");cvar_set("vr_forcegrab_mode","1");
     other=oldother;self.handvel=self.offhandvel='0 0 0';ADVR_Sync();
-    bprint("ADVR FORCE GRAB PASS: both hands, selection, grip/flick gates, cancellation, flight, catch and trigger safety\n");
+    bprint("ADVR FORCE GRAB PASS: both hands, trigger/flick, released-trigger flight, grip-only catch, miss and trigger safety\n");
 };
 entity advr_grab_view_record;
 float advr_grab_view_ammo,advr_recoil_base;
@@ -339,11 +366,135 @@ void() ADVR_TestGrabSelected = {
 };
 void() ADVR_TestGrabArrived = {
     ADVR_Assert(self.advr_main==advr_grab_view_record,"real-time flick flight reaches held hand");
-    ADVR_Assert(self.advr_fg_rearm[1] && self.ammo_shells==advr_grab_view_ammo+self.advr_main.wi_clip,"catch while trigger held never fires");
+    ADVR_Assert(self.ammo_shells==advr_grab_view_ammo+self.advr_main.wi_clip,"catch never fires accidentally");
     bprint("ADVR GRAB FLIGHT PASS: real frame flight and safe catch\n");
 };
 void() ADVR_TestRecoilBase = {advr_recoil_base=self.shotrot_x-self.handrot_x;};
 void() ADVR_TestRecoilAim = {
-    ADVR_Assert(self.shotrot_x-self.handrot_x<advr_recoil_base-1,"Widowmaker recoil raises actual shot direction");
+    ADVR_Assert(self.shotrot_x-self.handrot_x<advr_recoil_base-1,"upgrade recoil raises actual shot direction");
     bprint("ADVR RECOIL AIM PASS: shot direction remains above tracked aim\n");
+};
+
+void() ADVR_TestGrabFlying = {
+    ADVR_Assert(self.mainhand_fgpulled.weaponinst==advr_grab_view_record && !self.advr_main && !self.button0 && !ADVR_Grip(1),"real flight persists after trigger release without grip");
+    bprint("ADVR GRAB RELEASE PASS\n");
+};
+void() ADVR_TestPlasmaView = {
+    ADVR_Reset();self.advr_initialized=1;self.flags=FL_CLIENT|FL_GODMODE;self.health=1000;
+    self.items=IT_LIGHTNING;self.moditems=IT_UPGRADE_LG;self.ammo_cells=100;
+    self.advr_main=ADVR_Record(IT_LIGHTNING);ADVR_Sync();
+};
+void() ADVR_TestCrossbow = {
+    local entity actor,foe,p,r,side,bolt,target;local float h,i,ammo;
+    actor=self;ADVR_Reset();self.advr_initialized=1;self.flags=FL_CLIENT|FL_GODMODE;self.health=1000;
+    self.items=IT_AXE;self.moditems=0;self.ammo_shells=50;self.ammo_nails=60;self.ammo_cells=70;
+    self.muzzlepos=self.offmuzzlepos=self.handpos=self.offhandpos=self.origin+self.view_ofs;
+    self.shotrot=self.offshotrot='-80 0 0';self.vrbits0=16384;
+    cvar_set("vr_enemy_drops_chance_mult","1");cvar_set("vr_reload_mode","2");
+    foe=spawn();foe.classtype=CT_MONDCROSS;setorigin(foe,self.origin+'80 0 0');
+    ADVR_Assert(ADVR_LootType(foe,0.99,0)==IT_AXE+ADVR_CROSSBOW*65536,"Crossbow Knights drop crossbows");
+    self=foe;ADVR_EnemyDrop();ADVR_EnemyDrop();self=actor;
+    p=find(world,classname,"advr_dropped_weapon");while(p && p.owner!=foe)p=find(p,classname,"advr_dropped_weapon");
+    ADVR_Assert(p && p.weaponinst.advr_kind==ADVR_CROSSBOW && p.weaponinst.wi_clip==0 && p.weaponinst.advr_bolt_pack==12,"death loot has an empty chamber and twelve reserve bolts");
+    ADVR_Catch(p,1);r=self.advr_main;
+    ADVR_Assert(self.advr_bolts==12 && !r.advr_bolt_pack && !ADVR_CanParry(r),"first catch collects bolt bundle once and cannot parry");
+    for(h=0;h<2;h=h+1){
+        self.advr_main=self.advr_off=world;r.wi_clip=0;self.advr_bolts=12;ADVR_SetHand(h,r);
+        for(i=0;i<12;i=i+1){
+            self.button0=self.button3=0;ADVR_Fire(h);r.advr_cooldown=r.advr_reload_until=0;
+            self.button0=self.button3=1;ADVR_Fire(h);
+            ADVR_Assert(r.wi_clip==0 && self.advr_bolts==12-i,"empty chamber cannot fire reserve bolts");
+            self.mainhand_hotspot=self.offhand_hotspot=5;ADVR_ReloadFrame(h);
+            self.mainhand_hotspot=self.offhand_hotspot=0;
+            ADVR_Assert(r.wi_clip==1 && self.advr_bolts==11-i,"holster reload transfers exactly one bolt");
+            ADVR_Sync();if(h)ADVR_Assert(self.weaponframe==4,"main loaded bolt visible");
+            else ADVR_Assert(self.weaponframe2==4,"offhand loaded bolt visible");
+            self.button0=self.button3=0;ADVR_Fire(h);r.advr_cooldown=0;
+            self.button0=self.button3=1;ADVR_Fire(h);bolt=newmis;ADVR_Sync();
+            ADVR_Assert(r.wi_clip==0 && bolt.advr_crossbolt && bolt.owner==self && bolt.classtype==CT_PROJ_BOLT1,"each reloaded shot launches an owned bolt");
+            if(h)ADVR_Assert(self.weaponframe==1,"main hand publishes firing pose");
+            else ADVR_Assert(self.weaponframe2==1,"off hand publishes firing pose");
+            ADVR_Fire(h);ADVR_Assert(r.wi_clip==0 && self.advr_bolts==11-i,"held trigger does not bypass reload");
+            r.advr_animtime=time+0.09;ADVR_Fire(h);ADVR_Assert(r.advr_frame==2,"bow rebounds after release");
+            r.advr_animtime=time+0.03;ADVR_Fire(h);ADVR_Assert(r.advr_frame==3,"bow settles");
+            r.advr_animtime=time;ADVR_Fire(h);ADVR_Assert(r.advr_frame==0,"firing animation returns to rest");
+            if(i==0){
+                target=spawn();target.classname="advr_crossbow_target";target.classtype=CT_TARGETDUMMY;target.health=1000;
+                target.takedamage=DAMAGE_YES;target.solid=SOLID_BBOX;setsize(target,'-4 -4 -4','4 4 4');setorigin(target,bolt.origin);
+                self=bolt;other=target;Touch_Projectile();self=actor;
+                ADVR_Assert(target.health==950,"player bolt deals fifty body damage through native impact code");remove(target);
+            }
+            remove(bolt);
+        }
+        r.advr_reload_until=0;ADVR_Reload(h);ADVR_Assert(r.wi_clip==0 && self.advr_bolts==0,"empty reserve cannot reload");
+    }
+    // A second fresh crossbow adds a bundle; both chambers draw from one pool.
+    p=ADVR_SpawnLoot(foe,IT_AXE+ADVR_CROSSBOW*65536);ADVR_Catch(p,0);side=self.advr_off;
+    ADVR_Assert(self.advr_bolts==12,"another enemy crossbow adds twelve bolts");
+    self.advr_main=r;r.advr_reload_until=0;ADVR_Reload(1);ADVR_Reload(0);
+    ADVR_Assert(r.wi_clip==1 && side.wi_clip==1 && self.advr_bolts==10,"dual crossbows share reserve but keep independent chambers");
+    ADVR_Drop(1);p=find(world,classname,"advr_dropped_weapon");while(p && p.weaponinst!=r)p=find(p,classname,"advr_dropped_weapon");
+    ADVR_Assert(p && p.weaponinst.wi_clip==1 && p.frame==4 && self.advr_bolts==10,"drop keeps chambered bolt and leaves reserve with player");
+    ADVR_Catch(p,1);ADVR_Assert(self.advr_bolts==10,"recatching cannot farm twelve more bolts");
+    r.wi_clip=5;ADVR_Sync();ADVR_Sync();
+    ADVR_Assert(r.wi_clip==1 && self.advr_bolts==14,"old five-shot magazine converts once without losing ammo");
+    self.advr_holster[0]=r;self.advr_main=world;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();
+    ADVR_Assert(self.advr_holster[0].wi_clip==1 && self.advr_off.wi_clip==1 && self.advr_bolts==14,"holster/map parms preserve chambers and reserve");
+    ADVR_Assert(self.ammo_shells==50 && self.ammo_nails==60 && self.ammo_cells==70,"bolts never change regular ammunition");
+    cvar_set("vr_reload_mode","0");self.advr_off.wi_clip=0;self.advr_off.advr_reload_until=0;ADVR_Reload(0);
+    ADVR_Assert(self.advr_off.wi_clip==1 && self.advr_bolts==13,"crossbow remains single-load when ordinary reloads are disabled");
+    cvar_set("vr_reload_mode","2");self.button0=self.button3=0;self.vrbits0=16384;
+    self.advr_main=self.advr_holster[0];self.advr_holster[0]=world;ADVR_Sync();
+    remove(foe);other=world;
+    bprint("ADVR CROSSBOW PASS: single chamber, reserve, holster reload, both hands, animation, no pickup duplication and persistence\n");
+};
+void() ADVR_TestCrossbowSaved = {
+    ADVR_Assert(self.advr_main.advr_kind==ADVR_CROSSBOW && self.advr_main.wi_clip==1 &&
+        self.advr_off.advr_kind==ADVR_CROSSBOW && self.advr_off.wi_clip==1 && self.advr_bolts==13,
+        "saved/transitioned crossbows retain independent chambers and shared reserve");
+    bprint("ADVR CROSSBOW SAVE PASS\n");
+};
+void() ADVR_TestCrossbowView = {
+    local entity foe,p;
+    ADVR_Reset();self.advr_initialized=1;self.flags=FL_CLIENT|FL_GODMODE;self.health=1000;self.items=IT_AXE;self.moditems=0;
+    foe=spawn();setorigin(foe,self.origin);p=ADVR_SpawnLoot(foe,IT_AXE+ADVR_CROSSBOW*65536);
+    ADVR_Catch(p,1);remove(foe);ADVR_Sync();
+};
+
+void() ADVR_TestStickyGrip = {
+    local float h,bit,oldbit,mode;local entity r,p;
+    mode=cvar("vr_weapon_grip_mode");ADVR_Reset();self.advr_initialized=1;
+    self.flags=FL_CLIENT|FL_GODMODE;self.health=1000;self.items=IT_SHOTGUN;self.ammo_shells=100;
+    self.handpos=self.offhandpos=self.origin+self.view_ofs;
+    self.handvel=self.offhandvel=self.handthrowvel=self.offhandthrowvel='0 0 0';
+    cvar_set("vr_weapon_grip_mode","1");
+    for(h=0;h<2;h=h+1){
+        bit=2;oldbit=4;if(h){bit=8;oldbit=16;}
+        self.advr_main=self.advr_off=world;r=ADVR_Record(IT_SHOTGUN);ADVR_SetHand(h,r);
+        self.mainhand_hotspot=self.offhand_hotspot=2;
+        self.vrbits0=16384|oldbit;ADVR_GripFrame(h);
+        ADVR_Assert(ADVR_Hand(h)==r,"sticky first release keeps held weapon");
+        self.vrbits0=16384|bit;ADVR_GripFrame(h);
+        ADVR_Assert(!ADVR_Hand(h),"sticky second press drops at nonzero weapon hotspot");
+        p=find(world,classname,"advr_dropped_weapon");while(p && p.weaponinst!=r)p=find(p,classname,"advr_dropped_weapon");
+        ADVR_Assert(p && p.weaponinst==r,"sticky release preserves physical weapon record");
+        p.advr_cooldown=0;setorigin(p,ADVR_Pos(h));self.vrbits0=16384|bit|oldbit;ADVR_GripFrame(h);
+        ADVR_Assert(!ADVR_Hand(h),"holding release press cannot recatch dropped weapon");
+        self.vrbits0=16384|oldbit;ADVR_GripFrame(h);
+        self.vrbits0=16384|bit;ADVR_GripFrame(h);
+        ADVR_Assert(ADVR_Hand(h)==r,"fresh sticky press picks weapon back up");
+        self.mainhand_hotspot=self.offhand_hotspot=5;self.vrbits0=16384|oldbit;ADVR_GripFrame(h);
+        ADVR_Assert(ADVR_Hand(h)==r && !self.advr_holster[2],"releasing pickup press near holster does not toggle again");
+        self.vrbits0=16384|bit;ADVR_GripFrame(h);
+        ADVR_Assert(!ADVR_Hand(h) && self.advr_holster[2]==r,"sticky press stores weapon in holster");
+        self.vrbits0=16384|oldbit;ADVR_GripFrame(h);
+        self.vrbits0=16384|bit;ADVR_GripFrame(h);
+        ADVR_Assert(ADVR_Hand(h)==r && !self.advr_holster[2],"next sticky press retrieves holstered weapon");
+        self.mainhand_hotspot=self.offhand_hotspot=2;cvar_set("vr_weapon_grip_mode","0");
+        self.vrbits0=16384|oldbit;ADVR_GripFrame(h);
+        ADVR_Assert(!ADVR_Hand(h),"hold mode still drops on physical release");
+        cvar_set("vr_weapon_grip_mode","1");
+    }
+    cvar_set("vr_weapon_grip_mode",ftos(mode));self.vrbits0=16384;ADVR_Sync();
+    bprint("ADVR STICKY GRIP PASS: both hands, nonzero hotspot release, no recatch, holster toggles and hold mode\n");
 };

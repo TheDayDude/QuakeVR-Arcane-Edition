@@ -26,6 +26,44 @@
 namespace
 {
 
+#include "vr_ad_weapon_meshes.inc"
+
+// AD weapons are disconnected pieces of the same alias mesh, not separate
+// entities. Keep living poses intact; hide the complete piece in death poses.
+// The matching AD rig assigns these vertices to its trailing Loose bone.
+bool hideADCorpseWeapons(const char* name, aliashdr_t* hdr, trivertx_t** poses)
+{
+    for(const ADWeaponMesh& mesh : adWeaponMeshes)
+    {
+        if(strcmp(name, mesh.model)) { continue; }
+        if(hdr->numverts != mesh.verts || hdr->numtris != mesh.tris || hdr->numframes != mesh.poses ||
+            hdr->numposes != mesh.poses)
+        {
+            Con_DPrintf("VR: %s: unknown replacement mesh; corpse weapon left intact\n", name);
+            return true;
+        }
+        for(int f = mesh.firstDeath; f <= mesh.lastDeath; f++)
+        {
+            const maliasframedesc_t& frame = hdr->frames[f];
+            for(int p = frame.firstpose; p < frame.firstpose + frame.numposes; p++)
+            {
+                const trivertx_t anchor = poses[p][mesh.vertices[0]];
+                for(int i = 0; i < mesh.count; i++)
+                {
+                    for(int axis = 0; axis < 3; axis++)
+                    {
+                        poses[p][mesh.vertices[i]].v[axis] = anchor.v[axis];
+                    }
+                }
+            }
+        }
+        Con_DPrintf("VR: %s: %d weapon vertices hidden in %d death frames\n", name, mesh.count,
+            mesh.lastDeath - mesh.firstDeath + 1);
+        return true;
+    }
+    return false;
+}
+
 [[nodiscard]] int uvS(const stvert_t* st, const dtriangle_t& t, int v, int skinWidth)
 {
     const int s = st[v].s;
@@ -230,6 +268,7 @@ static void aliasPosesLoaded(const char* name, void* aliashdr, const stvert_t* s
     trivertx_t** poses)
 {
     aliashdr_t* hdr = static_cast<aliashdr_t*>(aliashdr);
+    if(hideADCorpseWeapons(name, hdr, poses)) { return; }
     const bool knight = !strcmp(name, "progs/knight.mdl");
     const bool hellKnight = !strcmp(name, "progs/hknight.mdl");
     // The ogre, the soldier and the enforcer: only Quake VR's own models (by their known vertices); the gremlin: Hipnotic's.

@@ -28,3 +28,9 @@ without the DLL, or with a version that refuses the context, the game keeps Quak
 the simulations on the game's thread pool). See `docs/vr-port/ROUND21.md`, "Spatial audio (Steam Audio)". The
 Windows build copies `phonon.dll` next to `ironwail.exe` (`Windows/VisualStudio/quakevr.props`); a release ships it
 there with `LICENSE` and `THIRDPARTY.md`.
+
+Source-only fork note: the prebuilt runtime DLL has been removed from this
+checkout. Keep these headers and license notices; download the matching 4.8.1
+runtime from the release above if spatial audio is wanted. The CMake build does
+not require it. Place the runtime beside the compiled engine when packaging.
+The older Visual Studio packaging path mentioned above is no longer included.

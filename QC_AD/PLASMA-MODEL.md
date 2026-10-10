@@ -56,3 +56,9 @@ replacement, both hands, independent lightning/plasma fire, ammo conservation,
 and existing save/load, level-transition and weapon regressions.
 
 Plasma magazine capacity is now 24 cells (24 shots); Thunderbolt remains 36.
+
+## Recoil revision 3
+
+Plasma now uses aim-affecting recoil like the Widowmaker. Strength is 5.5 versus 7, with a 0.8-second transient return versus 0.95. A full support-hand grip reduces each shot to 45% strength (2.475). Lingering aim rise caps at 18 degrees versus 25, and transient burst strength at 8 versus 10. Recovery pauses 0.65 seconds after firing and then removes 1.5 degrees per second. Sustained fire builds recoil; lowering the controller counters it. The Thunderbolt remains unchanged. Magazine capacity remains 24.
+
+The mock VR runtime tests both one- and two-handed kick strengths and actual shot direction after transient recoil ends.

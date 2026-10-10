@@ -365,6 +365,7 @@ constexpr SeedTable seedTables[] = {
 };
 
 #include "vr_ad_rigs.inc"
+#include "vr_ad_weapon_meshes.inc"
 
 [[nodiscard]] const SeedTable* tableOf(const qmodel_t* model)
 {
@@ -763,6 +764,14 @@ bool derive(qmodel_t* model, const SeedTable& table, Rig& rig, DeriveLog& log)
     {
         q_snprintf(log.text, sizeof(log.text), "ragdoll: %s is not the model its seed table was made for\n", model->name);
         return false;
+    }
+    for(const ADWeaponMesh& mesh : adWeaponMeshes)
+    {
+        if(!strcmp(model->name, mesh.model) && (hdr->numtris != mesh.tris || hdr->numframes != mesh.poses))
+        {
+            q_snprintf(log.text, sizeof(log.text), "ragdoll: %s has an unknown weapon mesh layout\n", model->name);
+            return false;
+        }
     }
     Mesh m;
     loadMesh(hdr, m);
@@ -2134,6 +2143,18 @@ static void checkSkins()
             after.retro[1], after.retro[2], before.retro[3], after.retro[3]);
         ++checked;
         failures += !same;
+        const Published& published = draw.byNum[static_cast<za::SizeT>(s.num)];
+        if(!published.rig || !sv.active || s.num >= sv.qcvm.num_edicts) { continue; }
+        const auto* corpse = reinterpret_cast<const edict_t*>(
+            reinterpret_cast<const byte*>(sv.qcvm.edicts) + s.num * sv.qcvm.edict_size);
+        const int last = published.rig->numBones - 1;
+        if(!corpse->free && !strcmp(published.rig->bones[last].name, "loose_weapon") && corpse->v.health <= 0.f)
+        {
+            const bool hidden = published.bodies <= last;
+            Con_Printf("RAGDOLL WEAPON %s: %s (%d body bones, weapon bone %d)\n",
+                hidden ? "PASS" : "FAIL", s.original->name, published.bodies, last);
+            failures += !hidden;
+        }
     }
     Con_Printf("RAGDOLL SKIN CHECK: %d checked, %d failures\n", checked, failures);
 }

@@ -203,6 +203,16 @@ void forget(int hand)
 }
 
 // `hand`'s weapon fired (the QC's, or vr_weaponfx_test).
+bool isPlasma(const qmodel_t* model)
+{
+    return model && strcmp(model->name, "progs/advr_plasma.mdl") == 0;
+}
+
+bool hasAimRecoil(const qmodel_t* model)
+{
+    return isPlasma(model) || (model && strcmp(model->name, "progs/advr_widowmaker.mdl") == 0);
+}
+
 void recoverAim(HandFx& h)
 {
     const double from = za::max(h.aimAt, h.aimHoldUntil);
@@ -231,13 +241,13 @@ void playerFired(int hand)
         h.nextKick = (h.nextKick + 1) % maxKicks;
         k.time = cl.time;
         k.strength = za::max(weapons::value(slot, Key::RecoilStrength), 0.f);
-        // The AD Widowmaker is controllable with a support hand, punishing without it.
+        // The large AD upgrades need a support hand; their recoil affects actual aim.
         const qmodel_t* model = weapons::heldModel(hand);
-        if(model && strcmp(model->name, "progs/advr_widowmaker.mdl") == 0)
-            {
+        if(hasAimRecoil(model))
+        {
             k.strength *= 1.f - 0.55f * za::clamp(twohand::transition(hand), 0.f, 1.f);
             recoverAim(h);
-            h.aimRise = za::min(25.f, h.aimRise + k.strength);
+            h.aimRise = za::min(isPlasma(model) ? 18.f : 25.f, h.aimRise + k.strength);
             h.aimHoldUntil = cl.time + 0.65;
         }
         k.duration = za::max(weapons::value(slot, Key::RecoilTime), 0.02f);
@@ -467,9 +477,9 @@ void recoilOffset(int hand, const glm::vec3& handAngles, glm::vec3& pos, glm::ve
             sideways += e * k.sideways;
         }
     }
-    // Keep the normal burst cap; allow the Widowmaker's deliberately heavy kick.
+    // Keep the normal burst cap; allow the upgraded weapons' deliberately heavy kick.
     const qmodel_t* model = weapons::heldModel(hand);
-    const float cap = model && strcmp(model->name, "progs/advr_widowmaker.mdl") == 0 ? 10.f : 2.5f;
+    const float cap = isPlasma(model) ? 8.f : (hasAimRecoil(model) ? 10.f : 2.5f);
     if(kick > cap)
     {
         sideways *= cap / kick;
@@ -493,11 +503,11 @@ void recoilOffset(int hand, const glm::vec3& handAngles, glm::vec3& pos, glm::ve
     }
 }
 
-// Widowmaker shots follow the same muzzle rise seen on the held model.
+// Upgraded weapon shots follow the same muzzle rise seen on the held model.
 glm::vec3 aimOffset(int hand)
 {
     const qmodel_t* model = weapons::heldModel(hand);
-    if(!model || strcmp(model->name, "progs/advr_widowmaker.mdl") != 0) return glm::vec3{0.f};
+    if(!hasAimRecoil(model)) return glm::vec3{0.f};
     glm::vec3 pos, angles;
     recoilOffset(hand, hands::current().rot[hand], pos, angles);
     return angles;

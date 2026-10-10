@@ -591,7 +591,8 @@ void() Touch_Projectile =
 			if (random() < 0.3) sound (self, CHAN_WEAPON, "weapons/bolt_hit1.wav", 1, ATTN_NORM);
 			else sound (self, CHAN_WEAPON, "weapons/bolt_hit4.wav", 1, ATTN_NORM);
 			// Reduce the damage if the bolt has hit another dcrossbow knight
-			if (other.classtype == self.owner.classtype) self.dmg = DAMAGE_BOLT0;
+			if(self.advr_crossbolt) self.dmg = 50;
+            else if (other.classtype == self.owner.classtype) self.dmg = DAMAGE_BOLT0;
 			else self.dmg = DAMAGE_BOLT1;
 		}
 		else if (self.classtype == CT_PROJ_BLBOLT || self.classtype == CT_PROJ_BLBOLT2) 

@@ -2371,8 +2371,12 @@ bool createRagdoll(edict_t* ent, int num, Slot& s, bool now = false)
     // a weapon of its own, vr_monstermods.cpp) gets no body and stays hidden (published collapsed): the last ones.
     r.count = rig->numBones;
     const bool headless = fieldFloatOr(ent, fields().vr_headless, 0.f) != 0.f;
+    // AD can finalize a corpse from a live pose (e.g. a knockdown). Its
+    // explicitly separated weapon still belongs only to the usable QC drop.
+    const bool deadADWeapon = ent->v.health <= 0.f &&
+        !strcmp(rig->bones[r.count - 1].name, "loose_weapon");
     while(r.count > 1 && rig->bones[r.count - 1].joint == ragdoll::Joint::Loose &&
-          (now || headless || ragdoll::collapsed(*rig, pose, r.count - 1)))
+          (now || headless || deadADWeapon || ragdoll::collapsed(*rig, pose, r.count - 1)))
     {
         r.count--;
     }

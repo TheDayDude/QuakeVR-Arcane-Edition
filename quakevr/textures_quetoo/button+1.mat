@@ -1,8 +1,0 @@
-{
-	diffusemap quake/button+1
-	{
-		texture quake/button+1_luma
-		blend src_alpha one
-		pulse 0.25
-	}
-}

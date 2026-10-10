@@ -2,14 +2,15 @@
 
 Launch the usual `QuakeVR-AD.bat`. Kill fresh enemies to get the new drops;
 already-dead bodies in older saves do not generate retroactive loot.
-Grab with an empty hand, or aim an empty hand and hold the trigger to pull a
-weapon toward you. Dropped weapons use the existing holsters and physics.
+Grab with an empty hand, or aim an empty hand, hold the trigger and flick to pull a
+weapon toward you, then grip to catch it. Dropped weapons use the existing holsters and physics.
 
 Default loot, at `vr_enemy_drops_chance_mult 1`:
 
 | Enemy | Drop |
 | --- | --- |
 | Standard grunt | Shotgun, always |
+| Crossbow Knight | Crossbow with 12 reserve bolts, always |
 | Knight, death guard, fury knight, zombie knight, invisible sword | QuakeVR knight sword, always |
 | Hellknight, blood/death/prince/sergeant knights, Quoth guard/death lord, Justice/Judicator | QuakeVR hellknight sword, always |
 | Original or hunter chainsaw ogre | 25% chainsaw, 25% grenade launcher, 50% no weapon |
@@ -64,3 +65,26 @@ independent plasma projectiles, and spawn-parm preservation.
 changelevel. `tests/enemy-drops.cfg` runs these in mock VR alongside the
 existing parry, weapon, reload and combat regressions. Headset feel still
 requires user testing.
+
+When a usable weapon drops, AD's decorative `w_*` weapon debris is suppressed for that enemy, including delayed death animations and subsequent corpse gibbing. Flesh, heads and other body debris remain. If the loot roll produces no usable weapon, native debris remains unchanged. This applies to newly killed enemies; existing decorative props in saved games are not removed.
+
+The built-in weapon geometry is also hidden in death poses for the 20 installed
+armed monster models: grunts, enforcer variants, sword/crossbow knights,
+ogre variants, and Justice/Judicator. This follows original QuakeVR's mesh
+approach and applies by monster model, even when its loot roll yields nothing.
+Living poses, body geometry, skin mappings and HD texture paths are unchanged.
+Zombie knights have no persistent death corpse: their real death gibs them;
+their temporary knockdown poses retain the sword.
+
+`tools/weapon-meshes.json` records the disconnected weapon vertices and QC death
+frame ranges for AD 1.80. `tools/make_weapon_meshes.py <ad-pak-directory>` validates
+the selections and generates the engine profiles and separate trailing weapon
+bones. It also runs after the full ragdoll generator. The corpse renderer hides
+those bones and physics does not create bodies for them, including deaths from
+a non-death animation or an existing knockdown. Replacement meshes with different
+vertex/triangle/frame counts are left intact rather than using these selections.
+
+`vr_ragdoll_info skincheck` now additionally reports `RAGDOLL WEAPON PASS/FAIL`
+for these dead creatures. `tests/ragdoll-skins.cfg` covers all 60 creature rigs,
+including all 20 weapon-bearing models, texture continuity and corpse physics.
+Restart the game and kill fresh enemies when checking the change in a headset.

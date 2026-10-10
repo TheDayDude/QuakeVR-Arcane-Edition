@@ -1,5 +1,0 @@
-{
-	diffusemap quake/crate1_top
-	normalmap quake/crate0_top_norm
-	specularmap quake/crate0_top_spec
-}

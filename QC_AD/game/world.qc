@@ -462,6 +462,13 @@ void() worldspawn =
     precache_model("progs/v_ksword.mdl");
     precache_model("progs/v_hksword.mdl");
     precache_model("progs/v_chainsaw.mdl");
+    precache_model("progs/advr_crossbow.mdl");
+    precache_model(MODEL_PROJ_BOLT1);
+    precache_sound("weapons/crossbow_fire.wav");
+    precache_sound("weapons/bolt_hit1.wav");
+    precache_sound("weapons/bolt_hit2.wav");
+    precache_sound("weapons/bolt_hit3.wav");
+    precache_sound("weapons/bolt_hit4.wav");
     precache_sound("vr/saw_run.wav");
     precache_sound("vr/saw_stall.wav");
 	precache_model ("progs/hand.mdl"); // An empty tracked hand must still have a model

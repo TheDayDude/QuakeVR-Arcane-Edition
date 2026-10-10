@@ -1015,6 +1015,12 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "swordgripstate")) fixture = "ADVR_TestSwordGripState";
         else if(!strcmp(Cmd_Argv(1), "swordhandoff")) fixture = "ADVR_TestSwordHandoff";
         else if(!strcmp(Cmd_Argv(1), "widowview")) fixture = "ADVR_TestWidowView";
+        else if(!strcmp(Cmd_Argv(1), "grabflying")) fixture = "ADVR_TestGrabFlying";
+        else if(!strcmp(Cmd_Argv(1), "stickygrip")) fixture = "ADVR_TestStickyGrip";
+        else if(!strcmp(Cmd_Argv(1), "crossbow")) fixture = "ADVR_TestCrossbow";
+        else if(!strcmp(Cmd_Argv(1), "crossbowsaved")) fixture = "ADVR_TestCrossbowSaved";
+        else if(!strcmp(Cmd_Argv(1), "crossbowview")) fixture = "ADVR_TestCrossbowView";
+        else if(!strcmp(Cmd_Argv(1), "plasmaview")) fixture = "ADVR_TestPlasmaView";
         else if(!strcmp(Cmd_Argv(1), "grabview")) fixture = "ADVR_TestGrabView";
         else if(!strcmp(Cmd_Argv(1), "grabselected")) fixture = "ADVR_TestGrabSelected";
         else if(!strcmp(Cmd_Argv(1), "grabarrived")) fixture = "ADVR_TestGrabArrived";
@@ -1071,13 +1077,23 @@ void adShadowDefaults()
 cvar_t adWidowModelVersion{"advr_widow_model_version", "0", CVAR_ARCHIVE};
 void adWidowDefaults()
 {
-    if(adWidowModelVersion.value >= 3.f) return;
+    if(adWidowModelVersion.value >= 4.f) return;
     using weapons::Key;
+    // Raising the mesh lowers the tracked main hand by about two finger widths.
+    // Its support hotspot moves with the mesh, retaining the off-hand fit.
+    if(adWidowModelVersion.value >= 1.f)
+        Cvar_SetValueQuick(weapons::cvar(25, Key::OffsetZ), weapons::value(25, Key::OffsetZ) + 1.1f);
+    if(adWidowModelVersion.value >= 3.f)
+    {
+        Cvar_SetValueQuick(&adWidowModelVersion, 4.f);
+        weapons::resetCaches();
+        return;
+    }
     if(adWidowModelVersion.value >= 2.f)
     {
         Cvar_SetValueQuick(weapons::cvar(25, Key::RecoilStrength), 7.f);
         Cvar_SetValueQuick(weapons::cvar(25, Key::RecoilTime), 0.95f);
-        Cvar_SetValueQuick(&adWidowModelVersion, 3.f);
+        Cvar_SetValueQuick(&adWidowModelVersion, 4.f);
         return;
     }
     if(adWidowModelVersion.value >= 1.f)
@@ -1087,7 +1103,7 @@ void adWidowDefaults()
         Cvar_SetValueQuick(weapons::cvar(25, Key::Recoil), 1.f);
         Cvar_SetValueQuick(weapons::cvar(25, Key::RecoilStrength), 7.f);
         Cvar_SetValueQuick(weapons::cvar(25, Key::RecoilTime), 0.95f);
-        Cvar_SetValueQuick(&adWidowModelVersion, 3.f);
+        Cvar_SetValueQuick(&adWidowModelVersion, 4.f);
         weapons::resetCaches();
         return;
     }
@@ -1095,20 +1111,28 @@ void adWidowDefaults()
 #define AD_WIDOWMAKER_SETTING(key, value) Cvar_SetValueQuick(weapons::cvar(25, Key::key), value);
 #include "vr_ad_widowmaker.inc"
 #undef AD_WIDOWMAKER_SETTING
-    Cvar_SetValueQuick(&adWidowModelVersion, 3.f);
+    Cvar_SetValueQuick(&adWidowModelVersion, 4.f);
     weapons::resetCaches();
     Con_Printf("AD VR: long Widowmaker model calibration installed\n");
 }
 cvar_t adPlasmaModelVersion{"advr_plasma_model_version", "0", CVAR_ARCHIVE};
 void adPlasmaDefaults()
 {
-    if(adPlasmaModelVersion.value >= 2.f) return;
+    if(adPlasmaModelVersion.value >= 3.f) return;
+    Cvar_SetValueQuick(weapons::cvar(26, weapons::Key::Recoil), 1.f);
+    Cvar_SetValueQuick(weapons::cvar(26, weapons::Key::RecoilStrength), 5.5f);
+    Cvar_SetValueQuick(weapons::cvar(26, weapons::Key::RecoilTime), 0.8f);
+    if(adPlasmaModelVersion.value >= 2.f)
+    {
+        Cvar_SetValueQuick(&adPlasmaModelVersion, 3.f);
+        return;
+    }
     if(adPlasmaModelVersion.value >= 1.f)
     {
         // Lower only the support grip on existing installations (about 4 cm).
         Cvar_SetValueQuick(weapons::cvar(26, weapons::Key::Hotspot1Z),
             weapons::value(26, weapons::Key::Hotspot1Z) - 1.2f);
-        Cvar_SetValueQuick(&adPlasmaModelVersion, 2.f);
+        Cvar_SetValueQuick(&adPlasmaModelVersion, 3.f);
         weapons::resetCaches();
         return;
     }
@@ -1119,9 +1143,40 @@ void adPlasmaDefaults()
 #define AD_PLASMA_SETTING(key, value) Cvar_SetValueQuick(weapons::cvar(26, Key::key), value);
 #include "vr_ad_plasma.inc"
 #undef AD_PLASMA_SETTING
-    Cvar_SetValueQuick(&adPlasmaModelVersion, 2.f);
+    Cvar_SetValueQuick(&adPlasmaModelVersion, 3.f);
     weapons::resetCaches();
     Con_Printf("AD VR: AD Plasma Gun model calibration installed\n");
+}
+cvar_t adCrossbowVersion{"advr_crossbow_version", "0", CVAR_ARCHIVE};
+void adCrossbowDefaults()
+{
+    if(adCrossbowVersion.value >= 4.f) return;
+    if(adCrossbowVersion.value >= 1.f) {
+        using weapons::Key;
+        if(adCrossbowVersion.value < 3.f) {
+            Cvar_SetValueQuick(weapons::cvar(27, Key::WpnButtonMode), 1.f);
+            Cvar_SetValueQuick(weapons::cvar(27, Key::Hotspot1Z), -.5f);
+        }
+        // Update only the muzzle to the chambered bolt tip, retaining grip tuning.
+#define AD_CROSSBOW_SETTING(key, value) \
+        if constexpr(Key::key == Key::MuzzleAnchorVertex || Key::key == Key::MuzzleOffsetX || \
+                     Key::key == Key::MuzzleOffsetY || Key::key == Key::MuzzleOffsetZ) \
+            Cvar_SetValueQuick(weapons::cvar(27, Key::key), value);
+#include "vr_ad_crossbow.inc"
+#undef AD_CROSSBOW_SETTING
+        Cvar_SetValueQuick(&adCrossbowVersion, 4.f);
+        weapons::resetCaches();
+        return;
+    }
+    using weapons::Key;
+    // A dedicated model slot; the bolt count lives in the weapon's own record.
+    weapons::stopInheriting(27);
+    Cvar_SetQuick(weapons::cvar(27, Key::ID), "progs/advr_crossbow.mdl");
+#define AD_CROSSBOW_SETTING(key, value) Cvar_SetValueQuick(weapons::cvar(27, Key::key), value);
+#include "vr_ad_crossbow.inc"
+#undef AD_CROSSBOW_SETTING
+    Cvar_SetValueQuick(&adCrossbowVersion, 4.f);
+    weapons::resetCaches();
 }
 cvar_t adRagdollTest{"advr_ragdoll_test", "0"}; // developer fixture assets only
 cvar_t adGrabVersion{"advr_forcegrab_version", "0", CVAR_ARCHIVE};
@@ -1135,7 +1190,7 @@ void adGrabDefaults()
 }
 void adDefaults_f()
 {
-    adGrabDefaults();
+    adGrabDefaults(); adCrossbowDefaults();
     if(cmd_source != src_command) return;
     if(adSettingsVersion.value >= 2.f) { adPlasmaDefaults(); adWidowDefaults(); adShadowDefaults(); return; }
     if(adSettingsVersion.value >= 1.f)
@@ -1185,6 +1240,7 @@ void init()
     Cvar_RegisterVariable(&adPlasmaModelVersion);
     Cvar_RegisterVariable(&adWidowModelVersion);
     Cvar_RegisterVariable(&adGrabVersion);
+    Cvar_RegisterVariable(&adCrossbowVersion);
     Cvar_RegisterVariable(&adShadowModelVersion);
     Cvar_RegisterVariable(&adRagdollTest);
     Cmd_AddCommand("advr_defaults", adDefaults_f);

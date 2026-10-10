@@ -149,7 +149,7 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 	// ADVR: direct player projectiles have a real impact position. Splash and
     // damage-over-time must never inherit a headshot from a stale trace.
     if(checkarmor==DAMARMOR && inflictor!=attacker && inflictor.owner==attacker &&
-       (inflictor.movetype==MOVETYPE_FLYMISSILE || inflictor.movetype==MOVETYPE_FLY || inflictor.movetype==MOVETYPE_BOUNCE))
+       (inflictor.advr_crossbolt || inflictor.movetype==MOVETYPE_FLYMISSILE || inflictor.movetype==MOVETYPE_FLY || inflictor.movetype==MOVETYPE_BOUNCE))
         damage=ADVR_HeadDamage(targ,attacker,inflictor.origin,inflictor.velocity,damage);
 
 	// check for quad damage powerup on the attacker

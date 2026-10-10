@@ -1,20 +1,29 @@
-Windows/VisualStudio/.vs/
-Windows/VisualStudio/Build-*/
-Windows/VisualStudio/ironwail.vcxproj.user
-Quake/*.o
-Quake/*.d
-Quake/*.res
-Quake/*.exe
-Quake/ironwail
-build/
-/.vs
+# Local builds and editor state
+/build*/
 /out/
-
-# QVR: Quake VR's build and packaging output (quakevr/ and Quake/vr/ have their own .gitignore)
-/build-cmake/
 /dist/
+/.vs/
+/.idea/
+/.vscode/
+CMakeUserPresets.json
 __pycache__/
-/build.log
-
-/build-ad/
-/build-ad-rigs/
+*.pyc
+*.log
+*.obj
+*.o
+*.d
+*.pdb
+*.ilk
+*.suo
+*.user
+# Built binaries (vendored dependencies under Windows/ remain tracked)
+/Quake/*.exe
+/Quake/ironwail
+# External game installations/content
+/id1/
+/ad/
+/ad_hd/
+/advr/
+/quakevr/
+*.sav
+/qconsole.log

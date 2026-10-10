@@ -3,6 +3,7 @@
 // player's upgrade flags. Zero is the original AD pickup behaviour.
 string(entity r) ADVR_RecordModel = {
     if(!r)return "";
+    if(r.advr_kind==ADVR_CROSSBOW)return "progs/advr_crossbow.mdl";
     if(r.advr_kind==ADVR_SWORD)return "progs/v_ksword.mdl";
     if(r.advr_kind==ADVR_HELLSWORD)return "progs/v_hksword.mdl";
     if(r.advr_kind==ADVR_SAW)return "progs/v_chainsaw.mdl";
@@ -18,6 +19,7 @@ string(entity r) ADVR_RecordModel = {
 float(entity r) ADVR_RecordCapacity = {
     if(!r)return 0;
     if(r.advr_kind==ADVR_SAW)return 100;
+    if(r.advr_kind==ADVR_CROSSBOW)return 1;
     if(r.advr_kind==ADVR_PLASMA || r.advr_kind==ADVR_WIDOWMAKER)return 24;
     if(r.advr_weapon==IT_SUPER_SHOTGUN)return 2;
     return ADVR_Capacity(r.advr_weapon);
@@ -39,6 +41,7 @@ float(entity foe,float roll,float choice) ADVR_LootType = {
     local float c,chance,w,kind;
     c=foe.classtype;chance=0.5;
     if(c==CT_MONARMY){w=IT_SHOTGUN;chance=1;}
+    else if(c==CT_MONDCROSS){w=IT_AXE;kind=ADVR_CROSSBOW;chance=1;}
     else if(c==CT_MONKNIGHT || c==CT_MONDGUARD || c==CT_MONDFURY || c==CT_MONZOMBIEK || c==CT_MONINVSWORD){w=IT_AXE;kind=ADVR_SWORD;chance=1;}
     else if(c==CT_MONHELLK || c==CT_MONDBLOOD || c==CT_MONDKNIGHT || c==CT_MONDPRINCE ||
         c==CT_MONDSERG || c==CT_MONCOMM || c==CT_MONDGUARDQ || c==CT_MONDLORD || c==CT_MONJUSTICE || c==CT_MONJUDGE){w=IT_AXE;kind=ADVR_HELLSWORD;chance=1;}
@@ -68,6 +71,7 @@ entity(entity foe,float packed) ADVR_SpawnLoot = {
     if(w==IT_SHOTGUN)r.wi_clip=4;
     if(w==IT_SUPER_SHOTGUN || w==IT_GRENADE_LAUNCHER)r.wi_clip=2;
     if(kind==ADVR_PLASMA)r.wi_clip=12;
+    if(kind==ADVR_CROSSBOW)r.advr_bolt_pack=12;
     if(kind==ADVR_SAW){least=bound(0,cvar("vr_chainsaw_drop_fuel_min"),100);r.wi_clip=least+floor(random()*(101-least));}
     p=spawn();p.classname="advr_dropped_weapon";p.weaponinst=r;p.advr_weapon=w;
     p.owner=foe;p.advr_cooldown=time+1;p.vr_monster_drop=time;
@@ -76,12 +80,27 @@ entity(entity foe,float packed) ADVR_SpawnLoot = {
     at=foe.origin+'0 0 12';setorigin(p,at);p.angles=foe.angles;
     p.velocity='0 0 100';p.velocity_x=crandom()*40;p.velocity_y=crandom()*40;
     p.vr_rigid=1;p.vr_spin='1 2 0';p.avelocity='57 114 0';p.gravity=1;
+    foe.advr_loot_spawned=1;
     return p;
 };
 void() ADVR_EnemyDrop = {
     if(QVR_AD_API!=1 || self.advr_drop_done)return;
     self.advr_drop_done=1;
     ADVR_SpawnLoot(self,ADVR_LootType(self,random(),random()));
+};
+
+// AD's w_* models are decorative weapon debris. The real drop replaces them,
+// including delayed death-animation debris and later corpse overkills.
+float(entity foe,float gib_no) ADVR_SkipWeaponGib = {
+    local string mdl;
+    if(QVR_AD_API!=1 || !foe.advr_loot_spawned)return 0;
+    if(gib_no==11)mdl=foe.gib1mdl;
+    else if(gib_no==12)mdl=foe.gib2mdl;
+    else if(gib_no==13)mdl=foe.gib3mdl;
+    else if(gib_no==14)mdl=foe.gib4mdl;
+    else if(gib_no==15)mdl=foe.gib5mdl;
+    else return 0;
+    return substring(mdl,0,8)=="progs/w_";
 };
 
 // Trigger-driven chainsaw: its fuel stays in its record through holsters,
@@ -121,4 +140,27 @@ void(float h) ADVR_SawAudio = {
     }
     if(!active && self.advr_saw_audio[h])sound(self,channel,"vr/saw_stall.wav",1,ATTN_NORM);
     if(!active)self.advr_saw_audio[h]=0;
+};
+
+// One chambered bolt; reloading draws from the separate player bolt reserve.
+void(float h,float pressed) ADVR_CrossbowFire = {
+    local entity r;local float was,channel;local vector at,ang;
+    r=ADVR_Hand(h);was=r.advr_trigger;r.advr_trigger=pressed;
+    r.advr_frame=4*(r.wi_clip>0);
+    if(r.advr_animtime>time){
+        if(r.advr_animtime-time>0.12)r.advr_frame=1;
+        else if(r.advr_animtime-time>0.06)r.advr_frame=2;
+        else r.advr_frame=3;
+    }
+    if(!pressed || was || r.wi_clip<=0 || time<r.advr_cooldown)return;
+    r.wi_clip=r.wi_clip-1;r.advr_cooldown=time+0.8;
+    r.advr_animtime=time+0.18;r.advr_frame=1;
+    if(h){at=self.muzzlepos;ang=self.shotrot;channel=CHAN_WEAPON;}
+    else{at=self.offmuzzlepos;ang=self.offshotrot;channel=CHAN_BODY;}
+    traceline(self.origin+self.view_ofs,at,TRUE,self);at=trace_endpos;
+    makevectors(ang);launch_projectile(at,v_forward,CT_PROJ_BOLT1,900);
+    newmis.advr_crossbolt=1;newmis.poisonous=0;newmis.bodyfadeaway=TRUE;
+    newmis.movetype=MOVETYPE_FLY;setmodel(newmis,MODEL_PROJ_BOLT1);
+    sound(self,channel,"weapons/crossbow_fire.wav",1,ATTN_NORM);
+    weaponfired(self,h);haptic(h,0,0.1,80,0.6);
 };

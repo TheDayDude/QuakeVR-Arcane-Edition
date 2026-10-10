@@ -136,6 +136,12 @@ void() ADVR_TestCombat = {
     projectile.classname="proj_bullet";projectile.classtype=CT_PROJ_SG;projectile.classgroup=CG_PROJSHELLS;
     beforehp=e.health;self=projectile;other=e;Touch_Bullet();self=actor;other=world;
     ADVR_Assert(beforehp-e.health==DAMAGE_PSHELL*1.5,"actual stopped pellet headshot");
+    // Native bolt impact stops movement before T_Damage; retain its head hit.
+    projectile.advr_crossbolt=1;projectile.classtype=CT_PROJ_BOLT1;projectile.classgroup=CG_PROJNAILS;
+    projectile.velocity='-900 0 0';projectile.touch=Touch_Projectile;setorigin(projectile,head);
+    beforehp=e.health;self=projectile;other=e;Touch_Projectile();self=actor;other=world;
+    ADVR_Assert(beforehp-e.health==75,"crossbow bolt receives headshot bonus exactly once");
+    projectile.advr_crossbolt=0;
     projectile.movetype=MOVETYPE_FLYMISSILE;projectile.velocity='-600 0 0';projectile.nextthink=time+600;
     // Multi-damage accumulates each pellet's own result, not a whole-blast head multiplier.
     ClearMultiDamage();e.resist_shells=0;

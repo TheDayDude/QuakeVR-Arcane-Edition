@@ -3,7 +3,7 @@
 No models/textures are redistributed. Anatomical templates seed a rigid-motion fit;
 only adjacent mesh regions can exchange vertices. The checked-in include is used
 at runtime, avoiding expensive clustering when an AD map loads. Requires numpy.
-Usage: python make_ragdolls.py GAME/ad [--only mon_soldier]
+Usage: python make_ragdolls.py GAME/ad --base-models GAME/quakevr/progs [--only mon_soldier]
 """
 from pathlib import Path
 import argparse, importlib.util, json, re, struct
@@ -100,7 +100,7 @@ def fit(x, labels, k):
         rot.append(r);pos.append(t);errs.append(err)
     return np.array(rot),np.array(pos),np.array(errs).T
 
-def generate(name, data, family, seeds):
+def generate(name, data, family, seeds, base_models):
     names,poses,tris=mdl.load(data);nv=poses.shape[1]
     # This reader's grouped-frame layout is not the engine's flattened pose layout.
     # Installed AD creature models use simple frames; reject other assets explicitly.
@@ -126,7 +126,7 @@ def generate(name, data, family, seeds):
             if i!=j:adj[i].add(j);adj[j].add(i)
     if family:
         base={'grunt':'soldier'}.get(family,family)
-        _,bp,_=mdl.load(ROOT/f'quakevr/progs/{base}.mdl')
+        _,bp,_=mdl.load(base_models/f'{base}.mdl')
         # Robust boxes avoid disproportionate scaling from a sword/chainsaw tip.
         lo,hi=np.percentile(p,[5,95],axis=0);bl,bh=np.percentile(bp[0],[5,95],axis=0)
         scale=(hi-lo)/np.maximum(bh-bl,1)
@@ -234,7 +234,9 @@ def draw(name, model, output):
     d.text((10,10),name,fill='black');im.save(output)
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('pakdir',type=Path);ap.add_argument('--only');args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('pakdir',type=Path)
+    ap.add_argument('--base-models',type=Path,required=True,help='Installed QuakeVR progs directory')
+    ap.add_argument('--only');args=ap.parse_args()
     assets={}
     for pak in sorted(args.pakdir.glob('pak*.pak')):
         data=pak.read_bytes();_,off,size=struct.unpack_from('<4sii',data)
@@ -250,11 +252,13 @@ def main():
         if args.only and key!=args.only:continue
         name=key[4:];family=families.get(name)
         seeds=[dict(b,centre=b['centre'].copy()) for b in ts[family]] if family else custom(name)
-        row,model=generate(key,assets[path],family,seeds);records.append(row)
+        row,model=generate(key,assets[path],family,seeds,args.base_models);records.append(row)
         draw(key,model,out/(key+'.png'))
         print(key,len(row['bones']),'bones',row['counts'],'rms',round(row['rms'],2),flush=True)
     if not args.only:
         emit(records,ROOT/'Quake/vr/vr_ad_rigs.inc')
+        from make_weapon_meshes import generate as separate_weapons
+        separate_weapons(args.pakdir)
         qc=['// Generated roster; test-only precaching is opt-in, never used in normal play.',
             'string(float i) ADVR_RagdollModel = {']
         qc += [f'    if(i=={i})return "{r["model"]}";' for i,r in enumerate(records)]

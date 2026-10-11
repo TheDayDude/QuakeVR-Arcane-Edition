@@ -75,7 +75,7 @@ void(entity targ, entity attacker) Killed =
 			ClientObituary(self, attacker);
 			self.touch = SUB_Null;
 	
-			if (self.flags & FL_MONSTER) { ADVR_EnemyDrop(); monster_death_use(); }
+			if (self.flags & FL_MONSTER) { ADVR_ManaReward(self,attacker); ADVR_EnemyDrop(); monster_death_use(); }
 			self.th_die ();
 		}
 		// Completely fuckup setup for the oldone boss with a weird target
@@ -89,6 +89,7 @@ void(entity targ, entity attacker) Killed =
 		}
 	}		
 	if(self.advr_hammer_down)ADVR_HammerDeath();
+    ADVR_DecapDeath();
 	// Restore self
 	self = oself;
 };
@@ -111,7 +112,12 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 {
 	local vector dir;
 	local entity oldself;
-	local float save, take, flinch, noarmordmg;
+	local float save, take, flinch, noarmordmg,headkind;
+    local vector headat,headvel;
+    if(checkarmor==DAMARMOR && advr_hit_ent==targ && advr_hit_by==attacker) {
+        headkind=advr_hit_kind;headat=advr_hit_at;headvel=advr_hit_vel;
+    }
+    ADVR_HitClear();
 
 	// Cannot hurt the world or enemy targets (fake flying markers)
 	if (targ.classtype == CT_WORLD) return;
@@ -151,7 +157,12 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
     // damage-over-time must never inherit a headshot from a stale trace.
     if(checkarmor==DAMARMOR && inflictor!=attacker && inflictor.owner==attacker &&
        (inflictor.advr_crossbolt || inflictor.movetype==MOVETYPE_FLYMISSILE || inflictor.movetype==MOVETYPE_FLY || inflictor.movetype==MOVETYPE_BOUNCE))
+    {
         damage=ADVR_HeadDamage(targ,attacker,inflictor.origin,inflictor.velocity,damage);
+        headkind=advr_hit_kind;headat=advr_hit_at;headvel=advr_hit_vel;
+        if(headkind && inflictor.classname=="advr_dropped_weapon" && ADVR_CanParry(inflictor.weaponinst))headkind=2;
+        ADVR_HitClear();
+    }
 
 	// check for quad damage powerup on the attacker
 	if (attacker.super_damage_finished > 0) damage = ceil(damage * 4);
@@ -379,6 +390,9 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 	// Has the monster died?
 	//----------------------------------------------------------------------
 	if (targ.health < 1) {
+        if(headkind && ADVR_DecapAllowed(targ)) {
+            targ.advr_decap_kind=headkind;targ.advr_decap_at=headat;targ.advr_decap_vel=headvel;
+        }
 		Killed (targ, attacker);
 		return;
 	}

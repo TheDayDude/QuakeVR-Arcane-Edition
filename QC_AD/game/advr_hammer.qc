@@ -62,6 +62,7 @@ void(entity victim,vector at,vector vel,float speed) ADVR_HammerHit = {
     local float damage,before;
     damage=65*bound(0.5,speed/3,2);victim.axhitme=1;
     if(victim.reflectaxe){Resist_Axe(self,at);return;}
+    damage=ADVR_MeleeHeadDamage(victim,self,at,vel,damage);
     before=victim.health;SpawnBlood(victim,at,vel,damage);T_Damage(victim,self,self,damage,DAMARMOR);
     if(victim.health<before && victim.health>0)ADVR_HammerKnockdown(victim);
 };

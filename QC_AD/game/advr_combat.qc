@@ -10,11 +10,12 @@ float(float p,float d,float lo,float hi) ADVR_HeadSlab = {
 float(entity target,entity attacker,vector at,vector direction,float damage) ADVR_HeadDamage = {
     local vector p,d,lo,hi,forward,left,headangles,savedforward,savedright,savedup;
     local float hit,mult;
+    ADVR_HitClear();
     if(damage<=0 || !(attacker.flags & FL_CLIENT) || !(attacker.vrbits0 & 16384) ||
        !(target.flags & FL_MONSTER) || target.health<=0 || target.takedamage==DAMAGE_NO ||
        !cvar("vr_positional_damage") || !ADVR_HeadProfile(target))return damage;
     mult=max(1,cvar("vr_headshot_mult"));
-    if(mult==1)return damage;
+
     savedforward=v_forward;savedright=v_right;savedup=v_up;
     headangles='0 0 0';headangles_y=target.angles_y;makevectors(headangles);
     forward=v_forward;left=-v_right;
@@ -41,6 +42,8 @@ float(entity target,entity attacker,vector at,vector direction,float damage) ADV
         hit=1;
     }
     if(!hit)return damage;
+    advr_hit_ent=target;advr_hit_by=attacker;advr_hit_kind=1;
+    advr_hit_at=at;advr_hit_vel=normalize(direction)*220;
     advr_head_hits=advr_head_hits+1;
     if(time>=attacker.advr_headsound_next) {
         attacker.advr_headsound_next=time+0.1;

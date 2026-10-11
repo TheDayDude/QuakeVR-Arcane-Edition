@@ -43,6 +43,7 @@ struct Queued
     Align align;
     float scale;
     bool screen;
+    bool ink{false};
     bool overlay{false}; // over the eye's image, not depth tested (queueOverlay)
     za::Vector<OverlayBar> bars; // queueOverlay's
     float backing{0.55f};
@@ -471,7 +472,7 @@ void layoutOverlay(const Queued& q)
 }
 
 void layout(za::StringView text, const glm::vec3& pos, const glm::vec3& angles, Align align, float scale,
-    bool screen = false)
+    bool screen = false, bool ink = false)
 {
     const size_t longest = splitLines(text);
     if(longest == 0)
@@ -507,7 +508,7 @@ void layout(za::StringView text, const glm::vec3& pos, const glm::vec3& angles, 
     // side facing the viewer (right x up points at them); the gadget's palette. As a CRT
     // (vr_weapon_screen_crt), the face and the text are its image (renderScreens), drawn over the
     // face through the CRT shader, with a glitch of its own: the screens glitch at other moments.
-    glm::vec4 textColor{1.f};
+    glm::vec4 textColor = ink ? glm::vec4{0.12f, 0.055f, 0.02f, 1.f} : glm::vec4{1.f};
     bool imaged = false;
     if(screen)
     {
@@ -994,7 +995,7 @@ void drawOverlay()
     }
 }
 
-void queue(za::StringView text, const glm::vec3& pos, const glm::vec3& angles, Align align, float scale, bool screen)
+void queue(za::StringView text, const glm::vec3& pos, const glm::vec3& angles, Align align, float scale, bool screen, bool ink)
 {
     Queued& q = nextQueued();
     q.text = text;
@@ -1003,6 +1004,7 @@ void queue(za::StringView text, const glm::vec3& pos, const glm::vec3& angles, A
     q.align = align;
     q.scale = scale;
     q.screen = screen;
+    q.ink = ink;
     q.overlay = false;
     q.bars.clear();
     builtFrame = -1;
@@ -1018,6 +1020,7 @@ void queueOverlay(za::StringView text, const glm::vec3& pos, const glm::vec3& an
     q.align = Align::Centre;
     q.scale = scale;
     q.screen = false;
+    q.ink = false;
     q.overlay = true;
     q.bars.assignRange(bars.begin(), bars.end());
     q.backing = backing;
@@ -1189,7 +1192,7 @@ extern "C" void VR_DrawSceneOpaque()
             }
             else
             {
-                layout(q.text, q.pos, q.angles, q.align, q.scale, q.screen);
+                layout(q.text, q.pos, q.angles, q.align, q.scale, q.screen, q.ink);
             }
         }
 

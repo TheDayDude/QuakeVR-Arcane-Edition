@@ -185,3 +185,11 @@ advr_ragdoll_tests.qc
 advr_hammer.qc
 advr_hammer_tests.qc
 advr_range_tests.qc
+
+advr_magic.qc
+advr_magic_tests.qc
+advr_fury.qc
+advr_fury_tests.qc
+
+advr_decap.qc
+advr_decap_tests.qc

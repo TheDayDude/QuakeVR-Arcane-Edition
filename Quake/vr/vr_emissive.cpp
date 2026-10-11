@@ -47,6 +47,8 @@ struct Glow
 
 // The rocket's (3, 1.5, 0.5) and the vore ball's (1.2, 0.5, 1) are DarkPlaces' own trail lights;
 // DarkPlaces gives the others none (the lasers a white EF_DIMLIGHT): these match their trails.
+constexpr Glow magicCharge{{2.5f, 0.7f, 0.06f}, 65.f};
+constexpr Glow furyCharge{{2.5f, 2.1f, 0.12f}, 100.f};
 constexpr Glow scragSpit{{0.8f, 1.8f, 0.3f}, 150.f};    // green, as its spit
 constexpr Glow knightFlame{{1.6f, 0.8f, 0.25f}, 150.f}; // orange fire (six at a time)
 constexpr Glow voreBall{{1.2f, 0.5f, 1.f}, 200.f};      // purple
@@ -111,6 +113,8 @@ void killDlight(int key)
 // choice of trail: a model with a gib or rocket trail is not one of these).
 [[nodiscard]] const Glow* projectileGlow(const entity_t& e)
 {
+    if(!strcmp(e.model->name, "progs/advr_magic_charge.mdl")) return &magicCharge;
+    if(!strcmp(e.model->name, "progs/advr_fury_charge.mdl")) return &furyCharge;
     const int flags = e.model->flags;
     if(flags & (EF_GIB | EF_ZOMGIB))
     {
@@ -446,7 +450,10 @@ extern "C" void VR_ProjectileLight(int ent)
     {
         radius *= 0.92f + 0.08f * za::sin(static_cast<float>(cl.time) * 23.f + static_cast<float>(ent) * 1.7f);
     }
-    setGlow(dl, glow->color, radius, 0.f);
+    if(glow == &furyCharge || glow == &magicCharge) {
+        const float charge = ENTALPHA_DECODE(e.alpha);
+        setGlow(dl, glow->color * (0.2f + 0.8f * charge), radius * (0.35f + 0.65f * charge), 0.f);
+    } else setGlow(dl, glow->color, radius, 0.f);
 }
 
 // A scrag's or a hell knight's spike hitting a wall: a flash of its colour, fading out in a quarter

@@ -3,6 +3,9 @@
 // player's upgrade flags. Zero is the original AD pickup behaviour.
 string(entity r) ADVR_RecordModel = {
     if(!r)return "";
+    if(r.advr_kind==ADVR_TOME)return "progs/advr_tome.mdl";
+    if(r.advr_kind==ADVR_FURY1)return "progs/advr_fury1.mdl";
+    if(r.advr_kind==ADVR_FURY2)return "progs/advr_fury2.mdl";
     if(r.advr_kind==ADVR_HAMMER)return "progs/advr_hammer.mdl";
     if(r.advr_kind==ADVR_CROSSBOW)return "progs/advr_crossbow.mdl";
     if(r.advr_kind==ADVR_SWORD)return "progs/v_ksword.mdl";
@@ -42,8 +45,10 @@ float(entity foe,float roll,float choice) ADVR_LootType = {
     local float c,chance,w,kind;
     c=foe.classtype;chance=0.5;
     if(c==CT_MONARMY){w=IT_SHOTGUN;chance=1;}
+    else if(c==CT_MONSKULLW){w=IT_AXE;kind=ADVR_TOME;chance=1;}
+    else if(c==CT_MONDFURY){w=IT_AXE;kind=ADVR_FURY1;chance=1;}
     else if(c==CT_MONDCROSS){w=IT_AXE;kind=ADVR_CROSSBOW;chance=1;}
-    else if(c==CT_MONKNIGHT || c==CT_MONDGUARD || c==CT_MONDFURY || c==CT_MONZOMBIEK || c==CT_MONINVSWORD){w=IT_AXE;kind=ADVR_SWORD;chance=1;}
+    else if(c==CT_MONKNIGHT || c==CT_MONDGUARD || c==CT_MONZOMBIEK || c==CT_MONINVSWORD){w=IT_AXE;kind=ADVR_SWORD;chance=1;}
     else if(c==CT_MONHELLK || c==CT_MONDBLOOD || c==CT_MONDKNIGHT || c==CT_MONDPRINCE ||
         c==CT_MONDSERG || c==CT_MONCOMM || c==CT_MONDGUARDQ || c==CT_MONDLORD || c==CT_MONJUSTICE || c==CT_MONJUDGE){w=IT_AXE;kind=ADVR_HELLSWORD;chance=1;}
     else if(c==CT_MONOGRE || c==CT_MONHOGRE){
@@ -85,9 +90,15 @@ entity(entity foe,float packed) ADVR_SpawnLoot = {
     return p;
 };
 void() ADVR_EnemyDrop = {
+    local float packed;local entity p;
     if(QVR_AD_API!=1 || self.advr_drop_done)return;
     self.advr_drop_done=1;
-    ADVR_SpawnLoot(self,ADVR_LootType(self,random(),random()));
+    packed=ADVR_LootType(self,random(),random());
+    p=ADVR_SpawnLoot(self,packed);
+    if(p && self.classtype==CT_MONDFURY) {
+        p.velocity_x=p.velocity_x-45;
+        p=ADVR_SpawnLoot(self,IT_AXE+ADVR_FURY2*65536);p.velocity_x=p.velocity_x+45;
+    }
 };
 
 // Range-only stock, spawned after the BSP entities and precaches are ready.
@@ -96,9 +107,10 @@ void() ADVR_RangeSetup = {
     local entity marker,p;local float kind;
     if(mapname!="ad_test11" || find(world,classname,"advr_range_stock"))return;
 
-    for(kind=ADVR_CROSSBOW;kind<=ADVR_HAMMER;kind=kind+1) {
+    for(kind=ADVR_CROSSBOW;kind<=ADVR_TOME;kind=kind+1) {
         marker=spawn();marker.classname="advr_range_stock";marker.advr_kind=kind;
-        if(kind==ADVR_CROSSBOW)setorigin(marker,'-96 64 40');else setorigin(marker,'96 64 40');
+        if(kind==ADVR_CROSSBOW)setorigin(marker,'-96 64 40');else if(kind==ADVR_HAMMER)setorigin(marker,'96 64 40');
+        else if(kind==ADVR_FURY1)setorigin(marker,'176 64 40');else if(kind==ADVR_FURY2)setorigin(marker,'208 64 40');else setorigin(marker,'248 64 40');
         p=ADVR_SpawnLoot(marker,IT_AXE+kind*65536);
         p.owner=world;p.advr_cooldown=0;p.velocity='0 0 0';p.avelocity='0 0 0';p.vr_spin='0 0 0';
         p.angles='0 90 90';setorigin(p,marker.origin);marker.weaponinst=p.weaponinst;
@@ -140,7 +152,7 @@ void(float h) ADVR_SawFrame = {
     if(trace_fraction==1 || !victim.takedamage)return;
     damage=max(0,cvar("vr_chainsaw_damage"))*0.1;victim.axhitme=1;
     if(victim.reflectaxe){Resist_Axe(self,trace_endpos);return;}
-    damage=ADVR_HeadDamage(victim,self,trace_endpos,tip-at,damage);
+    damage=ADVR_MeleeHeadDamage(victim,self,trace_endpos,tip-at,damage);
     SpawnBlood(victim,trace_endpos,normalize(tip-at)*50,damage);
     T_Damage(victim,self,self,damage,DAMARMOR);
     haptic(h,0,0.1,90,0.7);

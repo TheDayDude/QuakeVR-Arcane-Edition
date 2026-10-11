@@ -30,9 +30,9 @@ enum class Align : int
 // Queued for this frame's scene: `pos` is the text block's centre, `angles` face it (Quake
 // angles), each character is 8 * scale units. Lines are separated by '\n'. With `screen`, the
 // text sits on a small screen (a bezel box with a lit face, in the wrist gadget's colours), as on
-// the weapons' ammo counters.
+// the weapons' ammo counters. `ink` uses dark brown lettering for light surfaces such as tome pages.
 void queue(za::StringView text, const glm::vec3& pos, const glm::vec3& angles, Align align, float scale,
-    bool screen = false);
+    bool screen = false, bool ink = false);
 
 // A filled bar in an overlay text (the profiler's panel): on line `line` (0 the first), from character `column`, `cells`
 // characters long (fractions too), over a dim track `track` characters long.

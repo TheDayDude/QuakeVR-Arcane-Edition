@@ -1727,7 +1727,7 @@ extern "C" int VR_IsWeaponModel(const char* name)
     const char* slash = strrchr(name, '/');
     const char* file = slash ? slash + 1 : name;
     return !strncmp(file, "v_", 2) || !strncmp(file, "g_", 2) ||
-        !strcmp(file, "advr_hammer.mdl") || !strcmp(file, "advr_crossbow.mdl") || !strcmp(file, "advr_plasma.mdl") ||
+        !strcmp(file, "advr_tome.mdl") || !strcmp(file, "advr_fury1.mdl") || !strcmp(file, "advr_fury2.mdl") || !strcmp(file, "advr_hammer.mdl") || !strcmp(file, "advr_crossbow.mdl") || !strcmp(file, "advr_plasma.mdl") ||
         !strcmp(file, "advr_widowmaker.mdl") || !strcmp(file, "advr_shadowaxe.mdl");
 }
 

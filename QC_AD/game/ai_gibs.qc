@@ -412,6 +412,7 @@ void() TouchGib =
 //======================================================================
 void(float gib_no, float gib_qty) ThrowGib =
 {
+    if(gib_no==25 && (self.vr_headless || self.advr_decap_kind==1))return;
     if(ADVR_SkipWeaponGib(self,gib_no))return;
 	
 	while (gib_qty > 0) {

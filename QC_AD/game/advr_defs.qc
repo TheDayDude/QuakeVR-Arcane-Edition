@@ -294,3 +294,36 @@ float(entity e,float frameA,float frameB,vector mins,vector maxs,float range) ra
 .vector advr_hammer_tip;
 void() ADVR_RangeSetup;
 
+
+float ADVR_FURY1=11, ADVR_FURY2=12;
+float(entity r) ADVR_IsFury;
+void() ADVR_FuryFrame;
+void() ADVR_FuryClear;
+.float advr_fury_charge,advr_fury_latched,advr_fury_cooldown,advr_fury_fxnext;
+.entity advr_fury_glow,advr_fury_main,advr_fury_off;
+
+entity advr_hit_ent,advr_hit_by;
+float advr_hit_kind,advr_multi_head;
+vector advr_hit_at,advr_hit_vel,advr_multi_at,advr_multi_vel;
+.float advr_decap_kind,advr_decap_done,advr_severed_head;
+.vector advr_decap_at,advr_decap_vel;
+void() ADVR_HitClear;
+void() ADVR_DecapDeath;
+float(entity e) ADVR_DecapAllowed;
+float(entity target,entity attacker,vector at,vector dir,float damage) ADVR_MeleeHeadDamage;
+float(entity e,vector blade,float settle) ragdolldecap = #0;
+vector(entity e,float what) ragdollcut = #0;
+
+float ADVR_TOME=13;
+float parm36,parm37;
+.float mana,advr_mana_seen,advr_mana_paid;
+.entity advr_magic_book,advr_magic_fx;
+.float advr_magic_hand,advr_magic_charge,advr_magic_peak_time,advr_magic_haptic,advr_fireball;
+.vector advr_magic_peak;
+float(entity r) ADVR_IsTome;
+void(entity player) ADVR_TomePickup;
+void(entity victim,entity killer) ADVR_ManaReward;
+void() ADVR_MagicFrame;
+void() ADVR_MagicClear;
+
+float(entity player,float hand) ragdollheld = #0;

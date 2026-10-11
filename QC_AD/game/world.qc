@@ -464,6 +464,15 @@ void() worldspawn =
     precache_model("progs/v_chainsaw.mdl");
     precache_model("progs/advr_crossbow.mdl");
     precache_model("progs/advr_hammer.mdl");
+    precache_model("progs/advr_fury1.mdl");
+    precache_model("progs/advr_fury2.mdl");
+    precache_model("progs/advr_fury_charge.mdl");
+    precache_model("progs/advr_tome.mdl");
+    precache_model("progs/advr_magic_charge.mdl");
+    precache_model(MODEL_PROJ_LAVA);
+    precache_sound("skullwiz/attack.wav");
+    precache_sound("hknight/attack1.wav");
+    precache_model(MODEL_PROJ_FURY1);
     precache_model(MODEL_PROJ_RINGSHOCK);
     precache_sound("ogre/ham_wave.wav");
     precache_sound(GIB_SOUND_HEAVY);

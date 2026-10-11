@@ -1025,6 +1025,13 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "hammerkill")) fixture = "ADVR_TestHammerKill";
         else if(!strcmp(Cmd_Argv(1), "hammerdead")) fixture = "ADVR_TestHammerDead";
         else if(!strcmp(Cmd_Argv(1), "hammergrip")) fixture = "ADVR_TestHammerGrip";
+        else if(!strcmp(Cmd_Argv(1), "decap")) fixture = "ADVR_TestDecap";
+        else if(!strcmp(Cmd_Argv(1), "decaprig")) fixture = "ADVR_TestDecapRig";
+        else if(!strcmp(Cmd_Argv(1), "decapstate")) fixture = "ADVR_TestDecapState";
+        else if(!strcmp(Cmd_Argv(1), "magic")) fixture = "ADVR_TestMagic";
+        else if(!strcmp(Cmd_Argv(1), "magicstate")) fixture = "ADVR_TestMagicState";
+        else if(!strcmp(Cmd_Argv(1), "magicview")) fixture = "ADVR_TestMagicView";
+        else if(!strcmp(Cmd_Argv(1), "fury")) fixture = "ADVR_TestFury";
         else if(!strcmp(Cmd_Argv(1), "range")) fixture = "ADVR_TestRange";
         else if(!strcmp(Cmd_Argv(1), "crossbow")) fixture = "ADVR_TestCrossbow";
         else if(!strcmp(Cmd_Argv(1), "crossbowsaved")) fixture = "ADVR_TestCrossbowSaved";
@@ -1187,6 +1194,52 @@ void adCrossbowDefaults()
     Cvar_SetValueQuick(&adCrossbowVersion, 4.f);
     weapons::resetCaches();
 }
+cvar_t adTomeVersion{"advr_tome_version", "0", CVAR_ARCHIVE};
+void adTomeDefaults()
+{
+    if(adTomeVersion.value >= 1.f) return;
+    using weapons::Key;
+    const int slot=31;
+    weapons::stopInheriting(slot);
+    for(int k=0;k<static_cast<int>(Key::Count);++k)
+        Cvar_SetQuick(weapons::cvar(slot,static_cast<Key>(k)),weapons::cvar(18,static_cast<Key>(k))->string);
+    Cvar_SetQuick(weapons::cvar(slot,Key::ID),"progs/advr_tome.mdl");
+#define AD_TOME_SETTING(key,value) Cvar_SetValueQuick(weapons::cvar(slot,Key::key),value);
+#include "vr_ad_tome.inc"
+#undef AD_TOME_SETTING
+    Cvar_SetValueQuick(&adTomeVersion,1.f);weapons::resetCaches();
+}
+cvar_t adFuryVersion{"advr_fury_version", "0", CVAR_ARCHIVE};
+void adFuryDefaults()
+{
+    if(adFuryVersion.value >= 2.f) return;
+    using weapons::Key;
+    if(adFuryVersion.value >= 1.f) {
+        for(int slot : {29,30}) Cvar_SetValueQuick(weapons::cvar(slot, Key::HandOnlyZ), 1.8f);
+        Cvar_SetValueQuick(weapons::cvar(30, Key::MuzzleOffsetX), 0.f);
+        // The updated model reverses variant two about its grip; refresh its contact calibration.
+#define AD_FURY_SETTING(key, value) if(Key::key==Key::MuzzleAnchorVertex || Key::key==Key::MuzzleOffsetX || Key::key==Key::MuzzleOffsetY || Key::key==Key::MuzzleOffsetZ) Cvar_SetValueQuick(weapons::cvar(30, Key::key), value);
+#include "vr_ad_fury2.inc"
+#undef AD_FURY_SETTING
+        Cvar_SetValueQuick(&adFuryVersion, 2.f); weapons::resetCaches(); return;
+    }
+    for(int slot : {29, 30}) {
+        weapons::stopInheriting(slot);
+        for(int k=0; k<static_cast<int>(Key::Count); ++k)
+            Cvar_SetQuick(weapons::cvar(slot, static_cast<Key>(k)), weapons::cvar(18, static_cast<Key>(k))->string);
+        Cvar_SetQuick(weapons::cvar(slot, Key::ID), slot==29 ? "progs/advr_fury1.mdl" : "progs/advr_fury2.mdl");
+        if(slot==29) {
+#define AD_FURY_SETTING(key, value) Cvar_SetValueQuick(weapons::cvar(slot, Key::key), value);
+#include "vr_ad_fury.inc"
+#undef AD_FURY_SETTING
+        } else {
+#define AD_FURY_SETTING(key, value) Cvar_SetValueQuick(weapons::cvar(slot, Key::key), value);
+#include "vr_ad_fury2.inc"
+#undef AD_FURY_SETTING
+        }
+    }
+    Cvar_SetValueQuick(&adFuryVersion, 2.f); weapons::resetCaches();
+}
 cvar_t adHammerVersion{"advr_hammer_version", "0", CVAR_ARCHIVE};
 void adHammerDefaults()
 {
@@ -1248,7 +1301,7 @@ void adGrabDefaults()
 }
 void adDefaults_f()
 {
-    adGrabDefaults(); adCrossbowDefaults(); adHammerDefaults();
+    adGrabDefaults(); adCrossbowDefaults(); adHammerDefaults(); adFuryDefaults(); adTomeDefaults();
     if(cmd_source != src_command) return;
     if(adSettingsVersion.value >= 2.f) { adPlasmaDefaults(); adWidowDefaults(); adShadowDefaults(); return; }
     if(adSettingsVersion.value >= 1.f)
@@ -1300,6 +1353,8 @@ void init()
     Cvar_RegisterVariable(&adGrabVersion);
     Cvar_RegisterVariable(&adCrossbowVersion);
     Cvar_RegisterVariable(&adHammerVersion);
+    Cvar_RegisterVariable(&adFuryVersion);
+    Cvar_RegisterVariable(&adTomeVersion);
     Cvar_RegisterVariable(&adShadowModelVersion);
     Cvar_RegisterVariable(&adRagdollTest);
     Cmd_AddCommand("advr_defaults", adDefaults_f);

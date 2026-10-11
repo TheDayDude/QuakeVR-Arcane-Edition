@@ -1261,7 +1261,7 @@ void() Touch_Missile =
                 lavadmg=TRUE;
             }
 			// BOSS Custom for ad_mountain (Chthon model)
-			else if (self.classtype == CT_PROJ_FIRETOP) {self.pos1 = DAMAGE_RLFIRETOP; lavadmg=TRUE;}
+			else if (self.classtype == CT_PROJ_FIRETOP) {self.pos1 = DAMAGE_RLFIRETOP; if(self.advr_fireball)self.pos1='40 0 40'; lavadmg=TRUE;}
 			// BOSS Custom for ad_magma (Stone demon model)
 			else if (self.classtype == CT_PROJ_EIDO1) self.pos1 = DAMAGE_RLEIDO;
 			// BOSS Custom for ad_azad (Ice Golem model)

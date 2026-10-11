@@ -123,7 +123,7 @@ void() W_FireAxe =
 		
 		// Spamn blood always up so player can see it
 		SpawnBlood (trace_ent, org, '0 0 1', axedmg);
-		T_Damage (trace_ent, self, self, ADVR_HeadDamage(trace_ent,self,trace_endpos,v_forward,axedmg), DAMARMOR);
+		T_Damage (trace_ent, self, self, ADVR_MeleeHeadDamage(trace_ent,self,trace_endpos,v_forward,axedmg), DAMARMOR);
 		
 		// Monster impact sounds (fleshy stuff)
 		if (trace_ent.flags & FL_MONSTER) {
@@ -174,16 +174,19 @@ void() ClearMultiDamage =
 {
 	multi_ent = world;
 	multi_damage = 0;
+    advr_multi_head=0;ADVR_HitClear();
 };
 
 //----------------------------------------------------------------------
 void() ApplyMultiDamage =
 {
-	local float temp_classgroup;
+	local float temp_classgroup,headshot;
 	
 	// Return if no target entity
 	if (!multi_ent) return;
 	
+	headshot=0;
+    if(advr_multi_head>0) {if(advr_multi_head>=multi_damage*0.5)headshot=1;}
 	// Check for bullet/shell resistance
 	if (multi_ent.resist_shells > 0) 
 		multi_damage = Resist_Damage(multi_ent, IT_SHELLS, multi_damage);
@@ -191,6 +194,11 @@ void() ApplyMultiDamage =
 	// Need to fool T_Damage that damage is coming from a shell
 	temp_classgroup = self.classgroup;
 	self.classgroup = CG_PROJSHELLS;
+    ADVR_HitClear();
+    if(headshot) {
+        advr_hit_ent=multi_ent;advr_hit_by=self;advr_hit_kind=1;
+        advr_hit_at=advr_multi_at;advr_hit_vel=advr_multi_vel;
+    }
 	T_Damage (multi_ent, self, self, multi_damage, DAMARMOR);
 	self.classgroup = temp_classgroup;
 };
@@ -198,14 +206,21 @@ void() ApplyMultiDamage =
 //----------------------------------------------------------------------
 void(entity hit, float damage) AddMultiDamage =
 {
+    local float head;local vector at,vel;
+    head=0;
+    if(advr_hit_ent==hit && advr_hit_by==self && advr_hit_kind)head=damage;
+    at=advr_hit_at;vel=advr_hit_vel;ADVR_HitClear();
 	if (!hit) return;
 	
 	if (hit != multi_ent) {
 		ApplyMultiDamage ();
 		multi_damage = damage;
+        advr_multi_head=0;
 		multi_ent = hit;
 	}
 	else multi_damage = multi_damage + damage;
+    advr_multi_head=advr_multi_head+head;
+    if(head>0){advr_multi_at=at;advr_multi_vel=vel;}
 };
 
 //----------------------------------------------------------------------

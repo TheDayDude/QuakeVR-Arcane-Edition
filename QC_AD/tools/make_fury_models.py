@@ -1,0 +1,94 @@
+"""Adapt installed AD Fury sword debris into held/physical VR swords.
+Usage: python QC_AD/tools/make_fury_models.py GAME/ad
+Preserves the source mesh topology, UVs and indexed skins; no AI artwork needed.
+"""
+from pathlib import Path
+import importlib.util, struct, sys, math
+ROOT=Path(__file__).resolve().parents[2]
+spec=importlib.util.spec_from_file_location('mdl',ROOT/'Misc/quakevr/blender/addons/quakevr_models/mdl.py')
+mdl=importlib.util.module_from_spec(spec);spec.loader.exec_module(mdl)
+def convert(folder,variant):
+    asset=f"progs/w_dfurysword{variant}.mdl"
+    data=None
+    for pak in sorted(folder.glob('*.pak')):
+        b=pak.read_bytes();magic,start,size=struct.unpack_from('<4sii',b);assert magic==b'PACK'
+        for pos in range(start,start+size,64):
+            name,offset,length=struct.unpack_from('<56sii',b,pos)
+            if name.split(b'\0')[0]==asset.encode():data=b[offset:offset+length]
+    loose=folder/asset
+    if loose.exists():data=loose.read_bytes()
+    if data is None:raise SystemExit(f'Installed AD {asset} not found')
+    m=mdl.Model(data,asset);assert len(m.frames)==1 and m.frames[0][0]=='simple'
+    
+    original_skins=list(m.skins);original_tris=list(m.tris)
+    # Rotate by +90 degrees about X; preserve winding and UV seam flags.
+    m.tris=list(original_tris)
+    # Grip at the handle centre; keep the native sword artwork.
+    verts=m.pose_bytes()[0]
+    def rotate(p):return (p[0],-p[2],p[1]) if variant==1 else (-p[0],p[2],p[1])
+    points=[]
+    for v in verts:
+        x,y,z=m.place(v)
+        sign=1 if variant==1 else -1
+        points.append((sign*x*.8,-sign*(z-3.5)*.8,(y+15.5)*.8))
+    low=[min(p[i] for p in points) for i in range(3)];high=[max(p[i] for p in points) for i in range(3)]
+    scale=[(high[i]-low[i])/255 for i in range(3)]
+    packed=bytearray()
+    for p,v in zip(points,verts):
+        normal=mdl.nearest_normal(rotate(mdl.anorms()[v[3]]))
+        packed+=bytes([max(0,min(255,round((p[i]-low[i])/scale[i]))) for i in range(3)]+[normal])
+    m.h[2:5]=scale;m.h[5:8]=low;m.h[8]=max(math.sqrt(sum(x*x for x in p)) for p in points)
+    m.h[9:12]=[0.,0.,0.];m.h[19]=0 # no pickup rotation/trails
+    hdr=bytes([0,0,0,0,255,255,255,0])+b'vr_idle\0'.ljust(16,b'\0')
+    m.frames=[['simple',hdr,bytes(packed)]];m.trailing=b''
+    # Four charge frames use emissive yellow blade skins; geometry stays identical.
+    # Rasterize blade UVs with the MDL back-face seam rule, keeping the grip unlit.
+    sw,sh=m.skin_size;mask=set()
+    for face,*indices in m.tris:
+        if min(points[i][2] for i in indices)<4:continue
+        uv=[(m.st[i][1]+(sw//2 if not face and m.st[i][0] else 0),m.st[i][2]) for i in indices]
+        def edge(a,b,p):return (p[0]-a[0])*(b[1]-a[1])-(p[1]-a[1])*(b[0]-a[0])
+        for y in range(max(0,min(q[1] for q in uv)-1),min(sh,max(q[1] for q in uv)+2)):
+            for x in range(max(0,min(q[0] for q in uv)-1),min(sw,max(q[0] for q in uv)+2)):
+                e=[edge(uv[i],uv[(i+1)%3],(x,y)) for i in range(3)]
+                if min(e)>=0 or max(e)<=0:mask.add(y*sw+x)
+    assert mask
+    for color in (240,241,242,243):
+        skin=bytearray(original_skins[0][2][0])
+        for i in mask:skin[i]=color
+        m.skins.append([0,b'', [bytes(skin)]])
+        m.frames.append(['simple',hdr,bytes(packed)])
+    out=ROOT/f'QC_AD/runtime/progs/advr_fury{variant}.mdl';out.write_bytes(m.to_bytes())
+    check=mdl.Model(out.read_bytes());assert check.skins[:1]==original_skins
+    assert check.tris==original_tris
+    order=mdl.strip_order(m.tris);actual=[m.place(v) for v in m.pose_bytes()[0]]
+    settings=dict(Scale=1,OffsetX=0,OffsetY=0,OffsetZ=0,Pitch=0,Yaw=0,Roll=0,ZeroBlend=0,TwoHZeroBlend=0)
+    # Anchor indices are strip-order indices, NOT the source vertex indices.
+    # Anchor extra offsets use default world units (modelScale / offsetScale = 7/6).
+    def anchor(key,offsetkeys,point):
+        idx=min(range(len(order)),key=lambda i:sum((actual[order[i]][j]-point[j])**2 for j in range(3)))
+        settings[key]=idx
+        for j,k in enumerate(offsetkeys):settings[k]=(point[j]-actual[order[idx]][j])*7/6
+        return idx
+    # Head contact point, shared by melee and floor impacts.
+    anchor('MuzzleAnchorVertex',['MuzzleOffsetX','MuzzleOffsetY','MuzzleOffsetZ'],(-4.7,1.96 if variant==1 else -1.96,28.9))
+    settings.update(WpnButtonMode=0,WpnTextMode=0,Hotspot1Type=0,
+        Hotspot1X=0,Hotspot1Y=0,Hotspot1Z=-8,Hotspot1Pitch=0,Hotspot1Yaw=0,Hotspot1Roll=0,
+        Hotspot1Sticky=1,Hotspot2Type=0,TwoHMode=1,TwoHDisplayMode=0,
+        Mass=1.1,Balance=12,Span=90,SpringStiffness=1.4,SpringDamping=1.1,
+        SpringStrength=1.6,SpringSag=.35,SpringSwing=.5,SpringTwoHanded=1.6,
+        Recoil=0,Flash=0,HandOnlyX=1,HandOnlyY=0,HandOnlyZ=1.8,Hotspot1VisualX=0)
+    inc=ROOT/('Quake/vr/vr_ad_fury.inc' if variant==1 else 'Quake/vr/vr_ad_fury2.inc')
+    inc.write_text('// Generated by QC_AD/tools/make_fury_models.py from installed AD Fury sword debris.\n'+''.join(f'AD_FURY_SETTING({k}, {v:.6f}f)\n' for k,v in settings.items()))
+    print('Converted',len(verts),'vertices;',len(m.tris),'triangles; skin',m.skin_size,'bounds',low,high)
+    print('Head contact strip vertex',settings['MuzzleAnchorVertex'])
+    
+
+if __name__ == "__main__":
+    for variant in (1,2):convert(Path(sys.argv[1]),variant)
+
+    # Tiny marker mesh carries a networked, engine-coloured charge light.
+    marker=mdl.Model((ROOT/'QC_AD/runtime/progs/advr_fury1.mdl').read_bytes())
+    marker.h[2:8]=[x*.001 for x in marker.h[2:8]]
+    marker.h[8]*=.001
+    (ROOT/'QC_AD/runtime/progs/advr_fury_charge.mdl').write_bytes(marker.to_bytes())

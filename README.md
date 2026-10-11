@@ -10,13 +10,14 @@ I've taken the framework for VR weapons, physics and enemies and applied those t
 
 Additional features (WIP):
 Usable Crossbows, Widowmakers, Plasma Guns, and Shadow Axes
-Hammer Ogre's Hammer added
+
+[Tome magic](QC_AD/MAGIC.md): Skull Wizard tomes, free-hand fireballs, and Arcane Essence.
 
 TODO:
-- Fury Knight's Swords
-- Magic System (Tome + Empty Hand + Mana/Essence Ammo)
-- Valve Finger Tracking compat
-- Decapitation
-- Crossbow bonus headshot damage
-- Traps (Nail Bomb? Bear trap? Rune traps?)
-- Rebalance melee a bit
+Fix weapon textures
+Ogre Hammer
+Fury Knight's Swords
+Valve Finger Tracking compat
+Decapitation
+Crossbow bonus headshot damage
+Traps (Nail Bomb? Bear trap? Rune traps?)

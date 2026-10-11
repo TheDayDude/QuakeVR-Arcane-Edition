@@ -646,6 +646,13 @@ void queueWeaponText(const glm::vec3& handRot, bool mirrored, int hand, const vi
     // screen the wrong way).
     angles = composeAngles(handRot, angles);
 
+    if(!strcmp(ve.ent.model->name, "progs/advr_tome.mdl"))
+    {
+        // Ink follows the sloping page and the weighted model, not just the controller aim.
+        const glm::mat3 basis = angleAxes({-ve.ent.angles[0], ve.ent.angles[1], ve.ent.angles[2]});
+        const glm::vec3 normalForward = glm::normalize(glm::vec3{0.f, mirrored ? -0.12f : 0.12f, -1.f});
+        angles = hands::anglesFromVectors(basis * normalForward, basis * glm::vec3{1.f, 0.f, 0.f});
+    }
     const bool main = hand == HAND_MAIN;
     const int clip = cl.stats[main ? STAT_QVR_WEAPONCLIP : STAT_QVR_WEAPONCLIP2];
     const int clipSize = cl.stats[main ? STAT_QVR_WEAPONCLIPSIZE : STAT_QVR_WEAPONCLIPSIZE2];
@@ -657,7 +664,11 @@ void queueWeaponText(const glm::vec3& handRot, bool mirrored, int hand, const vi
     }
 
     char buf[64];
-    if(reloading && clipSize != 0)
+    if(ve.ent.model && !strcmp(ve.ent.model->name, "progs/advr_tome.mdl"))
+    {
+        q_snprintf(buf, sizeof(buf), "Arcane\nEssence\n%d", ammo);
+    }
+    else if(reloading && clipSize != 0)
     {
         q_snprintf(buf, sizeof(buf), "%d/%d\n%d", clip, clipSize, ammo);
     }
@@ -667,8 +678,9 @@ void queueWeaponText(const glm::vec3& handRot, bool mirrored, int hand, const vi
     }
 
     text3d::queue(buf, pos, angles, text3d::Align::Centre, 0.1f * weapons::value(slot, Key::WpnTextScale),
-        vr_weapon_screen.value != 0.f);
-    if(vr_weapon_screen.value != 0.f)
+        vr_weapon_screen.value != 0.f && strcmp(ve.ent.model->name, "progs/advr_tome.mdl"),
+        !strcmp(ve.ent.model->name, "progs/advr_tome.mdl"));
+    if(vr_weapon_screen.value != 0.f && strcmp(ve.ent.model->name, "progs/advr_tome.mdl"))
     {
         emissive::weaponScreenLight(hand, pos, angles); // its faint glow (vr_weapon_screen_light)
     }
@@ -1162,6 +1174,10 @@ void setupWeapon(hands::State& s, int hand, qmodel_t* model, int frame, bool flo
     const glm::vec3 wt = carried ? weaponTurn(rot, slot, mirrored) : heldWeaponTurn(rot, hand, slot, mirrored);
 
     place(ve, model, held.pos, {-wt.x, wt.y, wt.z}, frame, mirrored);
+    // Fury charge frames select yellow fullbright blade skins, aligned with the held mesh.
+    ve.ent.skinnum = model && (!strcmp(model->name, "progs/advr_fury1.mdl") ||
+        !strcmp(model->name, "progs/advr_fury2.mdl")) ? za::clamp(frame, 0, 4) : 0;
+
     if(!floating)
     {
         recordDrawnWeapon(s, hand); // (for its body in Box3D)

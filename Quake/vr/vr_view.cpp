@@ -666,7 +666,8 @@ void queueWeaponText(const glm::vec3& handRot, bool mirrored, int hand, const vi
     char buf[64];
     if(ve.ent.model && !strcmp(ve.ent.model->name, "progs/advr_tome.mdl"))
     {
-        q_snprintf(buf, sizeof(buf), "Arcane\nEssence\n%d", ammo);
+        q_snprintf(buf, sizeof(buf), "Arcane Essence\n%d\n\n%s Fireball\n%s Lightning\n\nTrigger: select", ammo,
+            ve.ent.frame == 1 ? " " : ">", ve.ent.frame == 1 ? ">" : " ");
     }
     else if(reloading && clipSize != 0)
     {

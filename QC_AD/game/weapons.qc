@@ -343,6 +343,7 @@ void() W_FireShotgun =
 
 	if (self.moditems & IT_ARTSHARP) spread_pat = SPREAD_SG2;
 	else spread_pat = SPREAD_SG;
+    if(QVR_AD_API==1 && self.advr_initialized)spread_pat=spread_pat*0.75;
 	
 	// Choose between a projectile or hitscan system
 	if (query_configflag(SVR_SHOTGPROJ)) {

@@ -150,8 +150,9 @@ void(float h) ADVR_SawFrame = {
     traceline(at,tip,2560,self);victim=trace_ent;
     haptic(h,0,0.1,70,0.3);
     if(trace_fraction==1 || !victim.takedamage)return;
-    damage=max(0,cvar("vr_chainsaw_damage"))*0.1;victim.axhitme=1;
+    damage=max(0,cvar("vr_chainsaw_damage"))*0.075;victim.axhitme=1;
     if(victim.reflectaxe){Resist_Axe(self,trace_endpos);return;}
+    ADVR_MeleeFeedback(h,victim,normalize(tip-at)*2,-normalize(tip-at));
     damage=ADVR_MeleeHeadDamage(victim,self,trace_endpos,tip-at,damage);
     SpawnBlood(victim,trace_endpos,normalize(tip-at)*50,damage);
     T_Damage(victim,self,self,damage,DAMARMOR);

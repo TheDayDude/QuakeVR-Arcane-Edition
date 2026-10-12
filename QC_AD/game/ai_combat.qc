@@ -159,6 +159,7 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
        (inflictor.advr_crossbolt || inflictor.movetype==MOVETYPE_FLYMISSILE || inflictor.movetype==MOVETYPE_FLY || inflictor.movetype==MOVETYPE_BOUNCE))
     {
         damage=ADVR_HeadDamage(targ,attacker,inflictor.origin,inflictor.velocity,damage);
+        if(inflictor.advr_crossbolt && advr_hit_kind)damage=damage*2/max(1,cvar("vr_headshot_mult"));
         headkind=advr_hit_kind;headat=advr_hit_at;headvel=advr_hit_vel;
         if(headkind && inflictor.classname=="advr_dropped_weapon" && ADVR_CanParry(inflictor.weaponinst))headkind=2;
         ADVR_HitClear();
@@ -286,6 +287,7 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 	//----------------------------------------------------------------------
 	// do the damage
 	//----------------------------------------------------------------------
+	ADVR_FireHit(targ,inflictor,attacker,take,checkarmor);
 	targ.health = targ.health - take;
     ADVR_HitPush(targ,inflictor,attacker,take);
 	
@@ -620,4 +622,5 @@ void(entity attacker, float damage) T_BeamDamage =
 		head = head.chain;
 	}
 }; */
+
 

@@ -453,6 +453,8 @@ void() worldspawn =
 	precache_model (MODEL_PROJ_FLESH);		// SpawnMeatSpray - projectiles.qc
 	precache_model (MODEL_PROJ_FLESHP);		// Poisonous version of meat
 
+	precache_model("progs/flame2.mdl");
+	precache_sound("vr/torch_light.wav");
 	precache_model ("progs/advr_shadowaxe.mdl");
 	precache_model ("progs/advr_widowmaker.mdl");
 	precache_model ("progs/advr_plasma.mdl");

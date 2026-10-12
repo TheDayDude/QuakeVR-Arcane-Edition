@@ -131,6 +131,8 @@ void() ADVR_Sync = {
     local float i;
     ADVR_ClampClip(self.advr_main);ADVR_ClampClip(self.advr_off);
     for(i=0;i<6;i=i+1)ADVR_ClampClip(self.advr_holster[i]);
+    if(ADVR_IsTome(self.advr_main))self.weaponframe=self.advr_spell;
+    if(ADVR_IsTome(self.advr_off))self.weaponframe2=self.advr_spell;
     if(self.advr_main.advr_kind==ADVR_CROSSBOW && self.advr_main.advr_animtime<=time)self.advr_main.advr_frame=4*(self.advr_main.wi_clip>0);
     if(self.advr_off.advr_kind==ADVR_CROSSBOW && self.advr_off.advr_animtime<=time)self.advr_off.advr_frame=4*(self.advr_off.wi_clip>0);
     self.weaponclipsize=ADVR_RecordCapacity(self.advr_main);
@@ -140,6 +142,8 @@ void() ADVR_Sync = {
     self.weapon2 = 0; self.weaponmodel2 = "progs/hand.mdl"; self.weaponframe2 = 0;
     if (self.advr_main) { self.weapon = self.advr_main.advr_weapon; self.weaponmodel = ADVR_RecordModel(self.advr_main); self.weaponframe = 0; }
     if (self.advr_off) { self.weapon2 = self.advr_off.advr_weapon; self.weaponmodel2 = ADVR_RecordModel(self.advr_off); self.weaponframe2 = 0; }
+    if(ADVR_IsTome(self.advr_main))self.weaponframe=self.advr_spell;
+    if(ADVR_IsTome(self.advr_off))self.weaponframe2=self.advr_spell;
     if(self.advr_main.advr_kind==ADVR_CROSSBOW || self.advr_main.advr_kind==ADVR_SAW || self.advr_main.advr_weapon==IT_SUPER_NAILGUN)self.weaponframe=self.advr_main.advr_frame;
     if(self.advr_off.advr_kind==ADVR_CROSSBOW || self.advr_off.advr_kind==ADVR_SAW || self.advr_off.advr_weapon==IT_SUPER_NAILGUN)self.weaponframe2=self.advr_off.advr_frame;
     if(self.advr_fury_charge>0) {
@@ -154,6 +158,8 @@ void() ADVR_Sync = {
     if(self.advr_off.advr_kind==ADVR_SAW)self.ammocounter2=self.advr_off.wi_clip;
     if(ADVR_IsTome(self.advr_main))self.ammocounter=self.mana;
     if(ADVR_IsTome(self.advr_off))self.ammocounter2=self.mana;
+    if(ADVR_IsTome(self.advr_main))self.weaponframe=self.advr_spell;
+    if(ADVR_IsTome(self.advr_off))self.weaponframe2=self.advr_spell;
     if(self.advr_main.advr_kind==ADVR_CROSSBOW)self.ammocounter=self.advr_bolts;
     if(self.advr_off.advr_kind==ADVR_CROSSBOW)self.ammocounter2=self.advr_bolts;
     self.holsterweaponinst0 = self.advr_holster[0]; self.holsterweaponinst1 = self.advr_holster[1];
@@ -260,6 +266,7 @@ void(float h) ADVR_Touch = {
     local entity p,next,player,oldother;
     local vector pos,nearest;
     local float previous,slot;
+    if(ADVR_HandBusy(h))return;
     pos=ADVR_Pos(h);player=self;oldother=other;
     p=findradius(pos,32);
     while (p) {
@@ -310,9 +317,14 @@ float(float h) ADVR_HolsterHaptic = {
     haptic(h,t*0.7,t*0.3,80,0.2);
     return 1;
 };
+float(float h) ADVR_HandBusy = {
+    if(h)return (self.vrbits0 & 262144)!=0;
+    return (self.vrbits0 & 131072)!=0;
+};
 void(float h) ADVR_GripFrame = {
     local float slot,grip,old;
     local entity r,tmp;
+    if(ADVR_HandBusy(h))return;
     if(self.advr_magic_book && self.advr_magic_hand==h && !ADVR_Hand(h))return;
     grip=ADVR_Grip(h);old=ADVR_OldGrip(h);slot=ADVR_Holster(h);r=ADVR_Hand(h);
     if(!r && ADVR_FGPulled(h))return;
@@ -327,7 +339,7 @@ void(float h) ADVR_GripFrame = {
             if(!r && (tmp.advr_kind==ADVR_SWORD || tmp.advr_kind==ADVR_HELLSWORD || tmp.advr_kind==ADVR_HAMMER))return;
             tmp=ADVR_Hand(1-h);ADVR_SetHand(1-h,r);ADVR_SetHand(h,tmp);return;
         }
-        if(slot>=0) { tmp=self.advr_holster[slot];self.advr_holster[slot]=r;ADVR_SetHand(h,tmp); }
+        if(slot>=0) { tmp=self.advr_holster[slot];self.advr_holster[slot]=r;ADVR_SetHand(h,tmp);if(r || tmp)sound(self,CHAN_AUTO,"reload1.wav",0.3,ATTN_NORM); }
         else if(r && cvar("vr_weapon_grip_mode")==1) {
             // Held guns report their own weapon hotspot, not necessarily zero.
             // Consume the toggle so this press cannot immediately catch the drop.
@@ -339,7 +351,7 @@ void(float h) ADVR_GripFrame = {
         if(!ADVR_Hand(1-h) && ADVR_Grip(1-h) && weaponanygrip(self,1-h)>0) {
             ADVR_SetHand(1-h,r);ADVR_SetHand(h,world);return;
         }
-        if(slot>=0) {tmp=self.advr_holster[slot];self.advr_holster[slot]=r;ADVR_SetHand(h,tmp);}
+        if(slot>=0) {tmp=self.advr_holster[slot];self.advr_holster[slot]=r;ADVR_SetHand(h,tmp);sound(self,CHAN_AUTO,"reload1.wav",0.3,ATTN_NORM);}
         else if(cvar("vr_weapon_grip_mode")==0) ADVR_Drop(h);
     }
     if(grip && !ADVR_Hand(h) && cvar("vr_weapon_grip_mode")!=1) ADVR_Touch(h);
@@ -412,14 +424,29 @@ void(float h) ADVR_Fire = {
     advr_activehand=1;
 };
 
+// Physical contact feedback: separate hands, no repeated clang from scraping.
+float(float h,entity victim,vector velocity,vector normal) ADVR_MeleeFeedback = {
+    local float flesh;
+    flesh=victim.flags & FL_MONSTER;
+    if(time<self.advr_impact_sound[h])return 0;
+    if(!flesh) {
+        if(self.advr_melee_contact[h] || vlen(velocity)<1.5 || velocity*normal>-0.6)return 0;
+        self.advr_melee_contact[h]=1;
+        sound(self,CHAN_AUTO,"weapons/bolt_hit1.wav",0.45,ATTN_NORM);
+    } else sound(self,CHAN_AUTO,"weapons/bolt_hit4.wav",0.55,ATTN_NORM);
+    self.advr_impact_sound[h]=time+0.3;
+    haptic(h,0,0.055,85,0.3);return 1;
+};
+
 // Sweep the weapon tip between tracked poses, plus its current reach. A teleport
 // never becomes a melee swing, and walking without moving the hand adds no power.
 void(float h) ADVR_Melee = {
-    local vector pos,previous,vel,ang,start;
+    local vector pos,previous,vel,ang,start,impactvel;
     local entity victim;
     local float speed,damage,w,nexttime,previous_time,dt;
     if(h) {pos=self.handpos;vel=self.handvel;nexttime=self.mainhand_melee_attack_finished;previous=self.advr_prevmain;previous_time=self.advr_prevmain_time;}
     else {pos=self.offhandpos;vel=self.offhandvel;nexttime=self.offhand_melee_attack_finished;previous=self.advr_prevoff;previous_time=self.advr_prevoff_time;}
+    if(ADVR_HandBusy(h))return;
     if(ADVR_IsTome(ADVR_Hand(h)))return;
     if(self.advr_magic_book && self.advr_magic_hand==h)return;
     if(ADVR_Hand(h).advr_kind==ADVR_HAMMER){ADVR_HammerFrame(h);return;}
@@ -428,13 +455,19 @@ void(float h) ADVR_Melee = {
     else if(w==IT_AXE)pos=pos+v_forward*28;else pos=pos+v_forward*8;
     if(h){self.advr_prevmain=pos;self.advr_prevmain_time=time;}
     else{self.advr_prevoff=pos;self.advr_prevoff_time=time;}
-    speed=vlen(vel);dt=time-previous_time;
+    speed=vlen(vel);dt=time-previous_time;impactvel=vel;
     if(dt>0 && dt<0.1 && vlen(pos-previous)<64 && speed>0.3)
-        speed=max(speed,vlen(pos-previous)/(dt*26.246719*max(0.01,cvar("vr_world_scale"))));
-    if(speed<1.5 || time<nexttime)return;
+    {
+        impactvel=(pos-previous)/(dt*26.246719*max(0.01,cvar("vr_world_scale")));
+        speed=max(speed,vlen(impactvel));
+    }
     traceline(start,pos,2560,self);
     if(trace_fraction==1 && dt>0 && dt<0.1 && vlen(pos-previous)<64)traceline(previous,pos,2560,self);
-    victim=trace_ent;if(trace_fraction==1 || !victim.takedamage)return;
+    victim=trace_ent;
+    if(trace_fraction==1){self.advr_melee_contact[h]=0;return;}
+    if(speed<1.5 || time<nexttime)return;
+    ADVR_MeleeFeedback(h,victim,impactvel,trace_plane_normal);
+    if(!victim.takedamage)return;
     damage=10;if(w==IT_AXE){damage=DAMAGE_PLAYAXE1;if(ADVR_Hand(h).advr_kind==ADVR_SHADOWAXE)damage=DAMAGE_PLAYAXE2;}
     if(ADVR_Hand(h).advr_kind==ADVR_SWORD)damage=15;
     if(ADVR_Hand(h).advr_kind==ADVR_HELLSWORD)damage=20;
@@ -442,7 +475,7 @@ void(float h) ADVR_Melee = {
     if(ADVR_Hand(h).advr_kind==ADVR_AXE)damage=DAMAGE_PLAYAXE1;
     if(ADVR_Hand(h).advr_kind==ADVR_CROSSBOW)damage=10;
     if(ADVR_Hand(h).advr_kind==ADVR_SAW){if(ADVR_Hand(h).advr_frame)return;damage=max(0,cvar("vr_dmg_chainsaw_swing"));}
-    damage=damage*bound(0.5,speed/3,2);victim.axhitme=1;
+    damage=damage*0.75*bound(0.5,speed/3,2);victim.axhitme=1;
     if(ADVR_Hand(h).advr_kind==ADVR_SHADOWAXE)victim.axhitme=2;
     if(victim.reflectaxe) Resist_Axe(self,trace_endpos);
     else {
@@ -476,7 +509,8 @@ void() ADVR_Frame = {
 
 void() ADVR_Reset = {
     local float i;
-    ADVR_MagicClear();self.mana=0;self.advr_mana_seen=0;
+    self.vr_flashlight_state=0;
+    ADVR_MagicClear();self.mana=0;self.advr_mana_seen=0;self.advr_spell=0;self.advr_magic_trigger=0;
     ADVR_FuryClear();self.advr_fury_latched=0;self.advr_fury_cooldown=0;
     self.advr_fury_main=self.advr_fury_off=world;
     self.advr_initialized=0;self.advr_main=world;self.advr_off=world;self.advr_bolts=0;
@@ -485,6 +519,8 @@ void() ADVR_Reset = {
     self.vr_stamina_used=0;self.vr_stamina_time=0;self.vr_melee_hud=0;
     self.advr_hover[0]=self.advr_hover[1]=0;
     self.advr_hover_next[0]=self.advr_hover_next[1]=0;
+    self.advr_melee_contact[0]=self.advr_melee_contact[1]=0;
+    self.advr_impact_sound[0]=self.advr_impact_sound[1]=0;
     self.weaponinst=self.weaponinst2=world;
     for(i=0;i<6;i=i+1)self.advr_holster[i]=world;
 };
@@ -496,7 +532,7 @@ void() ADVR_SaveParms = {
     parm26=self.advr_main.wi_clip;parm27=self.advr_off.wi_clip;
     parm28=self.advr_holster[0].wi_clip;parm29=self.advr_holster[1].wi_clip;
     parm30=self.advr_holster[2].wi_clip;parm31=self.advr_holster[3].wi_clip;
-    parm32=self.advr_holster[4].wi_clip;parm33=self.advr_holster[5].wi_clip;parm34=1;parm35=self.advr_bolts;parm36=self.mana;parm37=self.advr_mana_seen;
+    parm32=self.advr_holster[4].wi_clip;parm33=self.advr_holster[5].wi_clip;parm34=1;parm35=self.advr_bolts;parm36=self.mana;parm37=self.advr_mana_seen;parm38=self.advr_spell;parm39=self.vr_flashlight_state;
 };
 entity(float w) ADVR_Restore = {
     local float kind;local entity r;
@@ -507,7 +543,7 @@ entity(float w) ADVR_Restore = {
 void() ADVR_LoadParms = {
     dprint("ADVR RESTORE ");dprint(ftos(parm17));dprint(" ");dprint(ftos(parm18));dprint(" ");dprint(ftos(parm19));dprint(" items ");dprint(ftos(self.items));dprint("\n");
     if(!parm17)return;
-    self.advr_initialized=1;self.advr_bolts=max(0,parm35);self.mana=bound(0,parm36,9999);self.advr_mana_seen=parm37;
+    self.advr_initialized=1;self.advr_bolts=max(0,parm35);self.mana=bound(0,parm36,9999);self.advr_mana_seen=parm37;self.advr_spell=bound(0,floor(parm38),1);self.vr_flashlight_state=parm39;
     self.advr_main=ADVR_Restore(parm18);self.advr_off=ADVR_Restore(parm19);
     self.advr_holster[0]=ADVR_Restore(parm20);self.advr_holster[1]=ADVR_Restore(parm21);
     self.advr_holster[2]=ADVR_Restore(parm22);self.advr_holster[3]=ADVR_Restore(parm23);
@@ -523,7 +559,7 @@ void() ADVR_LoadParms = {
 void() SetNewParms = {
     ADVR_AD_SetNewParms();
     parm17=parm18=parm19=parm20=parm21=parm22=parm23=parm24=parm25=0;
-    parm26=parm27=parm28=parm29=parm30=parm31=parm32=parm33=parm34=parm35=parm36=parm37=0;
+    parm26=parm27=parm28=parm29=parm30=parm31=parm32=parm33=parm34=parm35=parm36=parm37=parm38=parm39=0;
 };
 void() SetChangeParms = {
     ADVR_AD_SetChangeParms();

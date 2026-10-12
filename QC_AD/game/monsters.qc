@@ -142,6 +142,7 @@ void() monster_liquid_check =
 		self.gibondeath = 1;
 	}
 
+	if(self.liquidbase==CONTENT_LAVA)ADVR_Ignite(self,world);
 	// Liquid damage
 	self.pain_finished = 0;		// Always pain
 	T_Damage (self, world, world, monster_dmg, DAMARMOR);

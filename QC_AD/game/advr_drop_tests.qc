@@ -103,6 +103,16 @@ void() ADVR_TestDrops = {
     setsize(target,'-4 -4 -4','4 4 4');setorigin(target,self.handpos+'30 0 0');
     self.handvel='3 0 0';self.mainhand_melee_attack_finished=0;self.advr_prevmain_time=0;
     ADVR_Melee(1);ADVR_Assert(target.health<1000,"tracked sword deals melee damage at blade reach");
+    ADVR_Assert(target.health==988,"sword swing damage reduced by one quarter");
+    self.advr_melee_contact[1]=0;self.advr_impact_sound[1]=0;
+    ADVR_Assert(!ADVR_MeleeFeedback(1,world,'0 2 0','-1 0 0'),"dragging along a wall is silent");
+    ADVR_Assert(!ADVR_MeleeFeedback(1,world,'0.5 0 0','-1 0 0'),"slow surface contact is silent");
+    ADVR_Assert(ADVR_MeleeFeedback(1,world,'2 0 0','-1 0 0'),"deliberate surface strike gives feedback");
+    self.advr_impact_sound[1]=0;
+    ADVR_Assert(!ADVR_MeleeFeedback(1,world,'2 0 0','-1 0 0'),"continuous contact cannot repeat clang");
+    target.flags=FL_MONSTER;
+    ADVR_Assert(ADVR_MeleeFeedback(1,target,'2 0 0','-1 0 0'),"monster strike gives flesh feedback");
+    target.flags=0;
     self.advr_holster[0]=self.advr_main;self.advr_main=world;
     p=ADVR_SpawnLoot(foe,IT_AXE+ADVR_SAW*65536);ADVR_Catch(p,1);ADVR_Sync();
     self.advr_main.wi_clip=50;self.button0=1;hp=target.health;
@@ -262,10 +272,10 @@ void() ADVR_TestShadow = {
     self.handrot='0 0 0';self.handvel='3 0 0';self.muzzlepos=self.handpos+'28 0 0';
     setsize(p,'-4 -4 -4','4 4 4');setorigin(p,self.handpos+'18 0 0');
     self.mainhand_melee_attack_finished=0;self.advr_prevmain_time=0;ADVR_Melee(1);
-    ADVR_Assert(p.health==1000-DAMAGE_PLAYAXE2 && p.axhitme==2,"Shadow Axe retains upgraded damage and zombie finishing");
+    ADVR_Assert(p.health==1000-ceil(DAMAGE_PLAYAXE2*0.75) && p.axhitme==2,"Shadow Axe retains upgraded damage and zombie finishing");
     self.advr_main=self.advr_off;p.health=1000;
     self.mainhand_melee_attack_finished=0;self.advr_prevmain_time=0;ADVR_Melee(1);
-    ADVR_Assert(p.health==1000-DAMAGE_PLAYAXE1 && p.axhitme==1,"ordinary axe retains normal damage after Shadow pickup");
+    ADVR_Assert(p.health==1000-ceil(DAMAGE_PLAYAXE1*0.75) && p.axhitme==1,"ordinary axe retains normal damage after Shadow pickup");
     remove(p);self.handvel='0 0 0';self.advr_main=r;ADVR_Sync();
     bprint("ADVR SHADOW PASS: native pickup, separate axes, parry, drop/catch, holster and map parms\n");
 };
@@ -498,3 +508,4 @@ void() ADVR_TestStickyGrip = {
     cvar_set("vr_weapon_grip_mode",ftos(mode));self.vrbits0=16384;ADVR_Sync();
     bprint("ADVR STICKY GRIP PASS: both hands, nonzero hotspot release, no recatch, holster toggles and hold mode\n");
 };
+

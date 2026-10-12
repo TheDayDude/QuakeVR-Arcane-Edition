@@ -121,11 +121,12 @@ void(float h) ADVR_HammerFrame = {
         nearhead=tip+normalize(vel)*4;traceline(tip,nearhead,2560,self);
         hit=trace_fraction<1;at=trace_endpos;normal=trace_plane_normal;victim=trace_ent;
     }
-    if(!hit)return;
+    if(!hit){self.advr_melee_contact[h]=0;return;}
     if(victim.takedamage) {
         ADVR_HammerHit(victim,at,vel,speed);r.advr_cooldown=time+0.8;
-        haptic(h,0,0.14,65,0.9);sound(self,CHAN_WEAPON,GIB_SOUND_HEAVY,1,ATTN_NORM);return;
+        ADVR_MeleeFeedback(h,victim,vel,normal);return;
     }
+    ADVR_MeleeFeedback(h,victim,vel,normal);
     if(normal_z>0.65 && vel_z<-2.6 && r.advr_hammer_armed && time>=r.advr_hammer_slam &&
        (self.flags & FL_ONGROUND) && fabs(at_z-(self.origin_z+self.mins_z))<24) {
         r.advr_hammer_armed=0;r.advr_hammer_slam=time+2;r.advr_cooldown=time+0.8;

@@ -44,6 +44,7 @@ void() ADVR_ThrownHit = {
     if(ADVR_IsFury(self.weaponinst) || self.weaponinst.advr_kind==ADVR_SWORD || self.weaponinst.advr_kind==ADVR_HELLSWORD)base=60;
     if(self.weaponinst.advr_kind==ADVR_SAW)base=50;
     if(self.weaponinst.advr_kind==ADVR_HAMMER)base=65;
+    if(self.weaponinst.advr_kind!=ADVR_HAMMER)base=base*0.75;
     damage=damage*base*weaponvalue(self.model,"w_throwdmg")*weightdamage(mass)*max(0,cvar("vr_weapon_throw_damage_mult"));
     if(damage<=0)return;
     SpawnBlood(other,self.origin,self.velocity,damage);

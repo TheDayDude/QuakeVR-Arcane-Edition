@@ -203,6 +203,15 @@ void() ADVR_BeginMelee;
 .entity advr_guard_player;
 .float advr_guard_hand;
 
+.entity advr_burn;
+.entity advr_fire_next,advr_fire_flames;
+.float advr_fire_end,advr_fire_tick,advr_fire_spread,advr_fire_count,advr_fire_model,advr_fire_dead;
+.vector advr_fire_offset;
+void(entity target,entity attacker) ADVR_Ignite;
+void(entity target,entity inflictor,entity attacker,float damage,float kind) ADVR_FireHit;
+void() ADVR_TestFire;
+float(entity e,vector a,vector b,float radius) hitmodel_any = #0;
+void(entity e,vector org,vector dir,float kind,float amount,float extra) woundevent = #0;
 // AD combat adapter: existing engine particle, model-hit and rigid-body APIs.
 void(vector origin,vector direction,float preset,float count) particle2 = #0;
 vector(entity e,float maximum) modelbounds = #0;
@@ -315,11 +324,16 @@ float(entity e,vector blade,float settle) ragdolldecap = #0;
 vector(entity e,float what) ragdollcut = #0;
 
 float ADVR_TOME=13;
-float parm36,parm37;
+float parm36,parm37,parm38,parm39;
+.float vr_flashlight_state;
+float(float h) ADVR_HandBusy;
+.float advr_melee_contact[2],advr_impact_sound[2];
+float(float h,entity victim,vector velocity,vector normal) ADVR_MeleeFeedback;
 .float mana,advr_mana_seen,advr_mana_paid;
 .entity advr_magic_book,advr_magic_fx;
 .float advr_magic_hand,advr_magic_charge,advr_magic_peak_time,advr_magic_haptic,advr_fireball;
-.vector advr_magic_peak;
+.vector advr_magic_peak,advr_magic_direction;
+.float advr_spell,advr_magic_trigger,advr_magic_ready,advr_magic_burst,advr_magic_tick;
 float(entity r) ADVR_IsTome;
 void(entity player) ADVR_TomePickup;
 void(entity victim,entity killer) ADVR_ManaReward;

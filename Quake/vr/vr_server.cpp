@@ -1030,6 +1030,10 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "decapstate")) fixture = "ADVR_TestDecapState";
         else if(!strcmp(Cmd_Argv(1), "magic")) fixture = "ADVR_TestMagic";
         else if(!strcmp(Cmd_Argv(1), "magicstate")) fixture = "ADVR_TestMagicState";
+        else if(!strcmp(Cmd_Argv(1), "fireview")) fixture = "ADVR_TestFireView";
+        else if(!strcmp(Cmd_Argv(1), "fire")) fixture = "ADVR_TestFire";
+        else if(!strcmp(Cmd_Argv(1), "flashlight")) fixture = "ADVR_TestFlashlight";
+        else if(!strcmp(Cmd_Argv(1), "flashlightview")) fixture = "ADVR_TestFlashlightView";
         else if(!strcmp(Cmd_Argv(1), "magicview")) fixture = "ADVR_TestMagicView";
         else if(!strcmp(Cmd_Argv(1), "fury")) fixture = "ADVR_TestFury";
         else if(!strcmp(Cmd_Argv(1), "range")) fixture = "ADVR_TestRange";
@@ -1197,7 +1201,7 @@ void adCrossbowDefaults()
 cvar_t adTomeVersion{"advr_tome_version", "0", CVAR_ARCHIVE};
 void adTomeDefaults()
 {
-    if(adTomeVersion.value >= 1.f) return;
+    if(adTomeVersion.value >= 2.f) return;
     using weapons::Key;
     const int slot=31;
     weapons::stopInheriting(slot);
@@ -1207,7 +1211,7 @@ void adTomeDefaults()
 #define AD_TOME_SETTING(key,value) Cvar_SetValueQuick(weapons::cvar(slot,Key::key),value);
 #include "vr_ad_tome.inc"
 #undef AD_TOME_SETTING
-    Cvar_SetValueQuick(&adTomeVersion,1.f);weapons::resetCaches();
+    Cvar_SetValueQuick(&adTomeVersion,2.f);weapons::resetCaches();
 }
 cvar_t adFuryVersion{"advr_fury_version", "0", CVAR_ARCHIVE};
 void adFuryDefaults()
@@ -1299,10 +1303,21 @@ void adGrabDefaults()
     Cvar_SetValueQuick(&vr_forcegrab_hue, 120.f);
     Cvar_SetValueQuick(&adGrabVersion, 1.f);
 }
+cvar_t adBurnChance{"advr_burn_explosion_chance", "0.3", CVAR_ARCHIVE};
+cvar_t adFlashlightVersion{"advr_flashlight_version", "0", CVAR_ARCHIVE};
+cvar_t adBalanceVersion{"advr_balance_version", "0", CVAR_ARCHIVE};
 void adDefaults_f()
 {
     adGrabDefaults(); adCrossbowDefaults(); adHammerDefaults(); adFuryDefaults(); adTomeDefaults();
     if(cmd_source != src_command) return;
+    if(adFlashlightVersion.value < 1.f) {
+        Cvar_SetValueQuick(&vr_flashlight, 1.f);
+        Cvar_SetValueQuick(&adFlashlightVersion, 1.f);
+    }
+    if(adBalanceVersion.value < 1.f) {
+        Cvar_SetValueQuick(&vr_parry_stamina_max, 125.f);
+        Cvar_SetValueQuick(&adBalanceVersion, 1.f);
+    }
     if(adSettingsVersion.value >= 2.f) { adPlasmaDefaults(); adWidowDefaults(); adShadowDefaults(); return; }
     if(adSettingsVersion.value >= 1.f)
     {
@@ -1347,6 +1362,9 @@ void adDefaults_f()
 
 void init()
 {
+    Cvar_RegisterVariable(&adBurnChance);
+    Cvar_RegisterVariable(&adFlashlightVersion);
+    Cvar_RegisterVariable(&adBalanceVersion);
     Cvar_RegisterVariable(&adSettingsVersion);
     Cvar_RegisterVariable(&adPlasmaModelVersion);
     Cvar_RegisterVariable(&adWidowModelVersion);

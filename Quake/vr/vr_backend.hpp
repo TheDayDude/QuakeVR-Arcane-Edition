@@ -80,6 +80,9 @@ struct HandInput
     float triggerValue{0.f};
     float gripValue{0.f};
     bool thumbTouch{false};
+    // Cosmetic only, thumb through little finger. Never generates button input.
+    float fingerCurl[5]{};
+    unsigned fingerValid{0}; // one validity bit per finger; missing data uses analog fallback
     bool triggerTouch{false}; // the index finger on the trigger (Touch, Index controllers; round 21)
 };
 

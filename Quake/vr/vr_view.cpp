@@ -127,6 +127,9 @@ double fingerFramesTime = -1.0;
 {
     const auto curl = [](float v) { return CLAMP(0.f, v + vr_finger_grip_bias.value, 1.f); };
 
+    if(vr_finger_tracking.value && finger>=FingerThumb && finger<=FingerPinky &&
+       (in.fingerValid & (1u << (finger-FingerThumb))))
+        return CLAMP(0.f,in.fingerCurl[finger-FingerThumb],1.f);
     switch(finger)
     {
         case FingerBase: return 0.f;
@@ -7041,6 +7044,7 @@ void dumpView_f()
             h == HAND_MAIN ? "main" : "off", in.triggerValue, in.gripValue, in.thumbTouch, fingerFrames[h][FingerThumb],
             fingerFrames[h][FingerIndex], fingerFrames[h][FingerMiddle], fingerFrames[h][FingerRing],
             fingerFrames[h][FingerPinky]);
+        Con_Printf("  tracked fingers mask %u, buttons trigger %d grip %d\n",in.fingerValid,in.trigger,in.grip);
         Con_Printf("  finger tweaks %+.2f %+.2f %+.2f %+.2f %+.2f (frame/open:", fingerBias[h][FingerThumb],
             fingerBias[h][FingerIndex], fingerBias[h][FingerMiddle], fingerBias[h][FingerRing], fingerBias[h][FingerPinky]);
         for(int f = FingerThumb; f < FingerCount; f++)

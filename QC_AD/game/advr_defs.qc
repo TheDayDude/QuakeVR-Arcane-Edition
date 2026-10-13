@@ -331,6 +331,7 @@ float(float h) ADVR_HandBusy;
 float(float h,entity victim,vector velocity,vector normal) ADVR_MeleeFeedback;
 .float mana,advr_mana_seen,advr_mana_paid;
 .entity advr_magic_book,advr_magic_fx;
+.float advr_magic_release_until;
 .float advr_magic_hand,advr_magic_charge,advr_magic_peak_time,advr_magic_haptic,advr_fireball;
 .vector advr_magic_peak,advr_magic_direction;
 .float advr_spell,advr_magic_trigger,advr_magic_ready,advr_magic_burst,advr_magic_tick;

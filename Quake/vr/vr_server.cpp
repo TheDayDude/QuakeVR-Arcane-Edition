@@ -1201,8 +1201,12 @@ void adCrossbowDefaults()
 cvar_t adTomeVersion{"advr_tome_version", "0", CVAR_ARCHIVE};
 void adTomeDefaults()
 {
-    if(adTomeVersion.value >= 2.f) return;
+    if(adTomeVersion.value >= 3.f) return;
     using weapons::Key;
+    if(adTomeVersion.value >= 2.f) {
+        Cvar_SetValueQuick(weapons::cvar(31,Key::HandOnlyY),2.f);
+        Cvar_SetValueQuick(&adTomeVersion,3.f);weapons::resetCaches();return;
+    }
     const int slot=31;
     weapons::stopInheriting(slot);
     for(int k=0;k<static_cast<int>(Key::Count);++k)
@@ -1211,7 +1215,7 @@ void adTomeDefaults()
 #define AD_TOME_SETTING(key,value) Cvar_SetValueQuick(weapons::cvar(slot,Key::key),value);
 #include "vr_ad_tome.inc"
 #undef AD_TOME_SETTING
-    Cvar_SetValueQuick(&adTomeVersion,2.f);weapons::resetCaches();
+    Cvar_SetValueQuick(&adTomeVersion,3.f);weapons::resetCaches();
 }
 cvar_t adFuryVersion{"advr_fury_version", "0", CVAR_ARCHIVE};
 void adFuryDefaults()

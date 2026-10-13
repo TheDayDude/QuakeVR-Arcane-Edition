@@ -187,6 +187,12 @@ public:
         }
         getVisibilityMask = nullptr;
 
+        for(auto& tracker : fingerTrackers) {
+            if(tracker!=XR_NULL_HANDLE && destroyHandTracker)destroyHandTracker(tracker);
+            tracker=XR_NULL_HANDLE;
+        }
+        createHandTracker=nullptr;destroyHandTracker=nullptr;locateHandJoints=nullptr;
+        fingerExtension=fingerSourceExtension=fingerRangeExtension=false;
         for(XrSpace& space : handSpaces)
         {
             destroySpace(space);
@@ -315,6 +321,7 @@ public:
         {
             const int side = handSide(h);
             tracking.hands[h] = locate(handSpaces[side], time);
+            readFingers(tracking.input.hands[h],side,time,tracking.hands[h].valid);
             tracking.gripInHand[h] = GripInRaw{};
             if(vr_controller_legacy_pose.value)
             {
@@ -532,6 +539,11 @@ private:
     XrFrameState frameState{XR_TYPE_FRAME_STATE};
     XrView views[2]{{XR_TYPE_VIEW}, {XR_TYPE_VIEW}};
     XrViewConfigurationView configViews[2]{{XR_TYPE_VIEW_CONFIGURATION_VIEW}, {XR_TYPE_VIEW_CONFIGURATION_VIEW}};
+    bool fingerExtension{false},fingerSourceExtension{false},fingerRangeExtension{false};
+    XrHandTrackerEXT fingerTrackers[2]{XR_NULL_HANDLE,XR_NULL_HANDLE};
+    PFN_xrCreateHandTrackerEXT createHandTracker{nullptr};
+    PFN_xrDestroyHandTrackerEXT destroyHandTracker{nullptr};
+    PFN_xrLocateHandJointsEXT locateHandJoints{nullptr};
     bool visibilityMaskExtension{false}; // XR_KHR_visibility_mask enabled
     char runtime[XR_MAX_RUNTIME_NAME_SIZE + 32]{}; // its name and version
     bool vdxr{false};                             // Virtual Desktop's own runtime (VDXR)
@@ -808,6 +820,15 @@ private:
             {
                 extensions.pushBack("XR_META_touch_controller_plus");
             }
+            if(!strcmp(p.extensionName,XR_EXT_HAND_TRACKING_EXTENSION_NAME)) {
+                extensions.pushBack(XR_EXT_HAND_TRACKING_EXTENSION_NAME);fingerExtension=true;
+            }
+            if(!strcmp(p.extensionName,XR_EXT_HAND_TRACKING_DATA_SOURCE_EXTENSION_NAME)) {
+                extensions.pushBack(XR_EXT_HAND_TRACKING_DATA_SOURCE_EXTENSION_NAME);fingerSourceExtension=true;
+            }
+            if(!strcmp(p.extensionName,XR_EXT_HAND_JOINTS_MOTION_RANGE_EXTENSION_NAME)) {
+                extensions.pushBack(XR_EXT_HAND_JOINTS_MOTION_RANGE_EXTENSION_NAME);fingerRangeExtension=true;
+            }
             // The lenses' hidden area (vr_visibility_mask).
             if(!strcmp(p.extensionName, XR_KHR_VISIBILITY_MASK_EXTENSION_NAME))
             {
@@ -874,6 +895,7 @@ private:
             return false;
         }
 
+        createFingerTrackers();
         getVisibilityMask = nullptr;
         if(visibilityMaskExtension)
         {
@@ -881,6 +903,72 @@ private:
         }
         Con_Printf("OpenXR: hidden area mesh %s\n", getVisibilityMask ? "available (XR_KHR_visibility_mask)" : "not available");
         return true;
+    }
+
+    void createFingerTrackers()
+    {
+        if(!fingerExtension) {
+            Con_Printf("OpenXR: individual finger tracking unavailable; using trigger/grip animation\n");return;
+        }
+        XrSystemHandTrackingPropertiesEXT hands{XR_TYPE_SYSTEM_HAND_TRACKING_PROPERTIES_EXT};
+        XrSystemProperties props{XR_TYPE_SYSTEM_PROPERTIES};props.next=&hands;
+        if(XR_FAILED(xrGetSystemProperties(instance,systemId,&props)) || !hands.supportsHandTracking)return;
+        xrGetInstanceProcAddr(instance,"xrCreateHandTrackerEXT",reinterpret_cast<PFN_xrVoidFunction*>(&createHandTracker));
+        xrGetInstanceProcAddr(instance,"xrDestroyHandTrackerEXT",reinterpret_cast<PFN_xrVoidFunction*>(&destroyHandTracker));
+        xrGetInstanceProcAddr(instance,"xrLocateHandJointsEXT",reinterpret_cast<PFN_xrVoidFunction*>(&locateHandJoints));
+        if(!createHandTracker || !destroyHandTracker || !locateHandJoints)return;
+        for(int side=0;side<2;++side) {
+            XrHandTrackingDataSourceEXT sources[]{XR_HAND_TRACKING_DATA_SOURCE_CONTROLLER_EXT,XR_HAND_TRACKING_DATA_SOURCE_UNOBSTRUCTED_EXT};
+            XrHandTrackingDataSourceInfoEXT source{XR_TYPE_HAND_TRACKING_DATA_SOURCE_INFO_EXT};
+            source.requestedDataSourceCount=2;source.requestedDataSources=sources;
+            XrHandTrackerCreateInfoEXT info{XR_TYPE_HAND_TRACKER_CREATE_INFO_EXT};
+            info.hand=side==0 ? XR_HAND_LEFT_EXT : XR_HAND_RIGHT_EXT;
+            info.handJointSet=XR_HAND_JOINT_SET_DEFAULT_EXT;
+            if(fingerSourceExtension)info.next=&source;
+            const XrResult result=createHandTracker(session,&info,&fingerTrackers[side]);
+            if(XR_FAILED(result))fingerTrackers[side]=XR_NULL_HANDLE;
+            Con_Printf("OpenXR: %s cosmetic finger tracker %s\n",side==0 ? "left" : "right",
+                fingerTrackers[side]!=XR_NULL_HANDLE ? "ready" : "unavailable");
+        }
+    }
+
+    void readFingers(HandInput& input,int side,XrTime time,bool controllerValid) const
+    {
+        input.fingerValid=0; // Never retain stale joints across loss of tracking.
+        if(!vr_finger_tracking.value || !controllerValid || !locateHandJoints || fingerTrackers[side]==XR_NULL_HANDLE)return;
+        XrHandJointLocationEXT joints[XR_HAND_JOINT_COUNT_EXT]{};
+        XrHandJointLocationsEXT locations{XR_TYPE_HAND_JOINT_LOCATIONS_EXT};
+        locations.jointCount=XR_HAND_JOINT_COUNT_EXT;locations.jointLocations=joints;
+        XrHandJointsMotionRangeInfoEXT range{XR_TYPE_HAND_JOINTS_MOTION_RANGE_INFO_EXT};
+        range.handJointsMotionRange=XR_HAND_JOINTS_MOTION_RANGE_UNOBSTRUCTED_EXT;
+        XrHandJointsLocateInfoEXT info{XR_TYPE_HAND_JOINTS_LOCATE_INFO_EXT};
+        info.baseSpace=worldSpace;info.time=time;
+        if(fingerRangeExtension)info.next=&range;
+        if(XR_FAILED(locateHandJoints(fingerTrackers[side],&info,&locations)) || !locations.isActive)return;
+        // Thumb: metacarpal to tip; other fingers: proximal to tip.
+        // Joint bend angles are independent of wrist position, scale and handedness.
+        constexpr int first[]{XR_HAND_JOINT_THUMB_METACARPAL_EXT,XR_HAND_JOINT_INDEX_PROXIMAL_EXT,
+            XR_HAND_JOINT_MIDDLE_PROXIMAL_EXT,XR_HAND_JOINT_RING_PROXIMAL_EXT,XR_HAND_JOINT_LITTLE_PROXIMAL_EXT};
+        for(int f=0;f<5;++f) {
+            glm::vec3 p[4];bool valid=true;
+            for(int j=0;j<4;++j) {
+                const auto& joint=joints[first[f]+j];
+                if(!(joint.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)){valid=false;break;}
+                const auto& v=joint.pose.position;p[j]={v.x,v.y,v.z};
+                if(!(glm::dot(p[j],p[j])<1e8f)){valid=false;break;}
+            }
+            if(!valid)continue;
+            glm::vec3 d[3];
+            for(int j=0;j<3;++j) {
+                d[j]=p[j+1]-p[j];const float len=glm::length(d[j]);
+                if(!(len>0.0001f)){valid=false;break;}d[j]/=len;
+            }
+            if(!valid)continue;
+            const float angle=za::atan2(glm::length(glm::cross(d[0],d[1])),glm::dot(d[0],d[1]))+
+                za::atan2(glm::length(glm::cross(d[1],d[2])),glm::dot(d[1],d[2]));
+            input.fingerCurl[f]=CLAMP(0.f,angle/(f==0 ? 2.1f : 3.141593f),1.f);
+            input.fingerValid |= 1u<<f;
+        }
     }
 
     bool createSpaces()

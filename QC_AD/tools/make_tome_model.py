@@ -53,7 +53,7 @@ if __name__=='__main__':
  write_mesh(m,points);m.frames.append([*m.frames[0]]);dest=ROOT/'QC_AD/runtime/progs';dest.mkdir(exist_ok=True,parents=True);(dest/'advr_tome.mdl').write_bytes(m.to_bytes())
  # The text sits on the open spread, facing up toward the reader.
  order=mdl.strip_order(m.tris);actual=[m.place(v) for v in m.pose_bytes()[0]]
- settings=dict(Scale=1,OffsetX=0,OffsetY=0,OffsetZ=0,Pitch=0,Yaw=0,Roll=-90,ZeroBlend=0,TwoHZeroBlend=0,HandOnlyX=3,HandOnlyY=0,HandOnlyZ=0,Hotspot1Type=0,Hotspot2Type=0,WpnButtonMode=0,WpnTextMode=1,WpnTextPitch=90,WpnTextYaw=0,WpnTextRoll=0,WpnTextScale=.48,Mass=.8,Balance=4,Span=35,Recoil=0,Flash=0)
+ settings=dict(Scale=1,OffsetX=0,OffsetY=0,OffsetZ=0,Pitch=0,Yaw=0,Roll=-90,ZeroBlend=0,TwoHZeroBlend=0,HandOnlyX=3,HandOnlyY=2,HandOnlyZ=0,Hotspot1Type=0,Hotspot2Type=0,WpnButtonMode=0,WpnTextMode=1,WpnTextPitch=90,WpnTextYaw=0,WpnTextRoll=0,WpnTextScale=.48,Mass=.8,Balance=4,Span=35,Recoil=0,Flash=0)
  for key,keys,target in [('WpnTextAnchorVertex',['WpnTextX','WpnTextY','WpnTextZ'],(4.5,3.3,3.8)),('MuzzleAnchorVertex',['MuzzleOffsetX','MuzzleOffsetY','MuzzleOffsetZ'],(9,0,3))]:
   ix=min(range(len(order)),key=lambda i:sum((actual[order[i]][j]-target[j])**2 for j in range(3)));settings[key]=ix
   for j,k in enumerate(keys):settings[k]=(target[j]-actual[order[ix]][j])*7/6

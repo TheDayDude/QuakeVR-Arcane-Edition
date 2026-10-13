@@ -112,6 +112,18 @@ bool setMockButton(int hand, const char* control, bool on)
 // vr_mock_fingers <main|off> <trigger> <grip> [<thumb 0|1> [<index on the trigger 0|1>]]: the finger sensors alone
 // (analog trigger and grip, 0..1, the thumb resting, the index finger touching the trigger; by default when the trigger
 // is pressed at all), without pressing the buttons: for the drawn fingers (round 21's curl sweeps).
+void mockTrackedFingers_f()
+{
+    const int h=Cmd_Argc()>=3 ? mockHand(Cmd_Argv(1)) : -1;
+    if(h<0 || (Cmd_Argc()!=3 && Cmd_Argc()!=7)) {
+        Con_Printf("usage: vr_mock_tracked_fingers <main|off> <thumb index middle ring little | off>\n");return;
+    }
+    HandInput& in=mockInput.hands[h];in.fingerValid=0;
+    if(Cmd_Argc()==7) {
+        for(int f=0;f<5;++f)in.fingerCurl[f]=CLAMP(0.f,static_cast<float>(Q_atof(Cmd_Argv(2+f))),1.f);
+        in.fingerValid=31;
+    }
+}
 void mockFingers_f()
 {
     const int hand = Cmd_Argc() >= 4 ? mockHand(Cmd_Argv(1)) : -1;
@@ -1063,6 +1075,7 @@ void registerMockCommands()
     Cmd_AddCommand("vr_mock_hand_to", mockHandTo_f);
     Cmd_AddCommand("vr_mock_look", mockLook_f);
     Cmd_AddCommand("vr_mock_camera", mockCamera_f);
+    Cmd_AddCommand("vr_mock_tracked_fingers", mockTrackedFingers_f);
     Cmd_AddCommand("vr_mock_fingers", mockFingers_f);
     Cmd_AddCommand("vr_mock_play", mockPlay_f);
 }

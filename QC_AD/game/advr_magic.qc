@@ -16,6 +16,7 @@ void(entity victim,entity killer) ADVR_ManaReward = {
 void() ADVR_MagicClear = {
     if(self.advr_magic_fx){remove(self.advr_magic_fx);self.advr_magic_fx=world;}
     self.advr_magic_book=world;self.advr_magic_charge=0;self.advr_magic_peak='0 0 0';self.advr_magic_peak_time=0;
+    self.advr_magic_release_until=0;
     self.advr_magic_ready=0;self.advr_magic_burst=0;self.advr_magic_tick=0;self.advr_magic_haptic=0;
 };
 // Book-hand trigger selects a spell; holding the trigger never cycles repeatedly.
@@ -98,7 +99,15 @@ void() ADVR_MagicFrame = {
         }
     }
     if(!grip) {
-        if(old && self.advr_magic_charge>=0.65 && self.mana>=1 && time-self.advr_magic_peak_time<=0.18 && vlen(self.advr_magic_peak)>=0.45) {
+        // A charged spell waits briefly for a flick after the release edge.
+        // Uncharged releases still cancel, and an open hand cannot extend the window.
+        if(!self.advr_magic_release_until) {
+            if(!old || self.advr_magic_charge<0.65){ADVR_MagicClear();return;}
+            self.advr_magic_release_until=time+0.2;
+        }
+        if(time>self.advr_magic_release_until){ADVR_MagicClear();return;}
+        if(self.advr_magic_fx)setorigin(self.advr_magic_fx,at);
+        if(self.advr_magic_charge>=0.65 && self.mana>=1 && time-self.advr_magic_peak_time<=0.18 && vlen(self.advr_magic_peak)>=0.45) {
             dir=normalize(self.advr_magic_peak);traceline(at,at+dir*6,TRUE,self);
             if(trace_fraction==1 && pointcontents(trace_endpos)!=CONTENT_SOLID) {
                 if(self.advr_spell==1) {
@@ -119,9 +128,11 @@ void() ADVR_MagicFrame = {
                     haptic(h,0,0.12,85,0.6);
                 }
             }
+            ADVR_MagicClear();return;
         }
-        ADVR_MagicClear();return;
+        return;
     }
+    self.advr_magic_release_until=0; // re-gripping resumes the held charge
     self.advr_magic_charge=min(1,self.advr_magic_charge+bound(0,frametime,0.05));
     if(!self.advr_magic_fx) {
         fx=spawn();fx.classname="advr_magic_charge";fx.owner=self;fx.solid=SOLID_NOT;fx.movetype=MOVETYPE_NONE;

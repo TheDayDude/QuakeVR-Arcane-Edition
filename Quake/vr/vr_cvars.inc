@@ -2003,6 +2003,7 @@ QVR_CVAR(vr_handgrenade_arm, "0", CVAR_ARCHIVE)         // 0: the trigger pulls 
 QVR_CVAR(vr_ogre_aim_height, "1", CVAR_ARCHIVE)          // ogres (and zombies) lob at your height: a ballistic arc at their throw's speed (0: Quake's flat lob)
 QVR_CVAR(vr_activestartpaknameidx, "0", CVAR_ARCHIVE)
 QVR_CVAR(vr_verbosebots, "0", CVAR_NONE)
+QVR_CVAR(vr_finger_tracking, "1", CVAR_ARCHIVE) // optional OpenXR cosmetic finger curls
 QVR_CVAR(vr_finger_grip_bias, "0.0", CVAR_ARCHIVE)
 QVR_CVAR(vr_forcegrabbable_ammo_boxes, "1", CVAR_ARCHIVE)
 QVR_CVAR(vr_forcegrabbable_health_boxes, "1", CVAR_ARCHIVE)

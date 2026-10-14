@@ -494,7 +494,7 @@ extern "C" void VR_ReadMoveExtras(client_t* client)
         clientBits.resize(clientNum + 1);
     }
     ClientBits& bits = clientBits[clientNum];
-    bits.received = move.vrBits0;
+    bits.received = move.vrBits0 & 0x3fff; // top bits are wire-only tome stick clicks
     // Bit 14 (QC QVR_VRBITS0_HANDSTRACKED): this client's hands come from real tracking, so the QC
     // can tell a VR player from a flat-screen one (and from a bot).
     const int tracked = (move.buttons & QVR_BUTTON_HANDSTRACKED) ? (1 << 14) : 0;
@@ -512,7 +512,9 @@ extern "C" void VR_ReadMoveExtras(client_t* client)
     setFieldVec(ent, f.teleport_target, move.teleportTarget);
     setFieldFloat(ent, f.offhand_hotspot, move.hotspots[0]);
     setFieldFloat(ent, f.sawcord, move.sawCord);
-    setFieldFloat(ent, f.handdrop, move.handDrop);
+    setFieldFloat(ent, f.handdrop, move.handDrop & 15);
+    setFieldFloat(ent, f.advr_magic_buttons, move.handDrop >> 4);
+    setFieldFloat(ent, f.advr_magic_sticks, move.vrBits0 >> 14);
     setFieldFloat(ent, f.mainhand_hotspot, move.hotspots[1]);
     setFieldVec(ent, f.roomscalemove, move.roomscaleMove);
     setFieldFloat(ent, f.button3, (move.buttons & QVR_BUTTON_OFFHANDATTACK) ? 1.f : 0.f);
@@ -602,6 +604,15 @@ extern "C" void VR_CalcStats(client_t* client, int* statsi, float* statsf)
     stat(STAT_QVR_WEAPONCLIPSIZE, f.weaponclipsize);
     stat(STAT_QVR_WEAPONCLIPSIZE2, f.weaponclipsize2);
     stat(STAT_QVR_MELEE, f.vr_melee_hud);
+    stat(STAT_QVR_MAGIC_KNOWN, f.advr_known);
+    stat(STAT_QVR_MAGIC_MAX, f.advr_mana_max);
+    stat(STAT_QVR_MAGIC_TOMES, f.advr_tome_flags);
+    for(int group=0;group<2;group++) {
+        int packed=0;
+        if(f.advr_favorites>=0)for(int i=0;i<4;i++)
+            packed |= (static_cast<int>(fieldFloatOr(ent,f.advr_favorites+group*4+i,0.f)) & 15) << (4*i);
+        statsf[STAT_QVR_MAGIC_FAVORITES0+group]=static_cast<float>(packed);
+    }
 
     const int holsterWeapon[numHolsters] = {f.holsterweapon0, f.holsterweapon1,
         f.holsterweapon2, f.holsterweapon3, f.holsterweapon4, f.holsterweapon5};
@@ -1029,6 +1040,10 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "decaprig")) fixture = "ADVR_TestDecapRig";
         else if(!strcmp(Cmd_Argv(1), "decapstate")) fixture = "ADVR_TestDecapState";
         else if(!strcmp(Cmd_Argv(1), "magic")) fixture = "ADVR_TestMagic";
+        else if(!strcmp(Cmd_Argv(1), "enchant")) fixture = "ADVR_TestEnchant";
+        else if(!strcmp(Cmd_Argv(1), "progression")) fixture = "ADVR_TestProgression";
+        else if(!strcmp(Cmd_Argv(1), "magicmainview")) fixture = "ADVR_TestMagicMainView";
+        else if(!strcmp(Cmd_Argv(1), "magicstandardview")) fixture = "ADVR_TestMagicStandardView";
         else if(!strcmp(Cmd_Argv(1), "magicstate")) fixture = "ADVR_TestMagicState";
         else if(!strcmp(Cmd_Argv(1), "fireview")) fixture = "ADVR_TestFireView";
         else if(!strcmp(Cmd_Argv(1), "fire")) fixture = "ADVR_TestFire";
@@ -1050,6 +1065,7 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "nailspin")) fixture = "ADVR_TestNailSpin";
         else if(!strcmp(Cmd_Argv(1), "shadow")) fixture = "ADVR_TestShadow";
         else if(!strcmp(Cmd_Argv(1), "widow")) fixture = "ADVR_TestWidow";
+        else if(!strcmp(Cmd_Argv(1), "unload")) fixture = "ADVR_TestUnload";
         else if(!strcmp(Cmd_Argv(1), "pickups")) fixture = "ADVR_TestPickups";
         else if(!strcmp(Cmd_Argv(1), "drops")) fixture = "ADVR_TestDrops";
         else if(!strcmp(Cmd_Argv(1), "dropsload")) fixture = "ADVR_TestDropsLoad";

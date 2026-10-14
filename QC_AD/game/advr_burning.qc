@@ -66,7 +66,7 @@ void() ADVR_FireThink = {
         particle2(self.advr_fire_flames.origin,'0 0 20',4,2);
         // No corpse damage: AD owns its gib/death animation lifecycle.
         // NOARMOR bypasses headshots; the burn entity cannot re-ignite itself.
-        if(v.health>0 && v.takedamage)T_Damage(v,self,self.owner,max(0,cvar("vr_burn_damage"))*0.5,NOARMOR);
+        if(v.health>0 && v.takedamage)T_Damage(v,self,self.owner,max(0,cvar("vr_burn_damage"))*0.5*max(1,self.advr_magic_damage),NOARMOR);
     }
 };
 void(entity target,entity attacker) ADVR_Ignite = {
@@ -82,11 +82,15 @@ void(entity target,entity attacker) ADVR_Ignite = {
         fire.advr_fire_spread=time+max(0.1,cvar("vr_burn_spread"));
         ADVR_FireAdd(fire);sound(target,CHAN_AUTO,"vr/torch_light.wav",0.6,ATTN_NORM);
     }
-    fire.owner=attacker;fire.advr_fire_end=time+cvar("vr_burn_time");
+    fire.owner=attacker;fire.advr_fire_end=time+cvar("vr_burn_time");fire.advr_magic_damage=1;
 };
 void(entity target,entity inflictor,entity attacker,float damage,float kind) ADVR_FireHit = {
     if(damage<=0 || inflictor.classname=="advr_burn")return;
-    if(inflictor.advr_fireball){ADVR_Ignite(target,attacker);return;}
+    if(inflictor.advr_fireball){
+        ADVR_Ignite(target,attacker);
+        if(target.advr_burn)target.advr_burn.advr_magic_damage=max(1,inflictor.advr_magic_damage);
+        return;
+    }
     if(kind==DAMSPLASH || inflictor.classgroup==CG_PROJROCKETS || inflictor.classgroup==CG_PROJGRENADES)
         if(random()<bound(0,cvar("advr_burn_explosion_chance"),1))ADVR_Ignite(target,attacker);
 };
@@ -107,6 +111,9 @@ void() ADVR_TestFire = {
     ADVR_Assert(v.advr_burn==fire && fire.advr_fire_count==1,"repeated ignition refreshes one nonstacking fire");
     hp=v.health;self=fire;self.advr_fire_tick=0;ADVR_FireThink();self=actor;
     ADVR_Assert(v.health==hp-2,"one half-second burn tick deals two damage");
+    shot.advr_magic_damage=1.2;ADVR_FireHit(v,shot,actor,10,NOARMOR);
+    hp=v.health;self=fire;self.advr_fire_tick=0;ADVR_FireThink();self=actor;
+    ADVR_Assert(fabs(v.health-(hp-2.4))<0.001,"spell rune bonus also scales its burning damage");
     v.waterlevel=2;v.watertype=CONTENT_WATER;
     self=fire;ADVR_FireThink();self=actor;
     ADVR_Assert(!v.advr_burn,"water extinguishes and clears fire");

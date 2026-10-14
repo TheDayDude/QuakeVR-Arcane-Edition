@@ -288,6 +288,7 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 	// do the damage
 	//----------------------------------------------------------------------
 	ADVR_FireHit(targ,inflictor,attacker,take,checkarmor);
+    take=ADVR_EnchantDamage(targ,inflictor,attacker,take);
 	targ.health = targ.health - take;
     ADVR_HitPush(targ,inflictor,attacker,take);
 	

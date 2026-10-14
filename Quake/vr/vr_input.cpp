@@ -24,6 +24,8 @@
 #include "vr_voicenotes.hpp"
 #include "vr_timescale.hpp"
 #include "vr_flashlight.hpp"
+#include "vr_weapons.hpp"
+#include "vr_protocol.hpp"
 
 #include "Zancle/Base/IsFinite.hpp"
 #include "Zancle/Base/Swap.hpp"
@@ -84,6 +86,9 @@ constexpr ButtonKeys buttonKeys[] = {
     {&HandInput::primary, {K_XBUTTON, K_ABUTTON}},
     {&HandInput::secondary, {K_YBUTTON, K_BBUTTON}},
     {&HandInput::stickClick, {K_LTHUMB, K_RTHUMB}},
+    {&HandInput::faceX,{K_XBUTTON,K_XBUTTON}}, {&HandInput::faceY,{K_YBUTTON,K_YBUTTON}},
+    {&HandInput::dpadUp,{K_DPAD_UP,K_DPAD_UP}}, {&HandInput::dpadDown,{K_DPAD_DOWN,K_DPAD_DOWN}},
+    {&HandInput::dpadLeft,{K_DPAD_LEFT,K_DPAD_LEFT}}, {&HandInput::dpadRight,{K_DPAD_RIGHT,K_DPAD_RIGHT}},
 };
 
 // vr_debug_buttons: a controller button pressed or let go (the hand, the button, its key and what the key is bound to),
@@ -99,6 +104,12 @@ void logButton(int h, const ButtonKeys& b, bool now, int key, const char* takenB
                        : b.button == &HandInput::grip      ? "grip"
                        : b.button == &HandInput::primary   ? (h == HAND_MAIN ? "lower face button (A)" : "lower face button (X)")
                        : b.button == &HandInput::secondary ? (h == HAND_MAIN ? "upper face button (B)" : "upper face button (Y)")
+                       : b.button == &HandInput::faceX ? "X"
+                       : b.button == &HandInput::faceY ? "Y"
+                       : b.button == &HandInput::dpadUp ? "physical D-pad Up"
+                       : b.button == &HandInput::dpadDown ? "physical D-pad Down"
+                       : b.button == &HandInput::dpadLeft ? "physical D-pad Left"
+                       : b.button == &HandInput::dpadRight ? "physical D-pad Right"
                                                            : "stick click";
     const char* kb = keybindings[key];
     Con_Printf("VR buttons: %s hand's %s %s: key %s (bound to \"%s\")%s%s%s\n", h == HAND_MAIN ? "main" : "off", name,
@@ -161,6 +172,22 @@ bool secondaryDown[HAND_COUNT] = {};
 // And the lower one (A/X): the hook unreels while it is (primaryHeld).
 bool primaryDown[HAND_COUNT] = {};
 
+bool tomeFace[HAND_COUNT][6] = {};
+bool tomeStick[HAND_COUNT] = {};
+int tomeButton(int h,bool HandInput::*button)
+{
+    if(h!=HAND_OFF)return -1;
+    if(button==&HandInput::dpadUp)return 2;
+    if(button==&HandInput::dpadDown)return 3;
+    if(button==&HandInput::dpadLeft)return 4;
+    if(button==&HandInput::dpadRight)return 5;
+    return -1;
+}
+bool tomeHand(int h)
+{
+    const qmodel_t* m = weapons::heldModel(h);
+    return cl.stats[protocol::STAT_QVR_MAGIC_MAX] > 0 && m && !strcmp(m->name, "progs/advr_tome.mdl");
+}
 InputState previous;
 glm::vec2 moveAxes{0.f};
 bool snapTurnArmed = true;
@@ -311,6 +338,26 @@ void update(const InputState& tracked)
                     logButton(h, b, now, b.key[h], "the weapon posing mode");
                     continue;
                 }
+                // Consume the click only for the hand opposite a tome, keeping movement axes free.
+                if(b.button==&HandInput::stickClick && (tomeStick[h] ||
+                    (now && key_dest==key_game && tomeHand(1-h) && !tomeHand(h))))
+                {
+                    tomeStick[h]=now;keyEvent(b.key[h],false);
+                    logButton(h,b,now,b.key[h],"tome casting/enchantment");continue;
+                }
+                // Tome favorites own both press and release, including a release after dropping the book.
+                if(tomeButton(h,b.button)>=0)
+                {
+                    const int face = tomeButton(h,b.button);
+                    if(tomeFace[h][face] || (now && key_dest == key_game && (tomeHand(HAND_OFF) || tomeHand(HAND_MAIN))))
+                    {
+                        tomeFace[h][face] = now;
+                        keyEvent(b.key[h], false);
+                        if(face==1)secondaryDown[h]=false;else if(face==0)primaryDown[h]=false;
+                        logButton(h,b,now,b.key[h],"tome favorites");
+                        continue;
+                    }
+                }
                 // The off hand's upper button at the mouth records a voice note instead (not while that hand holds
                 // the flashlight or is at it on the head: its Y turns it round in the fist, clips it on the head or
                 // takes it off; a note's release always ends it).
@@ -430,7 +477,7 @@ void update(const InputState& tracked)
         stickKey(stickKeys[1], -main.stick.y, false);
         stickKey(stickKeys[2], 0.f, false);
         stickKey(stickKeys[3], 0.f, false);
-        moveAxes = {deadzone(off.stick.x), deadzone(off.stick.y)};
+        moveAxes = {deadzone(off.stick.x),deadzone(off.stick.y)};
         if(active)
         {
             turn(main.stick.x);
@@ -446,7 +493,23 @@ void update(const InputState& tracked)
     runHaptics();
 }
 
-bool secondaryHeld(int hand)
+int magicButton()
+{
+    if(key_dest != key_game || posing::active() || !vrActive() ||
+        !(tomeHand(HAND_OFF) || tomeHand(HAND_MAIN)))return 0;
+    for(int key=2;key<6;key++)if(tomeFace[HAND_OFF][key])return key+1;
+    return 0;
+}
+
+int magicSticks()
+{
+    if(key_dest!=key_game || posing::active() || !vrActive())return 0;
+    int bits=0;
+    for(int h=0;h<HAND_COUNT;h++)if(tomeStick[h] && tomeHand(1-h) && !tomeHand(h))bits|=1<<h;
+    return bits;
+}
+
+  bool secondaryHeld(int hand)
 {
     return hand >= 0 && hand < HAND_COUNT && secondaryDown[hand] && key_dest == key_game;
 }

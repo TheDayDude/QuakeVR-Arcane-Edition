@@ -323,7 +323,19 @@ float(entity target,entity attacker,vector at,vector dir,float damage) ADVR_Mele
 float(entity e,vector blade,float settle) ragdolldecap = #0;
 vector(entity e,float what) ragdollcut = #0;
 
-float ADVR_TOME=13;
+float ADVR_TOME=13, ADVR_DEBUGTOME=14;
+float ADVR_SPELL_COUNT=2; // spell IDs: 0 fireball, 1 lightning
+float parm40,parm41,parm42,parm43,parm44;
+.float advr_magic_version,advr_known,advr_mana_max,advr_tome_read;
+.float advr_favorites[8]; // X,Y,A,B,Up,Down,Left,Right; spell ID + 1 (zero unassigned)
+.float advr_magic_buttons,advr_fav_button,advr_fav_time,advr_fav_spell,advr_fav_done;
+.entity advr_fav_book;
+.float advr_magic_damage,advr_tome_flags;
+void(entity player) ADVR_MagicInit;
+float(entity player,entity book) ADVR_SpellMask;
+float() ADVR_MagicMultiplier;
+void() ADVR_PowerPickup;
+void() ADVR_TestProgression;
 float parm36,parm37,parm38,parm39;
 .float vr_flashlight_state;
 float(float h) ADVR_HandBusy;
@@ -336,9 +348,27 @@ float(float h,entity victim,vector velocity,vector normal) ADVR_MeleeFeedback;
 .vector advr_magic_peak,advr_magic_direction;
 .float advr_spell,advr_magic_trigger,advr_magic_ready,advr_magic_burst,advr_magic_tick;
 float(entity r) ADVR_IsTome;
-void(entity player) ADVR_TomePickup;
+void(entity player,entity book) ADVR_TomePickup;
 void(entity victim,entity killer) ADVR_ManaReward;
 void() ADVR_MagicFrame;
 void() ADVR_MagicClear;
 
 float(entity player,float hand) ragdollheld = #0;
+
+// Tome stick gestures and per-weapon elemental infusion. Type: 0 none, 1 fire, 2 lightning.
+.float advr_magic_sticks,advr_magic_oldsticks,advr_magic_control;
+.entity advr_enchant_record,advr_enchant_book;
+.float advr_enchant_charge,advr_enchant_latched,advr_enchant_spell,advr_enchant_hand;
+.float advr_enchant_type,advr_enchant_until,advr_enchant_scale;
+entity advr_attack_record,advr_attack_actor;
+void(entity missile) ADVR_EnchantMissile;
+float(entity target,entity inflictor,entity attacker,float damage) ADVR_EnchantDamage;
+void() ADVR_EnchantClear;
+void() ADVR_TestEnchant;
+
+.entity advr_enchant_fx;
+.float advr_enchant_spark;
+float parm45,parm46,parm47,parm48,parm49,parm50,parm51,parm52;
+float(entity r) ADVR_EnchantPack;
+void(entity r,float packed) ADVR_EnchantRestore;
+void(entity fire) ADVR_FireOut;

@@ -2791,6 +2791,7 @@ Custom event trigger
 ======================================================================*/
 void() tomeofpower_touch =
 {
+    ADVR_PowerPickup();
 	sprint (other, "You got the ");
 	sprint (other, self.netname);
 	sprint (other,"\n");

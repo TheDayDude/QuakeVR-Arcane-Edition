@@ -26,7 +26,7 @@ void() ADVR_FuryGlowThink = {
     self.nextthink=time+0.1;
 };
 void() ADVR_FuryFrame = {
-    local vector a,b,c,d,head,dir,at;local entity fx;local float crossed;
+    local vector a,b,c,d,head,dir,at,side;local entity fx;local float crossed,i;
     if(self.health<=0 || intermission_running || cinematic_running ||
         !ADVR_IsFury(self.advr_main) || !ADVR_IsFury(self.advr_off)) {
         ADVR_FuryClear();self.advr_fury_latched=0;return;
@@ -63,8 +63,12 @@ void() ADVR_FuryFrame = {
     at=advr_fury_cross+dir*8;traceline(head,at,TRUE,self);
     if(trace_fraction<1){ADVR_FuryClear();return;}
     // Native AD projectile keeps explosion, resistance, damage credit and parry handling.
-    Launch_Missile(at,dir,'100 150 50',CT_PROJ_FURY1,750);
+    // A deterministic fan like the knight's: center and +/-8 degrees. Save the
+    // basis because Launch_Missile may change the global direction vectors.
+    makevectors(self.v_angle);side=v_right*0.14054;
+    for(i=-1;i<=1;i=i+1)
+        Launch_Missile(at,normalize(dir+side*i),'100 150 50',CT_PROJ_FURY1,750);
     sound(self,CHAN_WEAPON,"hknight/attack1.wav",1,ATTN_NORM);
-    self.advr_fury_latched=1;self.advr_fury_cooldown=time+2;
+    self.advr_fury_latched=1;self.advr_fury_cooldown=time+5;
     ADVR_FuryClear();
 };

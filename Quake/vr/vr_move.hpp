@@ -33,13 +33,13 @@ struct VrMove
     VrHandMove hands[2];       // [0] off hand, [1] main hand
     glm::vec3 headVel{0.f};
     glm::vec3 muzzlePos[2]{glm::vec3{0.f}, glm::vec3{0.f}}; // [0] off hand, [1] main hand
-    za::U16 vrBits0{0};  // QVR_VRBITS0_* (QC/vr_defs.qc)
+    za::U16 vrBits0{0};  // low 14: QVR_VRBITS0_*; wire-only bits 14/15: off/main tome stick clicks
     glm::vec3 teleportTarget{0.f};
     za::U8 hotspots[2]{0, 0}; // QVR_HS_* for [0] off hand, [1] main hand
     glm::vec3 roomscaleMove{0.f};   // world units / second
     za::U8 buttons{0};        // protocol::QVR_BUTTON_*
     za::U8 sawCord{0};        // the chainsaws' cords (vr_chainsaw.cpp moveBits) -> .sawcord
-    za::U8 handDrop{0};       // a heavy weapon wrenched out of a hand (vr_weight.cpp dropBits) -> .handdrop
+    za::U8 handDrop{0};       // low nibble: drop/jump bits; high nibble: tome key (1..6, +8 main hand)
     glm::vec3 origin{0.f};          // the player origin the client placed the hands from
     glm::vec3 headPos{0.f};         // the head (between the eyes), world
     // Where each hand's shots go (angles): its aim turned by the held weapon's Shot Pitch and Yaw (weapons::shotAngles);

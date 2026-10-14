@@ -152,6 +152,7 @@ void(vector org, vector dir, float proj_type, float proj_speed) Launch_Bullet =
 {
 	newmis = spawn();
 	newmis.owner = self;
+    ADVR_EnchantMissile(newmis);
 	newmis.classname = "proj_bullet";	// obj name, not really used anymore
 	newmis.classtype = proj_type;		// Class type number, quick identity
 	newmis.classgroup = CG_PROJSHELLS;	// Ammo type
@@ -409,6 +410,7 @@ void(vector org, vector dir, float proj_type, float proj_speed) launch_plasma =
 {
 	newmis = spawn ();
 	newmis.owner = self;
+    ADVR_EnchantMissile(newmis);
 	newmis.classname = "proj_plasma";	// obj name, not really used anymore
 	newmis.classtype = CT_PROJ_PLASMA;	// Class type number, quick identity
 	newmis.classgroup = CG_PROJCELLS;	// Ammo type
@@ -826,6 +828,7 @@ void(vector org, vector dir, float proj_type, float proj_speed) launch_projectil
 {
 	newmis = spawn ();
 	newmis.owner = self;
+    ADVR_EnchantMissile(newmis);
 	newmis.classname = "proj_nail";		// obj name, not really used anymore
 	newmis.classtype = proj_type;		// Class type number, quick identity
 
@@ -1261,7 +1264,7 @@ void() Touch_Missile =
                 lavadmg=TRUE;
             }
 			// BOSS Custom for ad_mountain (Chthon model)
-			else if (self.classtype == CT_PROJ_FIRETOP) {self.pos1 = DAMAGE_RLFIRETOP; if(self.advr_fireball)self.pos1='40 0 40'; lavadmg=TRUE;}
+			else if (self.classtype == CT_PROJ_FIRETOP) {self.pos1 = DAMAGE_RLFIRETOP; if(self.advr_fireball)self.pos1='40 0 40'*max(1,self.advr_magic_damage); lavadmg=TRUE;}
 			// BOSS Custom for ad_magma (Stone demon model)
 			else if (self.classtype == CT_PROJ_EIDO1) self.pos1 = DAMAGE_RLEIDO;
 			// BOSS Custom for ad_azad (Ice Golem model)
@@ -1504,6 +1507,7 @@ void(vector org, vector dir, vector avel, float proj_type, float proj_speed) Lau
 	
 	newmis = spawn ();
 	newmis.owner = self;
+    ADVR_EnchantMissile(newmis);
 	newmis.classname = "proj_rocket";	// obj name, not really used anymore
 	newmis.classtype = proj_type;		// Class type number, quick identity
 	newmis.classgroup = CG_PROJROCKETS;	// Ammo type
@@ -1889,6 +1893,7 @@ void(vector org, vector dir, vector avel, float proj_type) Launch_Grenade =
 	
 	newmis = spawn ();
 	newmis.owner = self;
+    ADVR_EnchantMissile(newmis);
 	newmis.classname = "proj_grenade";	// obj name, not really used anymore
 	newmis.classtype = proj_type;		// Class type number, quick identity
 	newmis.classgroup = CG_PROJGRENADES;// Ammo type

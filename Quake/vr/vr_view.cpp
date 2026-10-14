@@ -666,11 +666,26 @@ void queueWeaponText(const glm::vec3& handRot, bool mirrored, int hand, const vi
         clipSizes[ve.ent.model] = clipSize;
     }
 
-    char buf[64];
+    char buf[256];
     if(ve.ent.model && !strcmp(ve.ent.model->name, "progs/advr_tome.mdl"))
     {
-        q_snprintf(buf, sizeof(buf), "Arcane Essence\n%d\n\n%s Fireball\n%s Lightning\n\nTrigger: select", ammo,
-            ve.ent.frame == 1 ? " " : ">", ve.ent.frame == 1 ? ">" : " ");
+        const bool debug=(cl.stats[STAT_QVR_MAGIC_TOMES] & (main ? 2 : 1))!=0;
+        const int known=debug ? 3 : cl.stats[STAT_QVR_MAGIC_KNOWN];
+        const char* names[]={"Fireball","Lightning"};
+        const char* keys[]={"X","Y","A","B","Up","Dn","Lt","Rt"};
+        q_snprintf(buf,sizeof(buf),"Arcane Essence\n%d/%d%s\n",ammo,cl.stats[STAT_QVR_MAGIC_MAX],debug ? " (Debug)" : "");
+        for(int spell=0;spell<2;spell++) {
+            if(!(known & (1<<spell)))continue;
+            char hotkeys[64]={};
+            for(int k=4;k<8;k++) {
+                const int packed=cl.stats[STAT_QVR_MAGIC_FAVORITES0+k/4];
+                if(((packed >> (4*(k%4))) & 15)==spell+1)
+                    q_snprintf(hotkeys+strlen(hotkeys),sizeof(hotkeys)-strlen(hotkeys),"%s%s",hotkeys[0] ? "," : "",keys[k]);
+            }
+            q_snprintf(buf+strlen(buf),sizeof(buf)-strlen(buf),"\n%s%s %s%s%s%s",ve.ent.frame==spell ? ">" : " ",
+                hotkeys[0] ? "*" : " ",names[spell],hotkeys[0] ? " [" : "",hotkeys,hotkeys[0] ? "]" : "");
+        }
+        q_snprintf(buf+strlen(buf),sizeof(buf)-strlen(buf),"\n\nTrigger: select\nD-pad 2s: favorite");
     }
     else if(reloading && clipSize != 0)
     {
@@ -681,7 +696,13 @@ void queueWeaponText(const glm::vec3& handRot, bool mirrored, int hand, const vi
         q_snprintf(buf, sizeof(buf), "%d", ammo);
     }
 
-    text3d::queue(buf, pos, angles, text3d::Align::Centre, 0.1f * weapons::value(slot, Key::WpnTextScale),
+    float pageScale=1.f;
+    if(!strcmp(ve.ent.model->name,"progs/advr_tome.mdl")) {
+        int longest=0,line=0;
+        for(const char* c=buf;*c;c++){if(*c=='\n')line=0;else if(++line>longest)longest=line;}
+        pageScale=0.8f*std::min(1.f,16.f/static_cast<float>(std::max(1,longest)));
+    }
+    text3d::queue(buf, pos, angles, text3d::Align::Centre, pageScale * 0.1f * weapons::value(slot, Key::WpnTextScale),
         vr_weapon_screen.value != 0.f && strcmp(ve.ent.model->name, "progs/advr_tome.mdl"),
         !strcmp(ve.ent.model->name, "progs/advr_tome.mdl"));
     if(vr_weapon_screen.value != 0.f && strcmp(ve.ent.model->name, "progs/advr_tome.mdl"))

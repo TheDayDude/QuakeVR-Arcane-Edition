@@ -103,6 +103,19 @@ void(float h) ADVR_Reload = {
     r.advr_cooldown=max(r.advr_cooldown,r.advr_reload_until);
     sound(self,CHAN_BODY,"reload1.wav",1,ATTN_NORM);haptic(h,0,0.12,70,0.5);
 };
+// Standard ammo totals already include loaded rounds; clearing their reservation
+// makes them available to other guns. Bolts instead have a separate reserve pool.
+void(float h) ADVR_Unload = {
+    local entity r;local float n;
+    r=ADVR_Hand(h);
+    if(!r || r.advr_kind==ADVR_SAW || ADVR_RecordCapacity(r)<=0)return;
+    ADVR_ClampClip(r);n=r.wi_clip;if(n<=0)return;
+    if(r.advr_kind==ADVR_CROSSBOW)self.advr_bolts=self.advr_bolts+n;
+    dprint("ADVR unload hand ");dprint(ftos(h));dprint(" rounds ");dprint(ftos(n));dprint("\n");
+    r.wi_clip=0;r.advr_reload_until=time+0.35;
+    r.advr_cooldown=max(r.advr_cooldown,r.advr_reload_until);
+    sound(self,CHAN_BODY,"reload1.wav",0.5,ATTN_NORM);haptic(h,0,0.08,80,0.35);
+};
 void(float h) ADVR_ReloadFrame = {
     local float pressed,flick,slot;
     if(h){pressed=(self.vrbits0 & 256) && !(self.vrbits0 & 512);flick=(self.vrbits0 & 4096) && !(self.vrbits0 & 8192);}
@@ -122,6 +135,9 @@ float(float h) ADVR_Grip = { if (h) return (self.vrbits0 & 8) != 0; return (self
 float(float h) ADVR_OldGrip = { if (h) return (self.vrbits0 & 16) != 0; return (self.vrbits0 & 4) != 0; };
 float(float h) ADVR_Holster = {
     local float n;
+    // A casting hand owns its charge, release grace period and sustained spell.
+    // Ignore holster proximity for lookup, hover feedback, reload and cancellation.
+    if(self.advr_magic_book && self.advr_magic_hand==h && !ADVR_Hand(h))return -1;
     if (h) n = self.mainhand_hotspot; else n = self.offhand_hotspot;
     if (n >= 3 && n <= 6) return n - 3;
     if (n == 8 || n == 9) return n - 4;
@@ -129,6 +145,8 @@ float(float h) ADVR_Holster = {
 };
 void() ADVR_Sync = {
     local float i;
+    ADVR_MagicInit(self);
+    self.advr_tome_flags=(self.advr_off.advr_kind==ADVR_DEBUGTOME)+2*(self.advr_main.advr_kind==ADVR_DEBUGTOME);
     ADVR_ClampClip(self.advr_main);ADVR_ClampClip(self.advr_off);
     for(i=0;i<6;i=i+1)ADVR_ClampClip(self.advr_holster[i]);
     if(ADVR_IsTome(self.advr_main))self.weaponframe=self.advr_spell;
@@ -256,7 +274,7 @@ void(entity p, float h) ADVR_Catch = {
         self.advr_bolts=self.advr_bolts+p.weaponinst.advr_bolt_pack;
         p.weaponinst.advr_bolt_pack=0;ADVR_ClampClip(p.weaponinst);
     }
-    if(ADVR_IsTome(p.weaponinst))ADVR_TomePickup(self);
+    if(ADVR_IsTome(p.weaponinst))ADVR_TomePickup(self,p.weaponinst);
     ADVR_SetAmmo(p.advr_weapon,ADVR_Ammo(p.advr_weapon)+p.weaponinst.wi_clip);
     ADVR_SetHand(h,p.weaponinst); self.items = self.items | p.advr_weapon;
     self.moditems = self.moditems | (p.advr_moditems & (IT_UPGRADE_AXE | IT_UPGRADE_GHOOK));
@@ -488,7 +506,7 @@ void(float h) ADVR_Melee = {
 void() ADVR_Frame = {
     local float desired;
     ADVR_SawAudio(1);ADVR_SawAudio(0);
-    if(self.health<=0 || intermission_running || cinematic_running){ADVR_FuryClear();ADVR_MagicClear();}
+    if(self.health<=0 || intermission_running || cinematic_running){ADVR_FuryClear();ADVR_MagicClear();ADVR_EnchantClear();}
     if(self.health<=0 || intermission_running || cinematic_running)return;
     self.ishuman=1;
     if(!self.advr_initialized) {
@@ -497,18 +515,30 @@ void() ADVR_Frame = {
     }
     // Honor AD's regular saved_weapon selection and automatic pickups.
     desired=self.weapon;
+    if(self.impulse==42 || self.impulse==43) {
+        ADVR_Unload(self.impulse==43);self.impulse=0;
+    }
     if(self.impulse) {ImpulseCommands();desired=self.weapon;}
     if(desired!=self.advr_main.advr_weapon)ADVR_Select(desired);
     ADVR_HolsterHaptic(1);ADVR_HolsterHaptic(0);
     ADVR_ForceGrab(1);ADVR_ForceGrab(0);
     ADVR_GripFrame(1);ADVR_GripFrame(0);
     ADVR_ReloadFrame(1);ADVR_ReloadFrame(0);
-    ADVR_Fire(1);if(self.health<=0)return;ADVR_Fire(0);if(self.health<=0)return;
-    ADVR_MagicFrame();ADVR_FuryFrame();ADVR_ParryFrame();ADVR_Melee(1);ADVR_Melee(0);ADVR_Sync();
+    advr_attack_actor=self;advr_attack_record=self.advr_main;ADVR_Fire(1);
+    advr_attack_record=world;advr_attack_actor=world;if(self.health<=0)return;
+    advr_attack_actor=self;advr_attack_record=self.advr_off;ADVR_Fire(0);
+    advr_attack_record=world;advr_attack_actor=world;if(self.health<=0)return;
+    ADVR_MagicFrame();ADVR_FuryFrame();ADVR_ParryFrame();
+    advr_attack_actor=self;advr_attack_record=self.advr_main;ADVR_Melee(1);
+    advr_attack_record=self.advr_off;ADVR_Melee(0);advr_attack_record=world;advr_attack_actor=world;ADVR_Sync();
 };
 
 void() ADVR_Reset = {
     local float i;
+    ADVR_EnchantClear();self.advr_enchant_latched=0;self.advr_magic_sticks=0;self.advr_magic_oldsticks=0;
+    self.advr_magic_version=1;self.advr_known=0;self.advr_mana_max=50;
+    for(i=0;i<8;i=i+1)self.advr_favorites[i]=0;
+    self.advr_fav_button=0;self.advr_fav_book=world;self.advr_magic_buttons=0;
     self.vr_flashlight_state=0;
     ADVR_MagicClear();self.mana=0;self.advr_mana_seen=0;self.advr_spell=0;self.advr_magic_trigger=0;
     ADVR_FuryClear();self.advr_fury_latched=0;self.advr_fury_cooldown=0;
@@ -525,6 +555,14 @@ void() ADVR_Reset = {
     for(i=0;i<6;i=i+1)self.advr_holster[i]=world;
 };
 void() ADVR_SaveParms = {
+    local float i;
+    ADVR_MagicInit(self);parm40=self.advr_known;parm41=self.advr_mana_max;parm42=self.advr_magic_version;
+    parm45=ADVR_EnchantPack(self.advr_main);parm46=ADVR_EnchantPack(self.advr_off);
+    parm47=ADVR_EnchantPack(self.advr_holster[0]);parm48=ADVR_EnchantPack(self.advr_holster[1]);
+    parm49=ADVR_EnchantPack(self.advr_holster[2]);parm50=ADVR_EnchantPack(self.advr_holster[3]);
+    parm51=ADVR_EnchantPack(self.advr_holster[4]);parm52=ADVR_EnchantPack(self.advr_holster[5]);
+    parm43=parm44=0;
+    for(i=0;i<4;i=i+1){parm43=parm43+self.advr_favorites[i]*pow(16,i);parm44=parm44+self.advr_favorites[i+4]*pow(16,i);}
     parm17=self.advr_initialized;parm18=ADVR_PackRecord(self.advr_main);parm19=ADVR_PackRecord(self.advr_off);
     parm20=ADVR_PackRecord(self.advr_holster[0]);parm21=ADVR_PackRecord(self.advr_holster[1]);
     parm22=ADVR_PackRecord(self.advr_holster[2]);parm23=ADVR_PackRecord(self.advr_holster[3]);
@@ -535,19 +573,27 @@ void() ADVR_SaveParms = {
     parm32=self.advr_holster[4].wi_clip;parm33=self.advr_holster[5].wi_clip;parm34=1;parm35=self.advr_bolts;parm36=self.mana;parm37=self.advr_mana_seen;parm38=self.advr_spell;parm39=self.vr_flashlight_state;
 };
 entity(float w) ADVR_Restore = {
-    local float kind;local entity r;
-    kind=floor(w/65536);w=w-kind*65536;
+    local float kind,read;local entity r;
+    read=floor(w/1048576);
+    kind=mod(floor(w/65536),16);w=mod(w,65536);
     if(!(self.items & w))return world;
-    r=ADVR_Record(w);r.advr_kind=kind;return r;
+    r=ADVR_Record(w);r.advr_kind=kind;r.advr_tome_read=read;return r;
 };
 void() ADVR_LoadParms = {
+    local float i;
     dprint("ADVR RESTORE ");dprint(ftos(parm17));dprint(" ");dprint(ftos(parm18));dprint(" ");dprint(ftos(parm19));dprint(" items ");dprint(ftos(self.items));dprint("\n");
     if(!parm17)return;
     self.advr_initialized=1;self.advr_bolts=max(0,parm35);self.mana=bound(0,parm36,9999);self.advr_mana_seen=parm37;self.advr_spell=bound(0,floor(parm38),1);self.vr_flashlight_state=parm39;
+    self.advr_known=parm40;self.advr_mana_max=parm41;self.advr_magic_version=parm42;ADVR_MagicInit(self);
+    for(i=0;i<4;i=i+1){self.advr_favorites[i]=mod(floor(parm43/pow(16,i)),16);self.advr_favorites[i+4]=mod(floor(parm44/pow(16,i)),16);}
     self.advr_main=ADVR_Restore(parm18);self.advr_off=ADVR_Restore(parm19);
     self.advr_holster[0]=ADVR_Restore(parm20);self.advr_holster[1]=ADVR_Restore(parm21);
     self.advr_holster[2]=ADVR_Restore(parm22);self.advr_holster[3]=ADVR_Restore(parm23);
     self.advr_holster[4]=ADVR_Restore(parm24);self.advr_holster[5]=ADVR_Restore(parm25);
+    ADVR_EnchantRestore(self.advr_main,parm45);ADVR_EnchantRestore(self.advr_off,parm46);
+    ADVR_EnchantRestore(self.advr_holster[0],parm47);ADVR_EnchantRestore(self.advr_holster[1],parm48);
+    ADVR_EnchantRestore(self.advr_holster[2],parm49);ADVR_EnchantRestore(self.advr_holster[3],parm50);
+    ADVR_EnchantRestore(self.advr_holster[4],parm51);ADVR_EnchantRestore(self.advr_holster[5],parm52);
     if(parm34){
         if(self.advr_main)self.advr_main.wi_clip=parm26;if(self.advr_off)self.advr_off.wi_clip=parm27;
         if(self.advr_holster[0])self.advr_holster[0].wi_clip=parm28;if(self.advr_holster[1])self.advr_holster[1].wi_clip=parm29;
@@ -558,6 +604,8 @@ void() ADVR_LoadParms = {
 };
 void() SetNewParms = {
     ADVR_AD_SetNewParms();
+    parm40=parm41=parm42=parm43=parm44=0;
+    parm45=parm46=parm47=parm48=parm49=parm50=parm51=parm52=0;
     parm17=parm18=parm19=parm20=parm21=parm22=parm23=parm24=parm25=0;
     parm26=parm27=parm28=parm29=parm30=parm31=parm32=parm33=parm34=parm35=parm36=parm37=parm38=parm39=0;
 };
@@ -617,6 +665,7 @@ void() ADVR_TestReload = {
     ADVR_Assert(r.wi_clip==2 && self.ammo_shells==4,"reload cannot duplicate ammo");
     self.handpos=self.origin+self.view_ofs;self.handthrowvel='0 0 0';
     ADVR_Drop(1);p=find(world,classname,"advr_dropped_weapon");
+    while(p && p.weaponinst!=r)p=find(p,classname,"advr_dropped_weapon");
     ADVR_Assert(self.ammo_shells==2 && p.weaponinst.wi_clip==2,"drop transfers loaded ammo out of inventory");
     ADVR_Catch(p,1);
     ADVR_Assert(self.ammo_shells==4 && self.advr_main==r && r.wi_clip==2,"catch restores same loaded rounds");
@@ -741,6 +790,7 @@ void() ADVR_Test = {
     self.handpos=self.origin+self.view_ofs;self.handthrowvel='2 0 0';
     ADVR_Drop(1);ADVR_Sync();
     p=find(world,classname,"advr_dropped_weapon");
+    while(p && p.weaponinst!=mainrec)p=find(p,classname,"advr_dropped_weapon");
     ADVR_Assert(p && p.weaponinst==mainrec && !self.advr_main,"throw transfers record");
     ADVR_Assert(self.weaponmodel=="progs/hand.mdl","dropping preserves visible empty hand");
     ADVR_Assert(p.model==ADVR_Model(mainrec.advr_weapon,0),"dropped weapon uses calibrated held mesh");
@@ -800,4 +850,24 @@ void() ADVR_TestInputState = {
     dprint(" ammo ");dprint(ftos(self.ammo_shells));dprint(" health ");dprint(ftos(self.health));dprint("\n");
     ADVR_Assert(self.ammo_shells==8 && self.advr_main.wi_clip==7 && self.advr_off.wi_clip==1,"controller firing and reloading both hands");
     bprint("ADVR INPUT PASS: both controller triggers and reload buttons, correct magazines and total ammo\n");
+};
+
+void() ADVR_TestUnload = {
+    local float total;
+    ADVR_Reset();self.advr_initialized=1;self.health=100;self.vrbits0=16384;
+    cvar_set("vr_reload_mode","1");
+    // Unloading returns reservations, not duplicate ammo, and does not touch the other gun.
+    self.advr_main=ADVR_Record(IT_SHOTGUN);self.advr_off=ADVR_Record(IT_SHOTGUN);
+    self.ammo_shells=20;self.advr_main.wi_clip=8;self.advr_off.wi_clip=4;
+    total=self.ammo_shells;ADVR_Unload(1);
+    ADVR_Assert(self.advr_main.wi_clip==0 && self.advr_off.wi_clip==4 && self.ammo_shells==total,"unload releases only requested magazine without duplicating ammo");
+    ADVR_Unload(1);ADVR_Assert(self.ammo_shells==total,"empty unload cannot grant ammo");
+    ADVR_Unload(0);ADVR_Assert(self.advr_off.wi_clip==0 && self.ammo_shells==total,"off-hand magazine unloads");
+    self.advr_main.advr_reload_until=0;ADVR_Reload(1);
+    ADVR_Assert(self.advr_main.wi_clip==8 && self.ammo_shells==total,"unloaded rounds can be reloaded without changing total");
+    self.advr_main.advr_kind=ADVR_CROSSBOW;self.advr_main.wi_clip=1;self.advr_bolts=12;
+    ADVR_Unload(1);ADVR_Unload(1);
+    ADVR_Assert(self.advr_main.wi_clip==0 && self.advr_bolts==13,"crossbow returns its bolt exactly once");
+
+    bprint("ADVR UNLOAD PASS: both hands, ammo conservation, empty repeat, reload and crossbow refund\n");
 };

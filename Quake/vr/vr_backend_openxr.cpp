@@ -192,7 +192,7 @@ public:
             tracker=XR_NULL_HANDLE;
         }
         createHandTracker=nullptr;destroyHandTracker=nullptr;locateHandJoints=nullptr;
-        fingerExtension=fingerSourceExtension=fingerRangeExtension=false;
+        fingerExtension=fingerSourceExtension=fingerRangeExtension=false;frameControllerExtension=false;
         for(XrSpace& space : handSpaces)
         {
             destroySpace(space);
@@ -511,6 +511,9 @@ private:
     XrAction gripPose{XR_NULL_HANDLE};
     XrAction triggerAction{XR_NULL_HANDLE};
     XrAction gripAction{XR_NULL_HANDLE};
+    bool frameControllerExtension{false};
+    XrAction faceXAction{XR_NULL_HANDLE},faceYAction{XR_NULL_HANDLE};
+    XrAction dpadUpAction{XR_NULL_HANDLE},dpadDownAction{XR_NULL_HANDLE},dpadLeftAction{XR_NULL_HANDLE},dpadRightAction{XR_NULL_HANDLE};
     XrAction primaryAction{XR_NULL_HANDLE};
     XrAction secondaryAction{XR_NULL_HANDLE};
     XrAction stickClickAction{XR_NULL_HANDLE};
@@ -816,6 +819,9 @@ private:
         xrEnumerateInstanceExtensionProperties(nullptr, available, &available, extensionList.data());
         for(const XrExtensionProperties& p : extensionList)
         {
+            if(!strcmp(p.extensionName,"XR_VALVE_frame_controller_interaction")) {
+                extensions.pushBack("XR_VALVE_frame_controller_interaction");frameControllerExtension=true;
+            }
             if(!strcmp(p.extensionName, "XR_META_touch_controller_plus"))
             {
                 extensions.pushBack("XR_META_touch_controller_plus");
@@ -1087,6 +1093,26 @@ private:
                     QVR_BOTH(triggerTouchAction, "input/trigger/touch")});
         }
 
+        // Native Frame paths keep its physical D-pad and ABXY independent of the sticks.
+        // https://partner.steamgames.com/doc/steamhardware/steamframe/input
+        if(frameControllerExtension)
+            suggest("/interaction_profiles/valve/frame_controller_valve",
+                {QVR_BOTH(gripPose,"input/grip/pose"),QVR_BOTH(triggerAction,"input/trigger/value"),
+                 QVR_BOTH(gripAction,"input/squeeze/value"),QVR_BOTH(stickAction,"input/thumbstick"),
+                 QVR_BOTH(stickClickAction,"input/thumbstick/click"),
+                 {&primaryAction,QVR_R("input/a/click")},{&secondaryAction,QVR_R("input/b/click")},
+                 {&faceXAction,QVR_R("input/x/click")},{&faceYAction,QVR_R("input/y/click")},
+                 {&dpadUpAction,QVR_L("input/dpad_up/click")},{&dpadDownAction,QVR_L("input/dpad_down/click")},
+                 {&dpadLeftAction,QVR_L("input/dpad_left/click")},{&dpadRightAction,QVR_L("input/dpad_right/click")},
+                 {&menuAction,QVR_L("input/view/click")},{&menuAction,QVR_R("input/menu/click")},
+                 QVR_BOTH(hapticAction,"output/haptic"),QVR_BOTH(triggerValueAction,"input/trigger/value"),
+                 QVR_BOTH(gripValueAction,"input/squeeze/value"),QVR_BOTH(thumbTouchAction,"input/thumbstick/touch"),
+                 QVR_BOTH(triggerTouchAction,"input/trigger/touch"),
+                 {&thumbTouchAction,QVR_R("input/a/touch")},{&thumbTouchAction,QVR_R("input/b/touch")},
+                 {&thumbTouchAction,QVR_R("input/x/touch")},{&thumbTouchAction,QVR_R("input/y/touch")},
+                 {&thumbTouchAction,QVR_L("input/dpad_up/touch")},{&thumbTouchAction,QVR_L("input/dpad_down/touch")},
+                 {&thumbTouchAction,QVR_L("input/dpad_left/touch")},{&thumbTouchAction,QVR_L("input/dpad_right/touch")}});
+
         // No menu button: the left B opens the menu.
         suggest("/interaction_profiles/valve/index_controller",
             {QVR_BOTH(gripPose, "input/grip/pose"), QVR_BOTH(triggerAction, "input/trigger/value"),
@@ -1144,6 +1170,12 @@ private:
         gripAction = makeAction(XR_ACTION_TYPE_BOOLEAN_INPUT, "grip", "Grip", true);
         primaryAction = makeAction(XR_ACTION_TYPE_BOOLEAN_INPUT, "primary", "Primary button (A/X)", true);
         secondaryAction = makeAction(XR_ACTION_TYPE_BOOLEAN_INPUT, "secondary", "Secondary button (B/Y)", true);
+        faceXAction=makeAction(XR_ACTION_TYPE_BOOLEAN_INPUT,"face_x","Right X button",true);
+        faceYAction=makeAction(XR_ACTION_TYPE_BOOLEAN_INPUT,"face_y","Right Y button",true);
+        dpadUpAction=makeAction(XR_ACTION_TYPE_BOOLEAN_INPUT,"dpad_up","Physical D-pad Up",true);
+        dpadDownAction=makeAction(XR_ACTION_TYPE_BOOLEAN_INPUT,"dpad_down","Physical D-pad Down",true);
+        dpadLeftAction=makeAction(XR_ACTION_TYPE_BOOLEAN_INPUT,"dpad_left","Physical D-pad Left",true);
+        dpadRightAction=makeAction(XR_ACTION_TYPE_BOOLEAN_INPUT,"dpad_right","Physical D-pad Right",true);
         stickClickAction = makeAction(XR_ACTION_TYPE_BOOLEAN_INPUT, "stick_click", "Thumbstick click", true);
         menuAction = makeAction(XR_ACTION_TYPE_BOOLEAN_INPUT, "menu", "Menu", true);
         stickAction = makeAction(XR_ACTION_TYPE_VECTOR2F_INPUT, "stick", "Thumbstick", true);
@@ -1224,6 +1256,9 @@ private:
             hand.grip = boolState(gripAction, side);
             hand.primary = boolState(primaryAction, side);
             hand.secondary = boolState(secondaryAction, side);
+            hand.faceX=boolState(faceXAction,side);hand.faceY=boolState(faceYAction,side);
+            hand.dpadUp=boolState(dpadUpAction,side);hand.dpadDown=boolState(dpadDownAction,side);
+            hand.dpadLeft=boolState(dpadLeftAction,side);hand.dpadRight=boolState(dpadRightAction,side);
             hand.stickClick = boolState(stickClickAction, side);
             hand.menu = boolState(menuAction, side);
             hand.stick = vec2State(stickAction, side);

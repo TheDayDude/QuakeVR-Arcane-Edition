@@ -88,6 +88,9 @@ bool setMockButton(int hand, const char* control, bool on)
     };
     constexpr Control controls[] = {{"trigger", &HandInput::trigger}, {"grip", &HandInput::grip},
         {"primary", &HandInput::primary}, {"secondary", &HandInput::secondary},
+        {"x",&HandInput::faceX},{"y",&HandInput::faceY},
+        {"dpad_up",&HandInput::dpadUp},{"dpad_down",&HandInput::dpadDown},
+        {"dpad_left",&HandInput::dpadLeft},{"dpad_right",&HandInput::dpadRight},
         {"stickclick", &HandInput::stickClick}, {"menu", &HandInput::menu}};
 
     for(const Control& c : controls)

@@ -1,5 +1,5 @@
 void() ADVR_TestFury = {
-    local entity player,foe,p,shot,target;local float count,oldframe,i,oldmult;local vector at;
+    local entity player,foe,p,shot,target;local float count,oldframe,i,oldmult,left,right,center;local vector at;
     player=self;oldframe=frametime;oldmult=cvar("vr_enemy_drops_chance_mult");
     cvar_set("vr_enemy_drops_chance_mult","1");
     ADVR_Assert(ADVR_FuryCross('0 -12 0','0 12 30','0 12 0','0 -12 30'),"crossed blades accepted");
@@ -29,7 +29,17 @@ void() ADVR_TestFury = {
     self.offmuzzlepos=at+'24 -12 22';
     for(i=0;i<22;i=i+1)ADVR_FuryFrame();
     ADVR_Assert(self.advr_fury_latched && self.advr_fury_cooldown>time,"full charge fires and latches");
-    shot=newmis;
+    shot=newmis;count=0;
+    p=world;
+    while((p=nextent(p)))if(p.owner==self && p.classtype==CT_PROJ_FURY1) {
+        count=count+1;
+        ADVR_Assert(fabs(vlen(p.velocity)-750)<1 && fabs(p.velocity_z)<1,"volley keeps native speed and horizontal cone");
+        if(p.velocity_y>50)left=left+1;
+        else if(p.velocity_y<-50)right=right+1;
+        else center=center+1;
+    }
+    ADVR_Assert(count==3 && left==1 && right==1 && center==1,"exactly three projectiles fan left center right");
+    ADVR_Assert(fabs(self.advr_fury_cooldown-time-5)<0.01,"volley has five second cooldown");
     ADVR_Assert(shot.owner==self && shot.classtype==CT_PROJ_FURY1 && shot.model==MODEL_PROJ_FURY1,"native red explosive projectile credits player");
     for(i=0;i<30;i=i+1)ADVR_FuryFrame();
     ADVR_Assert(newmis==shot,"held X does not repeat fire");
@@ -40,6 +50,12 @@ void() ADVR_TestFury = {
     ADVR_Assert(target.health<1000,"Fury projectile explodes with radius damage");remove(target);
     self.offmuzzlepos=self.offhandpos+'0 0 30';ADVR_FuryFrame();
     ADVR_Assert(!self.advr_fury_latched,"uncross rearms after firing");
+    self.offmuzzlepos=at+'24 -12 22';newmis=world;
+    for(i=0;i<22;i=i+1)ADVR_FuryFrame();
+    ADVR_Assert(!newmis && !self.advr_fury_charge,"recross cannot bypass cooldown");
+    self.advr_fury_cooldown=time-0.01;
+    for(i=0;i<22;i=i+1)ADVR_FuryFrame();
+    ADVR_Assert(newmis && self.advr_fury_latched,"attack becomes available after cooldown");
     frametime=oldframe;cvar_set("vr_enemy_drops_chance_mult",ftos(oldmult));
     bprint("ADVR FURY PASS: paired drops, identity, X charge/cancel/latch, native projectile and splash\n");
 };

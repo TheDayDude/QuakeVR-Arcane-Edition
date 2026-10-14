@@ -71,6 +71,9 @@ struct HandInput
     bool grip{false};
     bool primary{false};   // A / X
     bool secondary{false}; // B / Y
+    // Physical controls, independent of the analog thumbsticks (Steam Frame).
+    bool faceX{false},faceY{false}; // extra right-hand face buttons
+    bool dpadUp{false},dpadDown{false},dpadLeft{false},dpadRight{false};
     bool stickClick{false};
     bool menu{false};
     glm::vec2 stick{0.f};  // x right, y forward

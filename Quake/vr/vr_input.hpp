@@ -9,6 +9,10 @@ namespace qvr::input
 {
 
 void init();
+// Physical left D-pad: 3..6 = Up/Down/Left/Right, with a tome in either hand.
+[[nodiscard]] int magicButton();
+// Opposite-tome stick clicks: off bit 0, main bit 1. Never stick deflection.
+[[nodiscard]] int magicSticks();
 
 // Once per host frame with the backend's input.
 void update(const InputState& in);

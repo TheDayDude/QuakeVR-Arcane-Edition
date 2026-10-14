@@ -307,7 +307,8 @@ VrMove unposed;
         VRBITS0_MAINHAND_RELOADFLICKING);
     set(twohand::aiming(), VRBITS0_2H_AIMING);
     set(teleport::update(hs, move.teleportTarget), VRBITS0_TELEPORTING);
-    move.vrBits0 = static_cast<za::U16>(bits);
+    // Wire-only top bits carry tome clicks; the server strips them before QC VR flags.
+    move.vrBits0 = static_cast<za::U16>(bits | (input::magicSticks() << 14));
 
     if(offhandAttack || offhandAttackImpulse)
     {
@@ -321,7 +322,8 @@ VrMove unposed;
     }
     // A hand holding the flashlight (or a chainsaw's cord) does not force grab.
     move.sawCord = chainsaw::moveBits();
-    move.handDrop = weight::dropBits();
+    // Four previously reserved bits carry the tome key without changing the move layout.
+    move.handDrop = static_cast<za::U8>(weight::dropBits() | (input::magicButton() << 4));
     if(flashlight::holds(HAND_OFF) || chainsaw::holds(HAND_OFF))
     {
         move.buttons |= QVR_BUTTON_OFFHANDBUSY;

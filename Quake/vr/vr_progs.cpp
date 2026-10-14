@@ -167,6 +167,7 @@ extern "C" void VR_OnProgsLoaded()
 #define QVR_FIELD(name) b.fields.name = ED_FindFieldOffset(#name);
 #include "vr_fields.inc"
 #undef QVR_FIELD
+        b.fields.advr_favorites = findArrayField("advr_favorites", 8, 1);
 
         b.OnSpawnServerBeforeLoad = findFunction("OnSpawnServerBeforeLoad");
         b.OnSpawnServerAfterLoad = findFunction("OnSpawnServerAfterLoad");

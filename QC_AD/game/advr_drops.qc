@@ -3,7 +3,7 @@
 // player's upgrade flags. Zero is the original AD pickup behaviour.
 string(entity r) ADVR_RecordModel = {
     if(!r)return "";
-    if(r.advr_kind==ADVR_TOME)return "progs/advr_tome.mdl";
+    if(ADVR_IsTome(r))return "progs/advr_tome.mdl";
     if(r.advr_kind==ADVR_FURY1)return "progs/advr_fury1.mdl";
     if(r.advr_kind==ADVR_FURY2)return "progs/advr_fury2.mdl";
     if(r.advr_kind==ADVR_HAMMER)return "progs/advr_hammer.mdl";
@@ -28,7 +28,7 @@ float(entity r) ADVR_RecordCapacity = {
     if(r.advr_weapon==IT_SUPER_SHOTGUN)return 2;
     return ADVR_Capacity(r.advr_weapon);
 };
-float(entity r) ADVR_PackRecord = {return r.advr_weapon+r.advr_kind*65536;};
+float(entity r) ADVR_PackRecord = {return r.advr_weapon+r.advr_kind*65536+(r.advr_tome_read!=0)*1048576;};
 vector(float h) ADVR_WeaponTip = {
     local vector at,tip;local float reach;local entity r;
     at=ADVR_Pos(h);r=ADVR_Hand(h);
@@ -107,10 +107,10 @@ void() ADVR_RangeSetup = {
     local entity marker,p;local float kind;
     if(mapname!="ad_test11" || find(world,classname,"advr_range_stock"))return;
 
-    for(kind=ADVR_CROSSBOW;kind<=ADVR_TOME;kind=kind+1) {
+    for(kind=ADVR_CROSSBOW;kind<=ADVR_DEBUGTOME;kind=kind+1) {
         marker=spawn();marker.classname="advr_range_stock";marker.advr_kind=kind;
         if(kind==ADVR_CROSSBOW)setorigin(marker,'-96 64 40');else if(kind==ADVR_HAMMER)setorigin(marker,'96 64 40');
-        else if(kind==ADVR_FURY1)setorigin(marker,'176 64 40');else if(kind==ADVR_FURY2)setorigin(marker,'208 64 40');else setorigin(marker,'248 64 40');
+        else if(kind==ADVR_FURY1)setorigin(marker,'176 64 40');else if(kind==ADVR_FURY2)setorigin(marker,'208 64 40');else if(kind==ADVR_TOME)setorigin(marker,'248 64 40');else setorigin(marker,'288 64 40');
         p=ADVR_SpawnLoot(marker,IT_AXE+kind*65536);
         p.owner=world;p.advr_cooldown=0;p.velocity='0 0 0';p.avelocity='0 0 0';p.vr_spin='0 0 0';
         p.angles='0 90 90';setorigin(p,marker.origin);marker.weaponinst=p.weaponinst;

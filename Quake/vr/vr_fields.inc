@@ -154,3 +154,9 @@ QVR_FIELD(vr_ragdoll_noblood) // optional: AD stone/metal/poison corpses must no
 QVR_FIELD(vr_gib) // a gib or head (QC): not a corpse (vr_box3d.cpp)
 QVR_FIELD(vr_headless) // its head cut off (QC vr_decap.qc): its ragdoll is made headless, a saved game's too (vr_box3d.cpp)
 QVR_FIELD(vr_knockdown) // a monster knocked down by a shove (QC vr_knockdown.qc): 1 a ragdoll while alive (vr_box3d.cpp), 2 getting up
+
+QVR_FIELD(advr_enchant_type)
+QVR_FIELD(advr_enchant_until)
+QVR_FIELD(advr_enchant_record)
+QVR_FIELD(advr_enchant_charge)
+QVR_FIELD(advr_enchant_spell)

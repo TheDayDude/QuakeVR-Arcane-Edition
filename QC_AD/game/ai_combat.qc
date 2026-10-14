@@ -112,7 +112,7 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 {
 	local vector dir;
 	local entity oldself;
-	local float save, take, flinch, noarmordmg,headkind;
+	local float save, take, flinch, noarmordmg,headkind,stagger;
     local vector headat,headvel;
     if(checkarmor==DAMARMOR && advr_hit_ent==targ && advr_hit_by==attacker) {
         headkind=advr_hit_kind;headat=advr_hit_at;headvel=advr_hit_vel;
@@ -289,6 +289,7 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 	//----------------------------------------------------------------------
 	ADVR_FireHit(targ,inflictor,attacker,take,checkarmor);
     take=ADVR_EnchantDamage(targ,inflictor,attacker,take);
+    stagger=advr_enchant_stagger;advr_enchant_stagger=0;
 	targ.health = targ.health - take;
     ADVR_HitPush(targ,inflictor,attacker,take);
 	
@@ -462,9 +463,10 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 	self = targ;
 	//----------------------------------------------------------------------
 
-	if (self.th_pain && self.pain_finished < time) {
+	if (self.th_pain && (self.pain_finished < time || stagger)) {
 		// Save pain finished state for later		
 		self.pain_finstate = self.pain_finished;
+        if(stagger)self.pain_finstate=time-PAIN_ALWAY-1; // native pain_check must animate, not sound-only
 
 		// The damage from projectile shotguns trinkle at the monster
 		// which means it cannot trigger the flinch function
@@ -474,7 +476,7 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 			// Demon, Shambler, Shalrath and Wizard all have high flinch values
 			if (self.pain_flinch > 40) flinch = 40;
 			else flinch = self.pain_flinch + 1;
-			if (self.dmgcombined < flinch) {self = oldself; return;}
+			if (!stagger && self.dmgcombined < flinch) {self = oldself; return;}
 		}
 
 		// Block pain re-trigger event

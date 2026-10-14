@@ -211,6 +211,7 @@ void() ADVR_TestEnchant = {
     self.advr_off=book;r=ADVR_Record(IT_SHOTGUN);self.advr_main=r;self.items=self.items | IT_SHOTGUN;
     before=self.mana;self.advr_magic_sticks=2;
     for(i=0;i<20;i=i+1)ADVR_MagicFrame();
+    ADVR_Assert(self.advr_enchant_record==r && self.advr_enchant_charge>0 && !self.advr_enchant_fx,"charging uses weapon state without a casting orb");
     self.advr_magic_sticks=0;ADVR_MagicFrame();
     ADVR_Assert(!r.advr_enchant_type && self.mana==before && !self.advr_enchant_fx,"short enchant hold cancels free");
     self.advr_magic_sticks=2;
@@ -227,20 +228,29 @@ void() ADVR_TestEnchant = {
     ADVR_Assert(r.advr_enchant_type==1 && r.advr_enchant_until==time+60,"holstered enchant survives map transition with remaining duration");
     self.advr_main=r;self.advr_holster[0]=world;
     v=spawn();v.classname="advr_enchant_target";v.flags=FL_MONSTER;v.takedamage=DAMAGE_YES;v.health=1000;
-    setmodel(v,"progs/knight.mdl");setorigin(v,ADVR_Head(self)+'100 0 0');
+    setmodel(v,"progs/player.mdl");setorigin(v,ADVR_Head(self)+'100 0 0');
     v.enemy=player;v.switchattacker=player;v.switchtimer=time+100;v.invincible_finished=0;
     advr_attack_actor=self;advr_attack_record=r;T_Damage(v,self,self,40,NOARMOR);
-    ADVR_Assert(v.health==950 && v.advr_burn,"enchanted direct weapon hit adds 25 percent and ignites");
+    ADVR_Assert(v.health==958 && v.advr_burn,"enchanted direct weapon hit adds 5 percent and ignites");
     ADVR_FireOut(v.advr_burn);
     r.advr_enchant_type=2;
     Launch_Missile(self.handpos,'1 0 0','0 0 0',CT_PROJ_FIRETOP,750);shot=newmis;
     advr_attack_record=world;advr_attack_actor=world;
     self.advr_main=world;T_Damage(v,shot,self,40,NOARMOR);
-    ADVR_Assert(v.health==900 && shot.advr_enchant_type==2,"projectile retains lightning after weapon leaves hand");
+    ADVR_Assert(v.health==916 && shot.advr_enchant_type==2,"projectile retains lightning after weapon leaves hand");
     T_Damage(v,self,self,40,NOARMOR);
-    ADVR_Assert(v.health==860,"unrelated damage cannot inherit enchantment");
+    ADVR_Assert(v.health==876,"unrelated damage cannot inherit enchantment");
     shot.advr_enchant_until=time-1;T_Damage(v,shot,self,40,NOARMOR);
-    ADVR_Assert(v.health==820,"expired infusion adds no damage");remove(shot);
+    ADVR_Assert(v.health==836,"expired infusion adds no damage");remove(shot);
+    v.th_pain=knight_pain;v.classgroup=CG_KNIGHT;v.pain_sound="weapons/lhit.wav";
+    ADVR_Assert(!ADVR_EnchantStagger(v,0.5),"ordinary lightning roll does not stagger");
+    ADVR_Assert(!ADVR_EnchantStagger(v,0),"rapid hits cannot repeat a stagger attempt");
+    v.advr_stagger_next=0;ADVR_Assert(ADVR_EnchantStagger(v,0.05),"ten percent roll staggers");
+    ADVR_Assert(v.advr_stagger_next==time+2 && !ADVR_EnchantStagger(v,0),"successful stagger has two second cooldown");
+    v.advr_stagger_next=0;v.bossflag=1;ADVR_Assert(!ADVR_EnchantStagger(v,0),"bosses retain their pain protections");v.bossflag=0;
+    v.vr_knockdown=1;ADVR_Assert(!ADVR_EnchantStagger(v,0),"stagger cannot interrupt a knockdown");v.vr_knockdown=0;
+    v.pain_finstate=time-PAIN_ALWAY-1;v.pain_flinch=1000;self=v;knight_pain(player,player,1);self=player;
+    ADVR_Assert(v.pain_check==1,"stagger requests real native pain animation at low damage");
     self.advr_main=book;self.advr_off=r;self.advr_spell=1;self.mana=20;self.advr_magic_sticks=1;
     for(i=0;i<65;i=i+1)ADVR_MagicFrame();
     ADVR_Assert(r.advr_enchant_type==2 && self.mana==15,"left weapon stick enchants while book is right");
@@ -251,4 +261,20 @@ void() ADVR_TestEnchant = {
     frametime=oldframe;ADVR_Sync();
     bprint("ADVR ENCHANT PASS: both stick casts, cancellation, duration, mana, hold latch, record persistence, damage, projectile isolation and expiry\n");
 };
+
+
+void() ADVR_TestEnchantGlow = {
+    local entity prop;
+    ADVR_Reset();self.advr_initialized=1;self.health=100;self.flags=self.flags | FL_GODMODE;
+    self.items=self.items | IT_SHOTGUN | IT_SUPER_SHOTGUN;
+    self.advr_main=ADVR_Record(IT_SHOTGUN);self.advr_off=ADVR_Record(IT_SUPER_SHOTGUN);
+    self.advr_main.advr_enchant_type=1;self.advr_main.advr_enchant_until=time+60;
+    self.advr_off.advr_enchant_type=2;self.advr_off.advr_enchant_until=time+60;
+    self.advr_main.advr_enchant_scale=self.advr_off.advr_enchant_scale=1;
+    prop=ADVR_SpawnLoot(self,IT_SHOTGUN);prop.weaponinst.advr_enchant_type=1;prop.weaponinst.advr_enchant_until=time+2;
+    setorigin(prop,self.origin+'64 0 8');
+    self.advr_holster[0]=ADVR_Record(IT_SHOTGUN);self.advr_holster[0].advr_enchant_type=2;self.advr_holster[0].advr_enchant_until=time+2;
+    ADVR_Sync();
+};
+
 

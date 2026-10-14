@@ -23,6 +23,9 @@ inline constexpr int U_QVR_OFFSET = 1 << 26;       // 3 coords
 inline constexpr int U_QVR_NOROTATE = 1 << 27;     // no data: a rigid body, whose EF_ROTATE model keeps its angles
 inline constexpr int U_QVR_WEAPONUID = 1 << 28;    // long: a weapon prop's weapon id (QC vr_weaponinst.qc: its record's)
 
+// Byte: low 2 bits element, high 6 bits glow strength. Absent means no enchantment.
+inline constexpr int U_QVR_ENCHANT = 1 << 29;
+
 // Server -> client.
 inline constexpr int svc_quakevr = 39;
 
@@ -102,7 +105,10 @@ enum Stat : int
     STAT_QVR_MAGIC_FAVORITES0, // four base-16 spell IDs + 1, X/Y/A/B
     STAT_QVR_MAGIC_FAVORITES1, // Up/Down/Left/Right
     STAT_QVR_MAGIC_TOMES, // bit 0 debug off-hand, bit 1 debug main-hand
-    STAT_QVR_END
+    STAT_QVR_ENCHANT_MAIN,
+    STAT_QVR_ENCHANT_OFF,
+    STAT_QVR_ENCHANT_HOLSTER0, // six holsters
+    STAT_QVR_END = STAT_QVR_ENCHANT_HOLSTER0 + 6
 };
 
 inline constexpr int numHolsters = 6;

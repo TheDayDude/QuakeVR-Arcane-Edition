@@ -506,6 +506,7 @@ void place(view::ViewEntity& ve, qmodel_t* model, const glm::vec3& origin, const
     ve.mirrored = mirrored;
     ve.scale = glm::vec3{1.f};
     ve.visible = model != nullptr;
+    ve.enchant=0;
 }
 
 // ----------------------------------------------------------------------------
@@ -1199,6 +1200,10 @@ void setupWeapon(hands::State& s, int hand, qmodel_t* model, int frame, bool flo
     const glm::vec3 wt = carried ? weaponTurn(rot, slot, mirrored) : heldWeaponTurn(rot, hand, slot, mirrored);
 
     place(ve, model, held.pos, {-wt.x, wt.y, wt.z}, frame, mirrored);
+    if(!floating) {
+        ve.enchant=cl.stats[hand==HAND_MAIN ? STAT_QVR_ENCHANT_MAIN : STAT_QVR_ENCHANT_OFF];
+        emissive::enchantLight(hand,held.pos,ve.enchant);
+    }
     // Fury charge frames select yellow fullbright blade skins, aligned with the held mesh.
     ve.ent.skinnum = model && (!strcmp(model->name, "progs/advr_fury1.mdl") ||
         !strcmp(model->name, "progs/advr_fury2.mdl")) ? za::clamp(frame, 0, 4) : 0;
@@ -4547,6 +4552,10 @@ void setupHolsters(const hands::State& s, bool queueTexts)
         const int idleFrame = model && !strcmp(model->name, "progs/advr_crossbow.mdl") && clip > 0
                                   ? 4 : holsteredGrappleOut(model, pose.weaponPos) ? 2 : 0;
         place(ve, model, pose.weaponPos, pose.weaponAngles, idleFrame, mirrored);
+        if(!previewHere && !posedHere) {
+            ve.enchant=cl.stats[STAT_QVR_ENCHANT_HOLSTER0+stat];
+            emissive::enchantLight(2+stat,pose.weaponPos,ve.enchant);
+        }
         highlight(ve, hover);
         // Just holstered: eased from the hand into the holster (vr_drawblend.cpp).
         drawblend::holster(s, stat, model ? &ve.ent : nullptr, !previewHere && !posedHere);

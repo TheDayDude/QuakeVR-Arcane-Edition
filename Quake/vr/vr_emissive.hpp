@@ -28,6 +28,10 @@ void weaponScreenLight(int hand, const glm::vec3& pos, const glm::vec3& angles);
 inline constexpr int lavaGunLights = 16;
 void lavaGunLight(int index, const glm::vec3& pos, float strength);
 
+// Elemental weapon glow: the mesh tint and nearby light share the same strength.
+[[nodiscard]] glm::vec3 enchantColor(int code);
+void enchantLight(int index,const glm::vec3& pos,int code);
+
 // Is `model` a lava nailgun's (its lava ammo's model)?
 [[nodiscard]] bool isLavaGun(const qmodel_t* model);
 

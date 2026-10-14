@@ -27,6 +27,8 @@ __pycache__/
 /quakevr/
 *.sav
 /qconsole.log
+docs/BUILDING.md
+docs/vr-port/CODE_STYLE.md
 QC_AD/BURNING.md
 QC_AD/CROSSBOW.md
 QC_AD/DECAPITATION.md

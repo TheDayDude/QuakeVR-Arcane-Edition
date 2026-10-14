@@ -13,6 +13,7 @@
 #include "vr_progs.hpp"
 #include "vr_protocol.hpp"
 #include "vr_server.hpp"
+#include "vr_client.hpp"
 #include "vr_worldtext.hpp"
 #include "vr_weapons.hpp"
 
@@ -148,6 +149,20 @@ za::Vector<unsigned char> instReferenced; // per edict, this frame's sweep: some
 [[nodiscard]] int weaponUid(edict_t* inst)
 {
     return inst ? static_cast<int>(fieldFloat(inst, fields().wi_uid)) : 0;
+}
+
+// No client-side timers: server record expiry also drives holstered and dropped glows.
+int enchantCode(edict_t* record,edict_t* player=nullptr)
+{
+    if(!record || !bindings().isAdVrProgs)return 0;
+    const FieldOffsets& f=fields();
+    if(player && weaponInst(player,f.advr_enchant_record)==record) {
+        const int strength=CLAMP(1,static_cast<int>(fieldFloatOr(player,f.advr_enchant_charge,0.f)*21.f),63);
+        return (static_cast<int>(fieldFloatOr(player,f.advr_enchant_spell,0.f))+1) | (strength<<2);
+    }
+    if(fieldFloatOr(record,f.advr_enchant_until,0.f)<=qcvm->time)return 0;
+    const int type=static_cast<int>(fieldFloatOr(record,f.advr_enchant_type,0.f));
+    return type==1 || type==2 ? type | (63<<2) : 0;
 }
 
 void sweepWeaponInsts()
@@ -607,6 +622,8 @@ extern "C" void VR_CalcStats(client_t* client, int* statsi, float* statsf)
     stat(STAT_QVR_MAGIC_KNOWN, f.advr_known);
     stat(STAT_QVR_MAGIC_MAX, f.advr_mana_max);
     stat(STAT_QVR_MAGIC_TOMES, f.advr_tome_flags);
+    statsi[STAT_QVR_ENCHANT_MAIN]=enchantCode(inst(f.weaponinst),ent);
+    statsi[STAT_QVR_ENCHANT_OFF]=enchantCode(inst(f.weaponinst2),ent);
     for(int group=0;group<2;group++) {
         int packed=0;
         if(f.advr_favorites>=0)for(int i=0;i<4;i++)
@@ -662,6 +679,7 @@ extern "C" void VR_CalcStats(client_t* client, int* statsi, float* statsf)
         statsi[STAT_QVR_HOLSTERWEAPONMODEL0 + i] = modelIndexOfField(ent, holsterModel[i]);
         stat(STAT_QVR_HOLSTERWEAPONFLAGS0 + i, holsterFlags[i]);
         statsf[STAT_QVR_HOLSTERWEAPONCLIP0 + i] = clip(holsterInst[i]);
+        statsi[STAT_QVR_ENCHANT_HOLSTER0+i]=enchantCode(inst(holsterInst[i]));
         statsi[STAT_QVR_HOLSTERWEAPONUID0 + i] = weaponUid(inst(holsterInst[i])); // (its blood drawn holstered: vr_wounds.cpp)
     }
 }
@@ -694,6 +712,7 @@ extern "C" int VR_EntityUpdateBits(edict_t* ent)
     }
     if(NUM_FOR_EDICT(ent) > svs.maxclients && weaponUid(weaponInst(ent, f.weaponinst)) != 0)
     {
+        if(enchantCode(weaponInst(ent,f.weaponinst)))bits |= U_QVR_ENCHANT;
         bits |= U_QVR_WEAPONUID; // a weapon prop (not a player: his .weaponinst is his main hand's, sent as a stat)
     }
     return bits;
@@ -732,6 +751,7 @@ extern "C" void VR_WriteEntityUpdate(sizebuf_t* msg, edict_t* ent, int bits)
     {
         MSG_WriteLong(msg, weaponUid(weaponInst(ent, f.weaponinst)));
     }
+    if(bits & U_QVR_ENCHANT)MSG_WriteByte(msg,enchantCode(weaponInst(ent,f.weaponinst)));
 }
 
 extern "C" void VR_WriteClientSpawnState(sizebuf_t* msg)
@@ -1011,6 +1031,13 @@ void adTest_f()
         Con_Printf("advr_selftest requires a local AD VR game and developer 1\n");
         return;
     }
+    if(Cmd_Argc()>1 && !strcmp(Cmd_Argv(1),"enchantprobe")) {
+        int world=0;
+        for(int i=1;i<cl.num_entities;i++)if(const auto* e=qvr::client::entityVr(i);e && e->enchant)world++;
+        Con_Printf("ENCHANT PROBE main=%d off=%d holster=%d world=%d\n",cl.stats[STAT_QVR_ENCHANT_MAIN],
+            cl.stats[STAT_QVR_ENCHANT_OFF],cl.stats[STAT_QVR_ENCHANT_HOLSTER0],world);
+        return;
+    }
     PR_SwitchQCVM(&sv.qcvm);
     const char* fixture = "ADVR_Test";
     if(Cmd_Argc() > 1)
@@ -1040,6 +1067,7 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "decaprig")) fixture = "ADVR_TestDecapRig";
         else if(!strcmp(Cmd_Argv(1), "decapstate")) fixture = "ADVR_TestDecapState";
         else if(!strcmp(Cmd_Argv(1), "magic")) fixture = "ADVR_TestMagic";
+        else if(!strcmp(Cmd_Argv(1), "enchantglow")) fixture = "ADVR_TestEnchantGlow";
         else if(!strcmp(Cmd_Argv(1), "enchant")) fixture = "ADVR_TestEnchant";
         else if(!strcmp(Cmd_Argv(1), "progression")) fixture = "ADVR_TestProgression";
         else if(!strcmp(Cmd_Argv(1), "magicmainview")) fixture = "ADVR_TestMagicMainView";
@@ -1410,3 +1438,4 @@ void onSpawnServerAfterLoad()
 }
 
 } // namespace qvr::server
+

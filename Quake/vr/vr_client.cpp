@@ -706,6 +706,7 @@ extern "C" void VR_ParseEntityUpdate(int num, int bits)
     data.offset = (bits & U_QVR_OFFSET) ? readCoords3() : glm::vec3{0.f};
     data.noRotate = (bits & U_QVR_NOROTATE) != 0;
     data.weaponUid = (bits & U_QVR_WEAPONUID) ? MSG_ReadLong() : 0;
+    data.enchant = (bits & U_QVR_ENCHANT) ? MSG_ReadByte() : 0;
 }
 
 extern "C" void VR_DebugDrawnBoxes(void)

@@ -21,6 +21,7 @@ struct ViewEntity
     bool mirrored{false};  // left-hand versions of right-hand models
     float zeroBlend{0.f};  // blend of the animation towards frame 0 (weapons)
     float morph{0.f};      // a gun morphing into its other ammo's model: + coming in, - going out (VR_AliasMorph)
+    int enchant{0}; // element and strength, only on the weapon mesh
     bool lightMultiply{false};
     glm::vec3 lightMod{1.f};
     glm::vec3 lightShift{0.f}; // the light sampled this far from the origin (a climbing hand: vr_climb.cpp drawnHand)

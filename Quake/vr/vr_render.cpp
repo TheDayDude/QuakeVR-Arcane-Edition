@@ -9,6 +9,7 @@
 //     * S(model scale) * T(network model_offset)                               (post)
 
 #include "vr_render.hpp"
+#include "vr_emissive.hpp"
 #include "vr_engine.hpp"
 #include "vr_anchor.hpp"
 #include "vr_avatar.hpp"
@@ -422,4 +423,8 @@ extern "C" void VR_AliasLightModifier(const entity_t* e, float lightcolor[3])
             lightcolor[i] *= ve->lightMod[i];
         }
     }
+    const auto* data=ve ? nullptr : networkData(e);
+    const glm::vec3 glow=emissive::enchantColor(ve ? ve->enchant : data ? data->enchant : 0);
+    for(int i=0;i<3;i++)lightcolor[i]+=glow[i];
+
 }

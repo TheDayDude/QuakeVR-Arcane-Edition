@@ -372,3 +372,7 @@ float parm45,parm46,parm47,parm48,parm49,parm50,parm51,parm52;
 float(entity r) ADVR_EnchantPack;
 void(entity r,float packed) ADVR_EnchantRestore;
 void(entity fire) ADVR_FireOut;
+
+float advr_enchant_stagger;
+.float advr_stagger_next;
+void() ADVR_TestEnchantGlow;

@@ -115,6 +115,7 @@ void killDlight(int key)
 // choice of trail: a model with a gib or rocket trail is not one of these).
 [[nodiscard]] const Glow* projectileGlow(const entity_t& e)
 {
+    if(!strcmp(e.model->name, "progs/advr_frostbolt.mdl")) return &lightningCharge;
     if(!strcmp(e.model->name, "progs/advr_magic_charge.mdl")) return e.skinnum == 1 ? &lightningCharge : &magicCharge;
     if(!strcmp(e.model->name, "progs/advr_fury_charge.mdl")) return &furyCharge;
     const int flags = e.model->flags;
@@ -418,9 +419,9 @@ mem::Scratch<EmissiveScratch> scratch{"emissive"};
 glm::vec3 emissive::enchantColor(int code)
 {
     const int type=code & 3;
-    if(type!=1 && type!=2)return glm::vec3{0.f};
+    if(type<1 || type>3)return glm::vec3{0.f};
     const float strength=static_cast<float>((code>>2)&63)/63.f;
-    return (type==1 ? glm::vec3{1.5f,0.045f,0.025f} : glm::vec3{0.65f,1.05f,1.65f})*strength;
+    return (type==1 ? glm::vec3{1.5f,0.045f,0.025f} : type==2 ? glm::vec3{0.65f,1.05f,1.65f} : glm::vec3{0.1f,0.65f,1.8f})*strength;
 }
 void emissive::enchantLight(int index,const glm::vec3& pos,int code)
 {
@@ -429,7 +430,7 @@ void emissive::enchantLight(int index,const glm::vec3& pos,int code)
     dlight_t* dl=CL_AllocDlight(-0x70000-index);
     for(int i=0;i<3;i++)dl->origin[i]=pos[i];
     dl->die=static_cast<float>(cl.time+0.05);
-    setGlow(dl,color,65.f,0.f);
+    setGlow(dl,color*0.12f,45.f,0.f);
 }
 
 // Each frame a glowing projectile is relinked: its light where it is drawn, lasting until the next

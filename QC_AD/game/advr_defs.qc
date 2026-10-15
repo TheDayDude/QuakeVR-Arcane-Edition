@@ -324,7 +324,7 @@ float(entity e,vector blade,float settle) ragdolldecap = #0;
 vector(entity e,float what) ragdollcut = #0;
 
 float ADVR_TOME=13, ADVR_DEBUGTOME=14;
-float ADVR_SPELL_COUNT=2; // spell IDs: 0 fireball, 1 lightning
+float ADVR_SPELL_COUNT=3; // spell IDs: 0 fireball, 1 lightning, 2 frostbolt
 float parm40,parm41,parm42,parm43,parm44;
 .float advr_magic_version,advr_known,advr_mana_max,advr_tome_read;
 .float advr_favorites[8]; // X,Y,A,B,Up,Down,Left,Right; spell ID + 1 (zero unassigned)
@@ -376,3 +376,10 @@ void(entity fire) ADVR_FireOut;
 float advr_enchant_stagger;
 .float advr_stagger_next;
 void() ADVR_TestEnchantGlow;
+
+.float advr_frost_until,advr_frostbolt;
+void(entity target) ADVR_FrostHit;
+void() ADVR_TestFrost;
+void() ADVR_TestFrostView;
+
+.entity advr_fury_guide; // reusable dotted center-projectile preview

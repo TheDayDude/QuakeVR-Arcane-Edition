@@ -13,7 +13,33 @@ float(vector a,vector b,vector c,vector d) ADVR_FuryCross = {
     p=a+u*s;q=c+v*t;if(vlen(p-q)>5)return 0;
     advr_fury_cross=(p+q)*0.5;return 1;
 };
+void() ADVR_FuryGuideClear = {
+    local entity dot,next;
+    dot=self.advr_fury_guide;self.advr_fury_guide=world;
+    while(dot){next=dot.chain;remove(dot);dot=next;}
+};
+// The native Fury balls fly straight. Trace the center ray from the exact
+// launch offset; no preview beyond a wall or damageable target.
+void(vector at,vector dir) ADVR_FuryGuide = {
+    local entity dot,previous;local float i,reach,distance;
+    traceline(at,at+dir*768,FALSE,self);reach=vlen(trace_endpos-at);
+    dot=self.advr_fury_guide;previous=world;
+    for(i=0;i<24;i=i+1) {
+        if(!dot) {
+            dot=spawn();dot.classname="advr_fury_guide";dot.owner=self;
+            dot.solid=SOLID_NOT;dot.movetype=MOVETYPE_NONE;
+            if(previous)previous.chain=dot;else self.advr_fury_guide=dot;
+        }
+        distance=16+i*24;
+        if(distance<reach) {
+            setmodel(dot,"progs/advr_aim_dot.mdl");
+            dot.alpha=0.22;setorigin(dot,at+dir*distance);
+        } else setmodel(dot,"");
+        previous=dot;dot=dot.chain;
+    }
+};
 void() ADVR_FuryClear = {
+    ADVR_FuryGuideClear();
     if(self.advr_fury_glow){remove(self.advr_fury_glow);self.advr_fury_glow=world;}
     self.advr_fury_charge=0;
 };
@@ -59,9 +85,10 @@ void() ADVR_FuryFrame = {
         haptic(0,0,0.05,65,0.1+self.advr_fury_charge*0.3);
         haptic(1,0,0.05,65,0.1+self.advr_fury_charge*0.3);
     }
-    if(self.advr_fury_charge<1)return;
     at=advr_fury_cross+dir*8;traceline(head,at,TRUE,self);
     if(trace_fraction<1){ADVR_FuryClear();return;}
+    ADVR_FuryGuide(at,dir);
+    if(self.advr_fury_charge<1)return;
     // Native AD projectile keeps explosion, resistance, damage credit and parry handling.
     // A deterministic fan like the knight's: center and +/-8 degrees. Save the
     // basis because Launch_Missile may change the global direction vectors.

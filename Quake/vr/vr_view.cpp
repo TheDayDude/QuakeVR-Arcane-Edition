@@ -671,11 +671,11 @@ void queueWeaponText(const glm::vec3& handRot, bool mirrored, int hand, const vi
     if(ve.ent.model && !strcmp(ve.ent.model->name, "progs/advr_tome.mdl"))
     {
         const bool debug=(cl.stats[STAT_QVR_MAGIC_TOMES] & (main ? 2 : 1))!=0;
-        const int known=debug ? 3 : cl.stats[STAT_QVR_MAGIC_KNOWN];
-        const char* names[]={"Fireball","Lightning"};
+        const int known=debug ? 7 : cl.stats[STAT_QVR_MAGIC_KNOWN];
+        const char* names[]={"Fireball","Lightning","Frostbolt"};
         const char* keys[]={"X","Y","A","B","Up","Dn","Lt","Rt"};
         q_snprintf(buf,sizeof(buf),"Arcane Essence\n%d/%d%s\n",ammo,cl.stats[STAT_QVR_MAGIC_MAX],debug ? " (Debug)" : "");
-        for(int spell=0;spell<2;spell++) {
+        for(int spell=0;spell<3;spell++) {
             if(!(known & (1<<spell)))continue;
             char hotkeys[64]={};
             for(int k=4;k<8;k++) {
@@ -4644,6 +4644,7 @@ void setupSawHandle()
     ve.scale = saw->scale;
     ve.lightMultiply = saw->lightMultiply;
     ve.lightMod = saw->lightMod;
+    ve.enchant = saw->enchant;
     // Lit as the chainsaw (sampled where its light is): no change of shade as it leaves its seat.
     ve.lightShift = glm::vec3{saw->ent.origin[0], saw->ent.origin[1], saw->ent.origin[2]} + saw->lightShift - origin;
 }

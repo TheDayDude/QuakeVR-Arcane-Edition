@@ -160,3 +160,5 @@ QVR_FIELD(advr_enchant_until)
 QVR_FIELD(advr_enchant_record)
 QVR_FIELD(advr_enchant_charge)
 QVR_FIELD(advr_enchant_spell)
+
+QVR_FIELD(advr_frost_until)

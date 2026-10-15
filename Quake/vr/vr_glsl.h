@@ -2272,6 +2272,8 @@ SPECULAR_AA_FUNCTIONS
 "		vec3 glowColor = in_glow > 0. ? SceneTone.yzw : vec3(1.0, 0.66, 0.2); // QVR: the player's hue; the counter's gold\n" \
 "		result.rgb += glowColor * abs(in_glow) * (pow(rim, 2.0) * 1.1 + (in_glow > 0. ? 0.08 : 0.12));\n" \
 "	}\n" \
+"\tfloat enchantRim = 1.0 - abs(dot(normalize(in_nor), normalize(-in_pos)));\n" \
+"\tresult.rgb += instances[in_instance].Enchant.rgb * (0.12 + 1.1 * enchantRim * enchantRim);\n" \
 "	result.rgb += morphSeam; // QVR: a morph's glowing seam\n" \
 "	if (!morphShown) // QVR: this model is not there yet (or any more) in a morph\n" \
 "		discard;\n"

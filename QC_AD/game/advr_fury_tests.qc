@@ -22,13 +22,19 @@ void() ADVR_TestFury = {
     frametime=0.05;
     for(i=0;i<8;i=i+1)ADVR_FuryFrame();
     ADVR_Assert(self.advr_fury_charge>0 && self.advr_fury_glow,"cross builds visible charge");
+    ADVR_Assert(self.advr_fury_guide && self.advr_fury_guide.alpha==0.22,"faint guide appears during charge");
+    ADVR_Assert(vlen(self.advr_fury_guide.origin-(advr_fury_cross+'24 0 0'))<0.01,"guide matches center launch ray");
+    target=spawn();target.solid=SOLID_BBOX;setsize(target,'-4 -40 -40','4 40 40');setorigin(target,advr_fury_cross+'60 0 0');
+    ADVR_FuryGuide(advr_fury_cross+'8 0 0','1 0 0');
+    ADVR_Assert(self.advr_fury_guide.modelindex && !self.advr_fury_guide.chain.chain.modelindex,"guide stops at blocker");remove(target);
     ADVR_Sync();ADVR_Assert(self.weaponframe==2 && self.weaponframe2==2,"both blades show partial yellow charge");
     self.offmuzzlepos=self.offhandpos+'0 0 30';ADVR_FuryFrame();
-    ADVR_Assert(!self.advr_fury_charge && !self.advr_fury_glow,"uncross cancels charge and glow");
+    ADVR_Assert(!self.advr_fury_charge && !self.advr_fury_glow && !self.advr_fury_guide,"uncross cancels charge and glow");
     ADVR_Sync();ADVR_Assert(self.weaponframe==0 && self.weaponframe2==0,"uncross restores normal blade skins");
     self.offmuzzlepos=at+'24 -12 22';
     for(i=0;i<22;i=i+1)ADVR_FuryFrame();
     ADVR_Assert(self.advr_fury_latched && self.advr_fury_cooldown>time,"full charge fires and latches");
+    ADVR_Assert(!self.advr_fury_guide,"firing removes guide");
     shot=newmis;count=0;
     p=world;
     while((p=nextent(p)))if(p.owner==self && p.classtype==CT_PROJ_FURY1) {

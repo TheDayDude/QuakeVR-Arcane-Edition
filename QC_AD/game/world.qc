@@ -469,8 +469,10 @@ void() worldspawn =
     precache_model("progs/advr_fury1.mdl");
     precache_model("progs/advr_fury2.mdl");
     precache_model("progs/advr_fury_charge.mdl");
+    precache_model("progs/advr_aim_dot.mdl");
     precache_model("progs/advr_tome.mdl");
     precache_model("progs/advr_magic_charge.mdl");
+    precache_model("progs/advr_frostbolt.mdl");
     precache_model(MODEL_PROJ_LAVA);
     precache_sound("skullwiz/attack.wav");
     precache_sound("hknight/attack1.wav");

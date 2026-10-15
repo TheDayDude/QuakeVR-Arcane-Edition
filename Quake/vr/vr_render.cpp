@@ -248,6 +248,11 @@ extern "C" void VR_AliasInstance(const entity_t* e, const float matrix[16], cons
     VR_AliasLightDir(e, out->lightdir);
     VR_AliasAmbient(e, matrix, hdr, lit, &out->ambient[0][0]); // directional ambient (vr_model_ambient_dir)
     VR_AliasMorph(e, hdr, &out->ambient[0][0]); // a gun morphing into its other ammo's model
+    const auto* enchantedView=view::find(e);
+    const auto* enchantedWorld=enchantedView ? nullptr : networkData(e);
+    const glm::vec3 enchant=emissive::enchantColor(enchantedView ? enchantedView->enchant : enchantedWorld ? enchantedWorld->enchant : 0);
+    for(int i=0;i<3;i++)out->enchant[i]=standard ? enchant[i] : 0.f;
+    out->enchant[3]=0.f;
     out->glow[0] = VR_EntityGlow(e);
     gltexture_t* skin = hdr->gltextures[e->skinnum >= 0 && e->skinnum < hdr->numskins ? e->skinnum : 0][0];
     const int authored = TexMgr_NormalMapAuthored(skin); // its skin's normal map is an authored file's
@@ -423,8 +428,6 @@ extern "C" void VR_AliasLightModifier(const entity_t* e, float lightcolor[3])
             lightcolor[i] *= ve->lightMod[i];
         }
     }
-    const auto* data=ve ? nullptr : networkData(e);
-    const glm::vec3 glow=emissive::enchantColor(ve ? ve->enchant : data ? data->enchant : 0);
-    for(int i=0;i<3;i++)lightcolor[i]+=glow[i];
+
 
 }

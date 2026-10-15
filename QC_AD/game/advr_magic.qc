@@ -24,7 +24,7 @@ void(entity player,entity book) ADVR_TomePickup = {
     for(i=0;i<ADVR_SPELL_COUNT;i=i+1) {
         if(!(player.advr_known & pow(2,spell))) {
             player.advr_known=player.advr_known | pow(2,spell);player.advr_spell=spell;
-            if(spell==0)sprint(player,"Learned Fireball!\n");else sprint(player,"Learned Lightning!\n");
+            if(spell==0)sprint(player,"Learned Fireball!\n");else if(spell==1)sprint(player,"Learned Lightning!\n");else sprint(player,"Learned Frostbolt!\n");
             return;
         }
         spell=mod(spell+1,ADVR_SPELL_COUNT);
@@ -142,6 +142,29 @@ float(float h) ADVR_MagicBlocked = {
     else {if(self.vrbits0 & 131072)return 1;if(self.offhand_hotspot==7)return 1;}
     return 0;
 };
+// One timestamp per living monster: repeat frost hits refresh, never stack speed loss.
+void(entity target) ADVR_FrostHit = {
+    if(!(target.flags & FL_MONSTER) || target.health<=0 || !target.takedamage ||
+       (target.flags & FL_GODMODE) || target.invincible_finished>time)return;
+    target.advr_frost_until=time+4;
+};
+void() ADVR_FrostTouch = {
+    if(other==self.owner)return;
+    if(pointcontents(self.origin)==CONTENT_SKY){remove(self);return;}
+    if(other.takedamage)T_Damage(other,self,self.owner,30*max(1,self.advr_magic_damage),DAMARMOR);
+    particle2(self.origin,'0 0 30',3,16);
+    sound(self,CHAN_WEAPON,"weapons/lhit.wav",0.5,ATTN_NORM);
+    remove(self);
+};
+void(vector at,vector direction) ADVR_FrostLaunch = {
+    newmis=spawn();newmis.classname="advr_frostbolt";newmis.owner=self;newmis.advr_frostbolt=1;
+    newmis.solid=SOLID_BBOX;newmis.movetype=MOVETYPE_FLYMISSILE;
+    newmis.velocity=normalize(direction)*750;newmis.angles=vectoangles(newmis.velocity);
+    newmis.touch=ADVR_FrostTouch;newmis.think=SUB_Remove;newmis.nextthink=time+5;
+    newmis.advr_magic_damage=ADVR_MagicMultiplier();
+    setmodel(newmis,"progs/advr_frostbolt.mdl");setsize(newmis,'0 0 0','0 0 0');setorigin(newmis,at);
+};
+
 // Pending infusion belongs to a particular book, weapon and controller.
 // Releasing, swapping either item or losing tracking cancels without spending.
 void() ADVR_EnchantClear = {
@@ -169,7 +192,7 @@ void(entity book,float h,float down,float old) ADVR_EnchantFrame = {
     haptic(h,0,0.12,150,0.7);haptic(h,0.2,0.12,150,0.7);
     sound(self,CHAN_AUTO,"skullwiz/attack.wav",0.45,ATTN_NORM);
     if(r.advr_enchant_type==1)sprint(self,"Fire enchantment: 60 seconds.\n");
-    else sprint(self,"Lightning enchantment: 60 seconds.\n");
+    else if(r.advr_enchant_type==2)sprint(self,"Lightning enchantment: 60 seconds.\n");else sprint(self,"Frost enchantment: 60 seconds.\n");
     ADVR_EnchantClear();
 };
 // Projectile payload is copied at launch, never looked up from the shooter's
@@ -201,6 +224,8 @@ float(entity target,entity inflictor,entity attacker,float damage) ADVR_EnchantD
     if(r.advr_enchant_type==1) {
         ADVR_Ignite(target,attacker);
         if(target.advr_burn)target.advr_burn.advr_magic_damage=max(1,r.advr_enchant_scale);
+    } else if(r.advr_enchant_type==3) {
+        ADVR_FrostHit(target);
     } else {
         bonus=Resist_Damage(target,IT_CELLS,bonus);
         if(bonus>0)advr_enchant_stagger=ADVR_EnchantStagger(target,random());
@@ -237,6 +262,7 @@ void() ADVR_MagicFrame = {
         ADVR_MagicClear();
         if(ADVR_SpellMask(self,book) & 1)self.advr_spell=0;
         else if(ADVR_SpellMask(self,book) & 2)self.advr_spell=1;
+        else if(ADVR_SpellMask(self,book) & 4)self.advr_spell=2;
         else return;
     }
     if(ADVR_Hand(h)) {
@@ -291,9 +317,10 @@ void() ADVR_MagicFrame = {
                     ADVR_MagicBeam(at,h);return;
                 }
                 at=trace_endpos;newmis=world;
-                Launch_Missile(at,dir,'0 0 0',CT_PROJ_FIRETOP,750);
+                if(self.advr_spell==2)ADVR_FrostLaunch(at,dir);
+                else Launch_Missile(at,dir,'0 0 0',CT_PROJ_FIRETOP,750);
                 if(newmis) {
-                    newmis.advr_fireball=1;newmis.advr_magic_damage=ADVR_MagicMultiplier();newmis.poisonous=0;
+                    newmis.advr_fireball=self.advr_spell==0;newmis.advr_magic_damage=ADVR_MagicMultiplier();newmis.poisonous=0;
                     self.mana=self.mana-1;
                     sound(self,CHAN_WEAPON,"skullwiz/attack.wav",1,ATTN_NORM);
                     haptic(h,0,0.12,85,0.6);
@@ -308,7 +335,7 @@ void() ADVR_MagicFrame = {
     if(!self.advr_magic_fx) {
         fx=spawn();fx.classname="advr_magic_charge";fx.owner=self;fx.solid=SOLID_NOT;fx.movetype=MOVETYPE_NONE;
         setmodel(fx,"progs/advr_magic_charge.mdl");fx.effects=EF_DIMLIGHT;fx.think=ADVR_MagicGlowThink;fx.nextthink=time+0.05;
-        fx.skin=self.advr_spell;
+        fx.skin=min(self.advr_spell,1);
         self.advr_magic_fx=fx;
     }
     setorigin(self.advr_magic_fx,at);self.advr_magic_fx.alpha=0.2+0.8*self.advr_magic_charge;

@@ -4644,6 +4644,7 @@ void setupSawHandle()
     ve.scale = saw->scale;
     ve.lightMultiply = saw->lightMultiply;
     ve.lightMod = saw->lightMod;
+    ve.enchant = saw->enchant;
     // Lit as the chainsaw (sampled where its light is): no change of shade as it leaves its seat.
     ve.lightShift = glm::vec3{saw->ent.origin[0], saw->ent.origin[1], saw->ent.origin[2]} + saw->lightShift - origin;
 }

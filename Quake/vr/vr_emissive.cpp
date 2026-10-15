@@ -429,7 +429,7 @@ void emissive::enchantLight(int index,const glm::vec3& pos,int code)
     dlight_t* dl=CL_AllocDlight(-0x70000-index);
     for(int i=0;i<3;i++)dl->origin[i]=pos[i];
     dl->die=static_cast<float>(cl.time+0.05);
-    setGlow(dl,color,65.f,0.f);
+    setGlow(dl,color*0.12f,45.f,0.f);
 }
 
 // Each frame a glowing projectile is relinked: its light where it is drawn, lasting until the next

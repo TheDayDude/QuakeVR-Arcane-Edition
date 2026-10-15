@@ -1204,6 +1204,7 @@ NOISE_FUNCTIONS
 "	vec4	WoundSide; // QVR: (vr/vr_wounds.cpp) xy the bones of its right side (bits 0..23, 24..47, as whole numbers: your body's mask is one a side), z painting only side z - 1 (0: all; drawn, negative: -(the layer + 1) of the blood on yours not yours, chunky), w the blood's opacity\n"\
 "	vec4	Retro; // QVR: retro textures (vr_retro.h): x its set (0 none), yz its skin's Quake size (0: the texture's own); w retro lighting's (vr_retrolight.h): a Quake texel's share of the texture's (0: 1)\n"\
 "	vec4	RetroPart; // QVR: your body's parts by bone (vr/vr_retro.cpp bodyParts): xy the low bits of bones 0..23, 24..47, zw the high bits\n"\
+"\tvec4 Enchant; // QVR: additive elemental weapon glow\n"\
 "};\n"\
 "\n"\
 "layout(std430, binding=1) restrict readonly buffer InstanceBuffer\n"\

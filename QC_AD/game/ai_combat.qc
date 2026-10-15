@@ -288,6 +288,7 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 	// do the damage
 	//----------------------------------------------------------------------
 	ADVR_FireHit(targ,inflictor,attacker,take,checkarmor);
+    if(take>0 && inflictor.advr_frostbolt)ADVR_FrostHit(targ);
     take=ADVR_EnchantDamage(targ,inflictor,attacker,take);
     stagger=advr_enchant_stagger;advr_enchant_stagger=0;
 	targ.health = targ.health - take;

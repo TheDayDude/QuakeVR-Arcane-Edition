@@ -144,6 +144,7 @@ qboolean SV_RunThink (edict_t *ent)
 	pr_global_struct->self = EDICT_TO_PROG(ent);
 	pr_global_struct->other = EDICT_TO_PROG(qcvm->edicts);
 	PR_ExecuteProgram (ent->v.think);
+    VR_FrostThink(ent,thinktime);
 
 	return !ent->free;
 }

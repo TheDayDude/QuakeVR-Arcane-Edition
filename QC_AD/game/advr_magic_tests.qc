@@ -141,15 +141,16 @@ void() ADVR_TestProgression = {
     book=ADVR_Record(IT_AXE);book.advr_kind=ADVR_TOME;
     ADVR_Assert(!self.advr_known && self.advr_mana_max==50,"new player has no spells and fifty capacity");
     ADVR_TomePickup(self,book);first=self.advr_known;
-    ADVR_Assert((first==1 || first==2) && self.mana==30,"first standard tome teaches exactly one spell and grants thirty mana");
+    ADVR_Assert((first==1 || first==2 || first==4) && self.mana==30,"first standard tome teaches exactly one spell and grants thirty mana");
     ADVR_TomePickup(self,book);
     ADVR_Assert(self.advr_known==first && self.mana==30,"same physical tome cannot teach or refill twice");
     self.advr_off=book;self.button3=1;ADVR_MagicSelect();self.button3=0;ADVR_MagicSelect();
     ADVR_Assert(first & pow(2,self.advr_spell),"selection skips unknown spells");
     debug=ADVR_Record(IT_AXE);debug.advr_kind=ADVR_DEBUGTOME;ADVR_TomePickup(self,debug);
-    ADVR_Assert(ADVR_SpellMask(self,debug)==3 && self.advr_known==first,"debug exposes all spells without learning them");
+    ADVR_Assert(ADVR_SpellMask(self,debug)==7 && self.advr_known==first,"debug exposes all spells without learning them");
     second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
-    ADVR_Assert(self.advr_known==3 && ADVR_SpellMask(self,book)==3,"second new tome teaches remaining spell, visible in first tome");
+    second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
+    ADVR_Assert(self.advr_known==7 && ADVR_SpellMask(self,book)==7,"three new tomes teach all spells, visible in first tome");
     self.mana=49;foe=spawn();foe.flags=FL_MONSTER;foe.classtype=CT_MONSKULLW;
     ADVR_ManaReward(foe,self);ADVR_Assert(self.mana==50,"magical kill reward clamps at mana capacity");remove(foe);
     power=spawn();self=power;other=player;ADVR_PowerPickup();ADVR_PowerPickup();self=player;
@@ -179,7 +180,7 @@ void() ADVR_TestProgression = {
     for(i=0;i<41;i=i+1)ADVR_MagicSelect();self.advr_magic_buttons=0;ADVR_MagicSelect();
     ADVR_Assert(self.advr_favorites[4]==1,"long D-pad hold rebinds instead of recalling old favorite");
     self.advr_main=debug;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();book=self.advr_off;
-    ADVR_Assert(self.advr_known==3 && self.advr_mana_max==60 && self.advr_favorites[4]==1 && self.advr_favorites[7]==2,"knowledge capacity and favorites survive map parms");
+    ADVR_Assert(self.advr_known==7 && self.advr_mana_max==60 && self.advr_favorites[4]==1 && self.advr_favorites[7]==2,"knowledge capacity and favorites survive map parms");
     ADVR_Assert(book.advr_tome_read && self.advr_main.advr_kind==ADVR_DEBUGTOME,"read state and debug identity survive map parms");
     self.advr_known=1;self.advr_main=world;self.advr_spell=0;self.advr_magic_buttons=4;ADVR_MagicSelect();
     self.advr_magic_buttons=0;ADVR_MagicSelect();ADVR_Assert(self.advr_spell==0,"debug-only favorite cannot unlock an unknown spell in a standard tome");
@@ -278,3 +279,59 @@ void() ADVR_TestEnchantGlow = {
 };
 
 
+
+// Real server think scheduling: first interval chilled, then expired, then dead.
+void() ADVR_TestFrostTick = {
+    if(self.count==1) {
+        ADVR_Assert(fabs(time-self.attack_finished-0.1/0.65)<0.002,"frost slows actual AI think interval by 35 percent");
+        self.advr_frost_until=time-1;
+    } else if(self.count==2) {
+        ADVR_Assert(fabs(time-self.attack_finished-0.1)<0.002,"expired frost restores normal interval");
+        self.advr_frost_until=time+4;self.health=0;
+    } else if(self.count==3) {
+        ADVR_Assert(fabs(time-self.attack_finished-0.1)<0.002,"frost does not slow corpse thinks");
+        bprint("ADVR FROST TIMING PASS: chilled, expired and dead AI intervals\n");remove(self);return;
+    }
+    self.count=self.count+1;self.attack_finished=time;self.nextthink=time+0.1;
+};
+void() ADVR_TestFrostView = {
+    ADVR_TestMagicView();self.advr_spell=2;ADVR_Sync();
+};
+void() ADVR_TestFrost = {
+    local entity player,book,v,shot,r,timer;
+    local float i,oldframe,before;
+    player=self;oldframe=frametime;frametime=0.05;
+    ADVR_TestFrostView();book=self.advr_off;
+    self.advr_known=3;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
+    ADVR_Assert(self.advr_known==7 && self.advr_spell==2,"new standard tome teaches missing frost");remove(r);
+    self.advr_favorites[4]=3;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();book=self.advr_off;
+    ADVR_Assert(self.advr_spell==2 && self.weaponframe2==2 && self.advr_favorites[4]==3,"frost selection and favorite survive map parms");
+    self.vrbits0=16384;self.handpos=ADVR_Head(self)+'24 0 -8';self.offhandpos=ADVR_Head(self)+'24 16 -8';
+    self.handrot=self.offhandrot='0 0 0';self.handvel=self.offhandvel='0 0 0';self.mainhand_hotspot=self.offhand_hotspot=0;
+    self.advr_magic_sticks=2;before=self.mana;
+    for(i=0;i<15;i=i+1)ADVR_MagicFrame();
+    ADVR_Assert(self.advr_magic_ready && self.advr_magic_fx.skin==1,"frost charges blue orb");
+    self.handvel='0 1 0';self.advr_magic_sticks=0;ADVR_MagicFrame();shot=newmis;
+    ADVR_Assert(self.mana==before-1 && shot.advr_frostbolt && !shot.advr_fireball && shot.velocity_y>700,"frost flick launches blue bolt for one mana");
+    v=spawn();v.classname="advr_frost_target";v.flags=FL_MONSTER;v.takedamage=DAMAGE_YES;v.health=1000;
+    v.enemy=player;v.switchattacker=player;v.switchtimer=time+100;
+    setmodel(v,"progs/player.mdl");setorigin(v,ADVR_Head(self)+'100 0 0');
+    shot.advr_magic_damage=1;self=shot;other=v;ADVR_FrostTouch();self=player;
+    ADVR_Assert(v.health==970 && v.advr_frost_until==time+4 && !v.advr_burn,"frost impact damages and chills without burning");
+    v.advr_frost_until=time+1;ADVR_FrostHit(v);ADVR_FrostHit(v);
+    ADVR_Assert(v.advr_frost_until==time+4,"repeat frost refreshes rather than stacks");
+    r=ADVR_Record(IT_SHOTGUN);self.advr_main=r;self.handvel='0 0 0';self.advr_magic_sticks=2;
+    for(i=0;i<65;i=i+1)ADVR_MagicFrame();
+    ADVR_Assert(r.advr_enchant_type==3,"frost selection enchants held gun");r.advr_enchant_scale=1;
+    advr_attack_actor=self;advr_attack_record=r;T_Damage(v,self,self,40,NOARMOR);
+    ADVR_Assert(v.health==928 && v.advr_frost_until==time+4,"frost hits add five percent and chill");
+    shot=spawn();shot.owner=self;ADVR_EnchantMissile(shot);advr_attack_actor=world;advr_attack_record=world;
+    T_Damage(v,shot,self,40,NOARMOR);
+    ADVR_Assert(v.health==886 && shot.advr_enchant_type==3,"frost projectile keeps enchant payload");remove(shot);
+    v.advr_frost_until=0;v.flags=FL_CLIENT;ADVR_FrostHit(v);ADVR_Assert(!v.advr_frost_until,"frost ignores players");
+    v.flags=FL_MONSTER | FL_GODMODE;ADVR_FrostHit(v);ADVR_Assert(!v.advr_frost_until,"frost respects invulnerability");remove(v);
+    timer=spawn();timer.classname="advr_frost_clock";timer.flags=FL_MONSTER;timer.health=10;
+    timer.advr_frost_until=time+4;timer.think=ADVR_TestFrostTick;timer.nextthink=time+0.1;
+    self.advr_magic_sticks=0;ADVR_MagicFrame();frametime=oldframe;ADVR_Sync();
+    bprint("ADVR FROST PASS: learning, persistence, casting, damage, refresh, enchantments and immunity\n");
+};

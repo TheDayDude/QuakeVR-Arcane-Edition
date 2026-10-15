@@ -583,7 +583,7 @@ void() ADVR_LoadParms = {
     local float i;
     dprint("ADVR RESTORE ");dprint(ftos(parm17));dprint(" ");dprint(ftos(parm18));dprint(" ");dprint(ftos(parm19));dprint(" items ");dprint(ftos(self.items));dprint("\n");
     if(!parm17)return;
-    self.advr_initialized=1;self.advr_bolts=max(0,parm35);self.mana=bound(0,parm36,9999);self.advr_mana_seen=parm37;self.advr_spell=bound(0,floor(parm38),1);self.vr_flashlight_state=parm39;
+    self.advr_initialized=1;self.advr_bolts=max(0,parm35);self.mana=bound(0,parm36,9999);self.advr_mana_seen=parm37;self.advr_spell=bound(0,floor(parm38),ADVR_SPELL_COUNT-1);self.vr_flashlight_state=parm39;
     self.advr_known=parm40;self.advr_mana_max=parm41;self.advr_magic_version=parm42;ADVR_MagicInit(self);
     for(i=0;i<4;i=i+1){self.advr_favorites[i]=mod(floor(parm43/pow(16,i)),16);self.advr_favorites[i+4]=mod(floor(parm44/pow(16,i)),16);}
     self.advr_main=ADVR_Restore(parm18);self.advr_off=ADVR_Restore(parm19);

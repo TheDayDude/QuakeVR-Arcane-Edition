@@ -162,7 +162,7 @@ int enchantCode(edict_t* record,edict_t* player=nullptr)
     }
     if(fieldFloatOr(record,f.advr_enchant_until,0.f)<=qcvm->time)return 0;
     const int type=static_cast<int>(fieldFloatOr(record,f.advr_enchant_type,0.f));
-    return type==1 || type==2 ? type | (63<<2) : 0;
+    return type>=1 && type<=3 ? type | (63<<2) : 0;
 }
 
 void sweepWeaponInsts()
@@ -754,6 +754,18 @@ extern "C" void VR_WriteEntityUpdate(sizebuf_t* msg, edict_t* ent, int bits)
     if(bits & U_QVR_ENCHANT)MSG_WriteByte(msg,enchantCode(weaponInst(ent,f.weaponinst)));
 }
 
+// Movement and attacks advance through these same animation/AI thinks. Do not
+// alter stored speed fields, so expiry, saves and overlapping effects stay safe.
+extern "C" void VR_FrostThink(edict_t* ent,double thinktime)
+{
+    if(ent->free || !bindings().isAdVrProgs || !(static_cast<int>(ent->v.flags)&FL_MONSTER) || ent->v.health<=0 ||
+       fieldFloatOr(ent,fields().vr_knockdown,0.f)!=0.f)return;
+    const double until=fieldFloatOr(ent,fields().advr_frost_until,0.f);
+    if(until<=thinktime || ent->v.nextthink<=thinktime)return;
+    const double delay=ent->v.nextthink-thinktime;
+    ent->v.nextthink+=static_cast<float>(std::min(delay*(1.0/0.65-1.0),std::max(0.0,until-ent->v.nextthink)));
+}
+
 extern "C" void VR_WriteClientSpawnState(sizebuf_t* msg)
 {
     if(vrProtocol())
@@ -1067,6 +1079,8 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "decaprig")) fixture = "ADVR_TestDecapRig";
         else if(!strcmp(Cmd_Argv(1), "decapstate")) fixture = "ADVR_TestDecapState";
         else if(!strcmp(Cmd_Argv(1), "magic")) fixture = "ADVR_TestMagic";
+        else if(!strcmp(Cmd_Argv(1), "frost")) fixture = "ADVR_TestFrost";
+        else if(!strcmp(Cmd_Argv(1), "frostview")) fixture = "ADVR_TestFrostView";
         else if(!strcmp(Cmd_Argv(1), "enchantglow")) fixture = "ADVR_TestEnchantGlow";
         else if(!strcmp(Cmd_Argv(1), "enchant")) fixture = "ADVR_TestEnchant";
         else if(!strcmp(Cmd_Argv(1), "progression")) fixture = "ADVR_TestProgression";

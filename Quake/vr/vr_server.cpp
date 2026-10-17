@@ -162,9 +162,6 @@ int enchantCode(edict_t* record,edict_t* player=nullptr)
     }
     if(fieldFloatOr(record,f.advr_enchant_until,0.f)<=qcvm->time)return 0;
     const int type=static_cast<int>(fieldFloatOr(record,f.advr_enchant_type,0.f));
-<<<<<<< Updated upstream
-    return type>=1 && type<=3 ? type | (63<<2) : 0;
-=======
     return type>=1 && type<=8 ? (type & 7) | (31<<3) : 0;
 }
 
@@ -176,7 +173,6 @@ int entityEnchantCode(edict_t* ent)
        fieldFloatOr(ent,fields().advr_frost_until,0.f)>qcvm->time)return 3 | (7<<3);
     if(edict_t* record=weaponInst(ent,fields().weaponinst))return enchantCode(record);
     return enchantCode(ent);
->>>>>>> Stashed changes
 }
 
 void sweepWeaponInsts()
@@ -793,18 +789,6 @@ extern "C" void VR_FrostThink(edict_t* ent,double thinktime)
     ent->v.nextthink+=static_cast<float>(std::min(delay*(1.0/0.65-1.0),std::max(0.0,until-ent->v.nextthink)));
 }
 
-// Movement and attacks advance through these same animation/AI thinks. Do not
-// alter stored speed fields, so expiry, saves and overlapping effects stay safe.
-extern "C" void VR_FrostThink(edict_t* ent,double thinktime)
-{
-    if(ent->free || !bindings().isAdVrProgs || !(static_cast<int>(ent->v.flags)&FL_MONSTER) || ent->v.health<=0 ||
-       fieldFloatOr(ent,fields().vr_knockdown,0.f)!=0.f)return;
-    const double until=fieldFloatOr(ent,fields().advr_frost_until,0.f);
-    if(until<=thinktime || ent->v.nextthink<=thinktime)return;
-    const double delay=ent->v.nextthink-thinktime;
-    ent->v.nextthink+=static_cast<float>(std::min(delay*(1.0/0.65-1.0),std::max(0.0,until-ent->v.nextthink)));
-}
-
 extern "C" void VR_WriteClientSpawnState(sizebuf_t* msg)
 {
     if(vrProtocol())
@@ -1126,8 +1110,6 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "decaprig")) fixture = "ADVR_TestDecapRig";
         else if(!strcmp(Cmd_Argv(1), "decapstate")) fixture = "ADVR_TestDecapState";
         else if(!strcmp(Cmd_Argv(1), "magic")) fixture = "ADVR_TestMagic";
-<<<<<<< Updated upstream
-=======
         else if(!strcmp(Cmd_Argv(1), "slipview")) fixture = "ADVR_TestSlipView";
         else if(!strcmp(Cmd_Argv(1), "slipstep")) fixture = "ADVR_TestSlipstep";
         else if(!strcmp(Cmd_Argv(1), "protection")) fixture = "ADVR_TestProtection";
@@ -1135,7 +1117,6 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "magicrefine")) fixture = "ADVR_TestMagicRefine";
         else if(!strcmp(Cmd_Argv(1), "void")) fixture = "ADVR_TestVoid";
         else if(!strcmp(Cmd_Argv(1), "acid")) fixture = "ADVR_TestAcid";
->>>>>>> Stashed changes
         else if(!strcmp(Cmd_Argv(1), "frost")) fixture = "ADVR_TestFrost";
         else if(!strcmp(Cmd_Argv(1), "frostview")) fixture = "ADVR_TestFrostView";
         else if(!strcmp(Cmd_Argv(1), "enchantglow")) fixture = "ADVR_TestEnchantGlow";

@@ -28,11 +28,7 @@ void(entity player,entity book) ADVR_TomePickup = {
     for(i=0;i<ADVR_SPELL_COUNT;i=i+1) {
         if(!(player.advr_known & pow(2,spell))) {
             player.advr_known=player.advr_known | pow(2,spell);player.advr_spell=spell;
-<<<<<<< Updated upstream
-            if(spell==0)sprint(player,"Learned Fireball!\n");else if(spell==1)sprint(player,"Learned Lightning!\n");else sprint(player,"Learned Frostbolt!\n");
-=======
             if(spell==0)sprint(player,"Learned Fire!\n");else if(spell==1)sprint(player,"Learned Lightning!\n");else if(spell==2)sprint(player,"Learned Frost!\n");else if(spell==3)sprint(player,"Learned Acid!\n");else if(spell==4)sprint(player,"Learned Void!\n");else if(spell==5)sprint(player,"Learned Haste!\n");else if(spell==6)sprint(player,"Learned Protection!\n");else sprint(player,"Learned Slipstep!\n");
->>>>>>> Stashed changes
             return;
         }
         spell=mod(spell+1,ADVR_SPELL_COUNT);
@@ -153,12 +149,6 @@ float(float h) ADVR_MagicBlocked = {
     return 0;
 };
 // One timestamp per living monster: repeat frost hits refresh, never stack speed loss.
-<<<<<<< Updated upstream
-void(entity target) ADVR_FrostHit = {
-    if(!(target.flags & FL_MONSTER) || target.health<=0 || !target.takedamage ||
-       (target.flags & FL_GODMODE) || target.invincible_finished>time)return;
-    target.advr_frost_until=time+4;
-=======
 // Elemental resistance applies only to the elemental portion of a weapon hit.
 float(entity target) ADVR_FireResistance = {
     if((target.flags & FL_MONSTER) && (target.classgroup==CG_STONE || target.gibtype==GIBTYPE_STONE))return 0.5;
@@ -196,34 +186,67 @@ void(entity target,entity attacker,float multiplier) ADVR_AcidApply = {
     effect.owner=attacker;effect.advr_magic_damage=multiplier;effect.advr_acid_end=time+4;
 };
 void() ADVR_AcidTouch = {
+    local entity e,hit;local float damage;
     if(other==self.owner)return;
     if(pointcontents(self.origin)==CONTENT_SKY){remove(self);return;}
-    if(other.takedamage)T_Damage(other,self,self.owner,20*max(1,self.advr_magic_damage)*ADVR_AcidResistance(other),DAMARMOR);
-    particle(self.origin,'0 0 30',63,20);
-    sound(self,CHAN_WEAPON,"weapons/lhit.wav",0.5,ATTN_NORM);remove(self);
+    hit=other;
+    // One hit per victim, native fire-sized falloff, no splash through walls.
+    e=world;
+    while((e=nextent(e))) {
+        if(!e.takedamage)continue;
+        damage=40-0.5*vlen(modelcentre(e)-self.origin);
+        if(e==hit)damage=40;
+        if(damage<=0)continue;
+        if(e!=hit && !CanDamage(e,self))continue;
+        if(e==self.owner)damage=damage*0.5;
+        T_Damage(e,self,self.owner,damage*max(1,self.advr_magic_damage)*ADVR_AcidResistance(e),DAMARMOR);
+    }
+    particle(self.origin,'0 0 30',63,80);
+    sound(self,CHAN_WEAPON,"weapons/lhit.wav",0.7,ATTN_NORM);remove(self);
+};
+// Independent controller leaves native fire impact, trail and expiry callbacks intact.
+.entity advr_guidance;
+.float advr_guidance_hand;
+void() ADVR_GuidedBoltThink = {
+    local entity missile,caster;local vector aim;local float speed;
+    missile=self.enemy;caster=self.owner;
+    if(!missile || missile.advr_guidance!=self || missile.owner!=caster ||
+       missile.solid==SOLID_NOT || time>=self.attack_finished ||
+       !caster || caster.health<=0 || !(caster.flags & FL_CLIENT)) {
+        if(missile && missile.advr_guidance==self)missile.advr_guidance=world;
+        remove(self);return;
+    }
+    if(self.advr_guidance_hand)aim=caster.handrot;else aim=caster.offhandrot;
+    makevectors(aim);speed=vlen(missile.velocity);
+    if(speed>1 && !(missile.advr_voidorb && missile.enemy && missile.enemy.health>0)) {
+        missile.velocity=normalize(normalize(missile.velocity)*0.88+v_forward*0.12)*speed;
+        missile.angles=vectoangles(missile.velocity);
+    }
+    self.nextthink=time+0.05;
+};
+void(entity missile,float hand) ADVR_GuideBolt = {
+    local entity guide;
+    guide=spawn();guide.classname="advr_guided_bolt";guide.owner=self;guide.enemy=missile;
+    guide.advr_guidance_hand=hand;guide.attack_finished=time+8;
+    missile.advr_guidance=guide;guide.think=ADVR_GuidedBoltThink;guide.nextthink=time+0.05;
 };
 void(vector at,vector direction) ADVR_AcidLaunch = {
     newmis=spawn();newmis.classname="advr_acidbolt";newmis.owner=self;newmis.advr_acidbolt=1;
     newmis.solid=SOLID_BBOX;newmis.movetype=MOVETYPE_FLYMISSILE;
-    newmis.velocity=normalize(direction)*750;newmis.angles=vectoangles(newmis.velocity);
+    newmis.velocity=normalize(direction)*550;newmis.angles=vectoangles(newmis.velocity);
     newmis.touch=ADVR_AcidTouch;newmis.think=SUB_Remove;newmis.nextthink=time+5;
     newmis.advr_magic_damage=ADVR_MagicMultiplier();
-    setmodel(newmis,MODEL_PROJ_WIZ);setsize(newmis,'0 0 0','0 0 0');setorigin(newmis,at);
+    setmodel(newmis,MODEL_PROJ_WIZ);setsize(newmis,'-4 -4 -4','4 4 4');setorigin(newmis,at);
 };
 void(entity target) ADVR_FrostHit = {
     if(!(target.flags & FL_MONSTER) || target.health<=0 || !target.takedamage ||
        (target.flags & FL_GODMODE) || target.invincible_finished>time)return;
     target.advr_frost_until=time+8*ADVR_FireResistance(target);
->>>>>>> Stashed changes
 };
 void() ADVR_FrostTouch = {
     if(other==self.owner)return;
     if(pointcontents(self.origin)==CONTENT_SKY){remove(self);return;}
-<<<<<<< Updated upstream
-    if(other.takedamage)T_Damage(other,self,self.owner,30*max(1,self.advr_magic_damage),DAMARMOR);
-=======
     if(other.takedamage)T_Damage(other,self,self.owner,30*max(1,self.advr_magic_damage)*ADVR_FireResistance(other),DAMARMOR);
->>>>>>> Stashed changes
     particle2(self.origin,'0 0 30',3,16);
     sound(self,CHAN_WEAPON,"weapons/lhit.wav",0.5,ATTN_NORM);
     remove(self);
@@ -231,10 +254,10 @@ void() ADVR_FrostTouch = {
 void(vector at,vector direction) ADVR_FrostLaunch = {
     newmis=spawn();newmis.classname="advr_frostbolt";newmis.owner=self;newmis.advr_frostbolt=1;
     newmis.solid=SOLID_BBOX;newmis.movetype=MOVETYPE_FLYMISSILE;
-    newmis.velocity=normalize(direction)*750;newmis.angles=vectoangles(newmis.velocity);
+    newmis.velocity=normalize(direction)*550;newmis.angles=vectoangles(newmis.velocity);
     newmis.touch=ADVR_FrostTouch;newmis.think=SUB_Remove;newmis.nextthink=time+5;
     newmis.advr_magic_damage=ADVR_MagicMultiplier();
-    setmodel(newmis,"progs/advr_frostbolt.mdl");setsize(newmis,'0 0 0','0 0 0');setorigin(newmis,at);
+    setmodel(newmis,"progs/advr_frostbolt.mdl");setsize(newmis,'-4 -4 -4','4 4 4');setorigin(newmis,at);
 };
 
 // Pending infusion belongs to a particular book, weapon and controller.
@@ -266,13 +289,8 @@ void(entity book,float h,float down,float old) ADVR_EnchantFrame = {
     self.advr_enchant_latched=1;
     haptic(h,0,0.12,150,0.7);haptic(h,0.2,0.12,150,0.7);
     sound(self,CHAN_AUTO,"skullwiz/attack.wav",0.45,ATTN_NORM);
-<<<<<<< Updated upstream
-    if(r.advr_enchant_type==1)sprint(self,"Fire enchantment: 60 seconds.\n");
-    else if(r.advr_enchant_type==2)sprint(self,"Lightning enchantment: 60 seconds.\n");else sprint(self,"Frost enchantment: 60 seconds.\n");
-=======
     if(r.advr_enchant_type==1)sprint(self,"Fire enchantment: 30 seconds.\n");
     else if(r.advr_enchant_type==2)sprint(self,"Lightning enchantment: 30 seconds.\n");else if(r.advr_enchant_type==3)sprint(self,"Frost enchantment: 30 seconds.\n");else if(r.advr_enchant_type==4)sprint(self,"Acid enchantment: 30 seconds.\n");else if(r.advr_enchant_type==5)sprint(self,"Void enchantment: 30 seconds.\n");else if(r.advr_enchant_type==6)sprint(self,"Haste enchantment: 30 seconds.\n");else if(r.advr_enchant_type==7)sprint(self,"Protection shield: 300 damage, 60 seconds.\n");else sprint(self,"Slipstep enchantment: 30 seconds.\n");
->>>>>>> Stashed changes
     ADVR_EnchantClear();
 };
 // Projectile payload is copied at launch, never looked up from the shooter's
@@ -312,14 +330,10 @@ float(entity target,entity inflictor,entity attacker,float damage) ADVR_EnchantD
         bonus=bonus*ADVR_FireResistance(target);
         ADVR_Ignite(target,attacker);
         if(target.advr_burn)target.advr_burn.advr_magic_damage=max(1,r.advr_enchant_scale);
-<<<<<<< Updated upstream
-    } else if(r.advr_enchant_type==3) {
-=======
     } else if(r.advr_enchant_type==4) {
         bonus=bonus*ADVR_AcidResistance(target);ADVR_AcidApply(target,attacker,max(1,r.advr_enchant_scale));
     } else if(r.advr_enchant_type==3) {
         bonus=bonus*ADVR_FireResistance(target);
->>>>>>> Stashed changes
         ADVR_FrostHit(target);
     } else {
         bonus=Resist_Damage(target,IT_CELLS,bonus)*ADVR_LightningResistance(target);
@@ -370,14 +384,11 @@ void() ADVR_MagicFrame = {
         if(ADVR_SpellMask(self,book) & 1)self.advr_spell=0;
         else if(ADVR_SpellMask(self,book) & 2)self.advr_spell=1;
         else if(ADVR_SpellMask(self,book) & 4)self.advr_spell=2;
-<<<<<<< Updated upstream
-=======
         else if(ADVR_SpellMask(self,book) & 8)self.advr_spell=3;
         else if(ADVR_SpellMask(self,book) & 16)self.advr_spell=4;
         else if(ADVR_SpellMask(self,book) & 32)self.advr_spell=5;
         else if(ADVR_SpellMask(self,book) & 64)self.advr_spell=6;
         else if(ADVR_SpellMask(self,book) & 128)self.advr_spell=7;
->>>>>>> Stashed changes
         else return;
     }
     if(ADVR_Hand(h)) {
@@ -446,15 +457,13 @@ void() ADVR_MagicFrame = {
                     ADVR_MagicBeam(at,h);return;
                 }
                 at=trace_endpos;newmis=world;
-<<<<<<< Updated upstream
-                if(self.advr_spell==2)ADVR_FrostLaunch(at,dir);
-=======
                 if(self.advr_spell==4){makevectors(ADVR_Angles(h));ADVR_VoidLaunch(at,dir,v_forward);}
                 else if(self.advr_spell==3)ADVR_AcidLaunch(at,dir);
                 else if(self.advr_spell==2)ADVR_FrostLaunch(at,dir);
->>>>>>> Stashed changes
-                else Launch_Missile(at,dir,'0 0 0',CT_PROJ_FIRETOP,750);
+                else Launch_Missile(at,dir,'0 0 0',CT_PROJ_FIRETOP,550);
                 if(newmis) {
+                    setsize(newmis,'-4 -4 -4','4 4 4');
+                    ADVR_GuideBolt(newmis,h);
                     newmis.advr_fireball=self.advr_spell==0;newmis.advr_magic_damage=ADVR_MagicMultiplier();newmis.poisonous=0;
                     self.mana=self.mana-1;
                     sound(self,CHAN_WEAPON,"skullwiz/attack.wav",1,ATTN_NORM);
@@ -470,14 +479,9 @@ void() ADVR_MagicFrame = {
     if(self.advr_spell==7 && self.advr_magic_charge>=0.65)ADVR_SlipPreview(h);
     if(!self.advr_magic_fx) {
         fx=spawn();fx.classname="advr_magic_charge";fx.owner=self;fx.solid=SOLID_NOT;fx.movetype=MOVETYPE_NONE;
-<<<<<<< Updated upstream
-        setmodel(fx,"progs/advr_magic_charge.mdl");fx.effects=EF_DIMLIGHT;fx.think=ADVR_MagicGlowThink;fx.nextthink=time+0.05;
-        fx.skin=min(self.advr_spell,1);
-=======
         if(self.advr_spell==4)setmodel(fx,"progs/advr_void_charge.mdl");else if(self.advr_spell==3)setmodel(fx,"progs/advr_acid_charge.mdl");else setmodel(fx,"progs/advr_magic_charge.mdl");fx.effects=EF_DIMLIGHT;fx.think=ADVR_MagicGlowThink;fx.nextthink=time+0.05;
         fx.skin=min(self.advr_spell,1);if(self.advr_spell>=3)fx.skin=0;
         if(self.advr_spell>=5){fx.advr_enchant_type=self.advr_spell+1;fx.advr_enchant_until=time+3600;}
->>>>>>> Stashed changes
         self.advr_magic_fx=fx;
     }
     setorigin(self.advr_magic_fx,at);self.advr_magic_fx.alpha=0.2+0.8*self.advr_magic_charge;

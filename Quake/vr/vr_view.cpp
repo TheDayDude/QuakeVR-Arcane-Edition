@@ -671,19 +671,11 @@ void queueWeaponText(const glm::vec3& handRot, bool mirrored, int hand, const vi
     if(ve.ent.model && !strcmp(ve.ent.model->name, "progs/advr_tome.mdl"))
     {
         const bool debug=(cl.stats[STAT_QVR_MAGIC_TOMES] & (main ? 2 : 1))!=0;
-<<<<<<< Updated upstream
-        const int known=debug ? 7 : cl.stats[STAT_QVR_MAGIC_KNOWN];
-        const char* names[]={"Fireball","Lightning","Frostbolt"};
-        const char* keys[]={"X","Y","A","B","Up","Dn","Lt","Rt"};
-        q_snprintf(buf,sizeof(buf),"Arcane Essence\n%d/%d%s\n",ammo,cl.stats[STAT_QVR_MAGIC_MAX],debug ? " (Debug)" : "");
-        for(int spell=0;spell<3;spell++) {
-=======
         const int known=debug ? 255 : cl.stats[STAT_QVR_MAGIC_KNOWN];
         const char* names[]={"Fire","Lightning","Frost","Acid","Void","Haste","Protection","Slipstep"};
         const char* keys[]={"X","Y","A","B","Up","Dn","Lt","Rt"};
         q_snprintf(buf,sizeof(buf),"Arcane Essence\n%d/%d%s\n",ammo,cl.stats[STAT_QVR_MAGIC_MAX],debug ? " (Debug)" : "");
         for(int spell=0;spell<8;spell++) {
->>>>>>> Stashed changes
             if(!(known & (1<<spell)))continue;
             char hotkeys[64]={};
             for(int k=4;k<8;k++) {

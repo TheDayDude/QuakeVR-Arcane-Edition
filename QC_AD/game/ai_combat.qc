@@ -296,14 +296,10 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 	//----------------------------------------------------------------------
 	// do the damage
 	//----------------------------------------------------------------------
-<<<<<<< Updated upstream
-	ADVR_FireHit(targ,inflictor,attacker,take,checkarmor);
-=======
 	if(inflictor.advr_fireball || inflictor.classname=="advr_burn")take=take*ADVR_FireResistance(targ);
     if(take>0 && inflictor.advr_voidorb)ADVR_VoidRoll(targ,attacker,random());
     ADVR_FireHit(targ,inflictor,attacker,take,checkarmor);
     if(take>0 && inflictor.advr_acidbolt)ADVR_AcidApply(targ,attacker,max(1,inflictor.advr_magic_damage));
->>>>>>> Stashed changes
     if(take>0 && inflictor.advr_frostbolt)ADVR_FrostHit(targ);
     take=ADVR_EnchantDamage(targ,inflictor,attacker,take);
     stagger=advr_enchant_stagger;advr_enchant_stagger=0;

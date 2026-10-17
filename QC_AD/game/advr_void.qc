@@ -91,7 +91,7 @@ void() ADVR_VoidThink = {
         self.enemy=ADVR_VoidTarget(self.origin,normalize(self.velocity),self.owner);
     if(self.enemy) {
         direction=normalize(modelcentre(self.enemy)-self.origin);
-        self.velocity=normalize(normalize(self.velocity)*0.65+direction*0.35)*500;
+        self.velocity=normalize(normalize(self.velocity)*0.65+direction*0.35)*450;
         self.angles=vectoangles(self.velocity);
     }
     self.nextthink=time+0.05;
@@ -118,10 +118,10 @@ void() ADVR_VoidTouch = {
 void(vector at,vector direction,vector aim) ADVR_VoidLaunch = {
     newmis=spawn();newmis.classname="advr_voidorb";newmis.owner=self;newmis.advr_voidorb=1;
     newmis.solid=SOLID_BBOX;newmis.movetype=MOVETYPE_FLYMISSILE;
-    newmis.velocity=normalize(direction)*500;newmis.angles=vectoangles(newmis.velocity);
+    newmis.velocity=normalize(direction)*450;newmis.angles=vectoangles(newmis.velocity);
     newmis.touch=ADVR_VoidTouch;newmis.think=ADVR_VoidThink;newmis.nextthink=time+0.05;
     newmis.attack_finished=time+8;newmis.advr_magic_damage=ADVR_MagicMultiplier();
-    setmodel(newmis,MODEL_PROJ_SHAL);setsize(newmis,'0 0 0','0 0 0');setorigin(newmis,at);
+    setmodel(newmis,MODEL_PROJ_SHAL);setsize(newmis,'-4 -4 -4','4 4 4');setorigin(newmis,at);
     newmis.enemy=ADVR_VoidTarget(at,aim,self);
 };
 

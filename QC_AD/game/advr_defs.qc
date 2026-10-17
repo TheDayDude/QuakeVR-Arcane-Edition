@@ -324,9 +324,6 @@ float(entity e,vector blade,float settle) ragdolldecap = #0;
 vector(entity e,float what) ragdollcut = #0;
 
 float ADVR_TOME=13, ADVR_DEBUGTOME=14;
-<<<<<<< Updated upstream
-float ADVR_SPELL_COUNT=3; // spell IDs: 0 fireball, 1 lightning, 2 frostbolt
-=======
 .float advr_haste_until;
 float(entity r) ADVR_HasteRate;
 void() ADVR_TestHaste;
@@ -350,7 +347,6 @@ float(float h) ADVR_SlipCast;
 void(entity target,entity attacker) ADVR_SlipHit;
 void() ADVR_TestSlipstep;
 float ADVR_SPELL_COUNT=8; // spell IDs: 0 fireball, 1 lightning, 2 frostbolt
->>>>>>> Stashed changes
 float parm40,parm41,parm42,parm43,parm44;
 .float advr_magic_version,advr_known,advr_mana_max,advr_tome_read;
 .float advr_favorites[8]; // X,Y,A,B,Up,Down,Left,Right; spell ID + 1 (zero unassigned)
@@ -409,8 +405,6 @@ void() ADVR_TestFrost;
 void() ADVR_TestFrostView;
 
 .entity advr_fury_guide; // reusable dotted center-projectile preview
-<<<<<<< Updated upstream
-=======
 
 .float advr_acidbolt,advr_acid_end,advr_acid_model;
 .entity advr_acid;
@@ -435,4 +429,3 @@ void(entity r) ADVR_VoidRestore;
 void() ADVR_VoidWeaponThink;
 
 void() ADVR_TestMagicRefine;
->>>>>>> Stashed changes

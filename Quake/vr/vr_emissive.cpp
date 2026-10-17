@@ -117,11 +117,8 @@ void killDlight(int key)
 // choice of trail: a model with a gib or rocket trail is not one of these).
 [[nodiscard]] const Glow* projectileGlow(const entity_t& e)
 {
-<<<<<<< Updated upstream
-=======
     if(!strcmp(e.model->name, "progs/advr_void_charge.mdl")) return &voidCharge;
     if(!strcmp(e.model->name, "progs/advr_acidbolt.mdl") || !strcmp(e.model->name, "progs/advr_acid_charge.mdl")) return &acidCharge;
->>>>>>> Stashed changes
     if(!strcmp(e.model->name, "progs/advr_frostbolt.mdl")) return &lightningCharge;
     if(!strcmp(e.model->name, "progs/advr_magic_charge.mdl")) return e.skinnum == 1 ? &lightningCharge : &magicCharge;
     if(!strcmp(e.model->name, "progs/advr_fury_charge.mdl")) return &furyCharge;
@@ -425,17 +422,10 @@ mem::Scratch<EmissiveScratch> scratch{"emissive"};
 
 glm::vec3 emissive::enchantColor(int code)
 {
-<<<<<<< Updated upstream
-    const int type=code & 3;
-    if(type<1 || type>3)return glm::vec3{0.f};
-    const float strength=static_cast<float>((code>>2)&63)/63.f;
-    return (type==1 ? glm::vec3{1.5f,0.045f,0.025f} : type==2 ? glm::vec3{0.65f,1.05f,1.65f} : glm::vec3{0.1f,0.65f,1.8f})*strength;
-=======
     const int type=(code & 7) ? (code & 7) : 8;
     if(!code)return glm::vec3{0.f};
     const float strength=static_cast<float>((code>>3)&31)/31.f;
     return (type==8 ? glm::vec3{1.6f,0.45f,0.12f} : type==7 ? glm::vec3{0.2f,1.4f,1.1f} : type==6 ? glm::vec3{1.5f,0.9f,0.08f} : type==5 ? glm::vec3{1.2f,0.08f,1.8f} : type==4 ? glm::vec3{0.2f,1.5f,0.035f} : type==1 ? glm::vec3{1.5f,0.045f,0.025f} : type==2 ? glm::vec3{0.65f,1.05f,1.65f} : glm::vec3{0.1f,0.65f,1.8f})*strength;
->>>>>>> Stashed changes
 }
 void emissive::enchantLight(int index,const glm::vec3& pos,int code)
 {

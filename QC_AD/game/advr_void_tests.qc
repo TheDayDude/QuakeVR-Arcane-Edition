@@ -20,7 +20,7 @@ void() ADVR_TestVoid = {
     ADVR_Assert(ADVR_VoidTarget(at,'1 0 0',actor)==near,"nearest visible monster in aim cone selected");
     ADVR_Assert(ADVR_VoidTarget(at,'-1 0 0',actor)!=near,"behind-hand target rejected");
     shot.enemy=near;self=shot;ADVR_VoidThink();self=actor;
-    ADVR_Assert(shot.velocity_y>0 && fabs(vlen(shot.velocity)-500)<1,"orb steers toward target");
+    ADVR_Assert(shot.velocity_y>0 && fabs(vlen(shot.velocity)-450)<1,"orb steers toward target");
     setorigin(far,at+'80 60 0');setorigin(shot,near.origin+'-6 0 0');shot.advr_magic_damage=1;
     near.enemy=far.enemy=actor;near.switchattacker=far.switchattacker=actor;near.switchtimer=far.switchtimer=time+100;
     self=shot;other=near;ADVR_VoidTouch();self=actor;

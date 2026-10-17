@@ -50,7 +50,8 @@ enum class Preset : int
     WoodDust,
     // A running chainsaw's exhaust (QC vr_chainsaw.qc, lying running; vr_chainsaw.cpp in a hand): `count` faint puffs,
     // vr_chainsaw_smoke_alpha opaque, drifting out along `dir` and up.
-    ChainsawSmoke
+    ChainsawSmoke,
+    AcidMist
 };
 
 // Spawns a preset's particles (count scaled by vr_particle_mult); false if they are off, for the

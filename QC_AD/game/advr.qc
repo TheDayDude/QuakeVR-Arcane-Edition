@@ -425,6 +425,9 @@ void(float h) ADVR_Fire = {
         self.think();
     } else if(button && time>=r.advr_cooldown && (self.currentammo>0 || self.weapon==IT_AXE) && r.advr_animtime==0) {didrun=1;W_Attack();}
     if(didrun) {
+        if(self.attack_finished>time && self.attack_finished!=r.advr_cooldown)
+            self.attack_finished=time+(self.attack_finished-time)/ADVR_HasteRate(r);
+        if(self.nextthink>time)self.nextthink=time+(self.nextthink-time)/ADVR_HasteRate(r);
         if(self.think==player_run || self.think==player_stand1) {r.advr_animtime=0;r.advr_anim=SUB_Null;}
         else {r.advr_anim=self.think;r.advr_animtime=self.nextthink;}
     }
@@ -528,7 +531,7 @@ void() ADVR_Frame = {
     advr_attack_record=world;advr_attack_actor=world;if(self.health<=0)return;
     advr_attack_actor=self;advr_attack_record=self.advr_off;ADVR_Fire(0);
     advr_attack_record=world;advr_attack_actor=world;if(self.health<=0)return;
-    ADVR_MagicFrame();ADVR_FuryFrame();ADVR_ParryFrame();
+    ADVR_MagicFrame();ADVR_ProtectionFrame();ADVR_FuryFrame();ADVR_ParryFrame();
     advr_attack_actor=self;advr_attack_record=self.advr_main;ADVR_Melee(1);
     advr_attack_record=self.advr_off;ADVR_Melee(0);advr_attack_record=world;advr_attack_actor=world;ADVR_Sync();
 };
@@ -540,7 +543,7 @@ void() ADVR_Reset = {
     for(i=0;i<8;i=i+1)self.advr_favorites[i]=0;
     self.advr_fav_button=0;self.advr_fav_book=world;self.advr_magic_buttons=0;
     self.vr_flashlight_state=0;
-    ADVR_MagicClear();self.mana=0;self.advr_mana_seen=0;self.advr_spell=0;self.advr_magic_trigger=0;
+    ADVR_MagicClear();self.advr_protection_until=0;self.advr_protection_armor=0;self.advr_haste_until=0;self.mana=0;self.advr_mana_seen=0;self.advr_spell=0;self.advr_magic_trigger=0;
     ADVR_FuryClear();self.advr_fury_latched=0;self.advr_fury_cooldown=0;
     self.advr_fury_main=self.advr_fury_off=world;
     self.advr_initialized=0;self.advr_main=world;self.advr_off=world;self.advr_bolts=0;

@@ -671,11 +671,19 @@ void queueWeaponText(const glm::vec3& handRot, bool mirrored, int hand, const vi
     if(ve.ent.model && !strcmp(ve.ent.model->name, "progs/advr_tome.mdl"))
     {
         const bool debug=(cl.stats[STAT_QVR_MAGIC_TOMES] & (main ? 2 : 1))!=0;
+<<<<<<< Updated upstream
         const int known=debug ? 7 : cl.stats[STAT_QVR_MAGIC_KNOWN];
         const char* names[]={"Fireball","Lightning","Frostbolt"};
         const char* keys[]={"X","Y","A","B","Up","Dn","Lt","Rt"};
         q_snprintf(buf,sizeof(buf),"Arcane Essence\n%d/%d%s\n",ammo,cl.stats[STAT_QVR_MAGIC_MAX],debug ? " (Debug)" : "");
         for(int spell=0;spell<3;spell++) {
+=======
+        const int known=debug ? 255 : cl.stats[STAT_QVR_MAGIC_KNOWN];
+        const char* names[]={"Fire","Lightning","Frost","Acid","Void","Haste","Protection","Slipstep"};
+        const char* keys[]={"X","Y","A","B","Up","Dn","Lt","Rt"};
+        q_snprintf(buf,sizeof(buf),"Arcane Essence\n%d/%d%s\n",ammo,cl.stats[STAT_QVR_MAGIC_MAX],debug ? " (Debug)" : "");
+        for(int spell=0;spell<8;spell++) {
+>>>>>>> Stashed changes
             if(!(known & (1<<spell)))continue;
             char hotkeys[64]={};
             for(int k=4;k<8;k++) {
@@ -701,7 +709,7 @@ void queueWeaponText(const glm::vec3& handRot, bool mirrored, int hand, const vi
     if(!strcmp(ve.ent.model->name,"progs/advr_tome.mdl")) {
         int longest=0,line=0;
         for(const char* c=buf;*c;c++){if(*c=='\n')line=0;else if(++line>longest)longest=line;}
-        pageScale=0.8f*std::min(1.f,16.f/static_cast<float>(std::max(1,longest)));
+        pageScale=0.7f*std::min(1.f,16.f/static_cast<float>(std::max(1,longest)));
     }
     text3d::queue(buf, pos, angles, text3d::Align::Centre, pageScale * 0.1f * weapons::value(slot, Key::WpnTextScale),
         vr_weapon_screen.value != 0.f && strcmp(ve.ent.model->name, "progs/advr_tome.mdl"),

@@ -93,7 +93,9 @@ void(float h) ADVR_ParrySpend = {
 void(entity targ,entity inflictor,entity attacker,float damage,float armor) ADVR_MeleeDamage = {
     local entity saved;
     local vector toward,oldf,oldr,oldu;
-    local float h,quiet,cooldown;
+    local float h,quiet,cooldown,remaining;
+    remaining=ADVR_ShieldDamage(targ,inflictor,attacker,damage,armor);
+    if(remaining<damage){if(remaining>0){advr_shield_skip=targ;T_Damage(targ,inflictor,attacker,remaining,armor);}return;}
     saved=self;oldf=v_forward;oldr=v_right;oldu=v_up;self=targ;
     if(targ.classname=="player" && targ.health>0 && ADVR_Tracked() && cvar("vr_parry") &&
        inflictor==attacker && (attacker.flags & FL_MONSTER) && damage>0 &&

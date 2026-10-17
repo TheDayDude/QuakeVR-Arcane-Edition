@@ -112,7 +112,8 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 {
 	local vector dir;
 	local entity oldself;
-	local float save, take, flinch, noarmordmg,headkind,stagger;
+	local float save, take, flinch, noarmordmg,headkind,stagger,skipshield;
+    skipshield=advr_shield_skip==targ;advr_shield_skip=world;
     local vector headat,headvel;
     if(checkarmor==DAMARMOR && advr_hit_ent==targ && advr_hit_by==attacker) {
         headkind=advr_hit_kind;headat=advr_hit_at;headvel=advr_hit_vel;
@@ -231,8 +232,16 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 	// Work out damage reduction based on armor level
 	// This is why the pentagram of protection loses armour
 	//----------------------------------------------------------------------
+    if(!skipshield && (checkarmor==DAMARMOR || checkarmor==DAMSPLASH))damage=ADVR_ShieldDamage(targ,inflictor,attacker,damage,checkarmor);
+    if(damage<=0)return;
 	save = 0;
-	if (checkarmor == DAMARMOR || checkarmor == DAMSPLASH) {
+    if(QVR_AD_API==1 && (targ.flags & FL_CLIENT) && targ.advr_protection_until>time &&
+       targ.advr_protection_armor>0 && (checkarmor==DAMARMOR || checkarmor==DAMSPLASH)) {
+        save=min(targ.advr_protection_armor,ceil(damage*0.8));
+        if(!noarmordmg)targ.advr_protection_armor=targ.advr_protection_armor-save;
+        take=ceil(damage-save);
+    }
+	else if (checkarmor == DAMARMOR || checkarmor == DAMSPLASH) {
 		save = ceil(targ.armortype*damage);
 		// Run out of amour?
 		if (save >= targ.armorvalue) {
@@ -287,7 +296,14 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 	//----------------------------------------------------------------------
 	// do the damage
 	//----------------------------------------------------------------------
+<<<<<<< Updated upstream
 	ADVR_FireHit(targ,inflictor,attacker,take,checkarmor);
+=======
+	if(inflictor.advr_fireball || inflictor.classname=="advr_burn")take=take*ADVR_FireResistance(targ);
+    if(take>0 && inflictor.advr_voidorb)ADVR_VoidRoll(targ,attacker,random());
+    ADVR_FireHit(targ,inflictor,attacker,take,checkarmor);
+    if(take>0 && inflictor.advr_acidbolt)ADVR_AcidApply(targ,attacker,max(1,inflictor.advr_magic_damage));
+>>>>>>> Stashed changes
     if(take>0 && inflictor.advr_frostbolt)ADVR_FrostHit(targ);
     take=ADVR_EnchantDamage(targ,inflictor,attacker,take);
     stagger=advr_enchant_stagger;advr_enchant_stagger=0;

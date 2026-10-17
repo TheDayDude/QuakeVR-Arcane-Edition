@@ -52,7 +52,7 @@ void SV_CalcStats(client_t *client, int *statsi, float *statsf, const char **sta
 	//if ((unsigned int)statsi[STAT_WEAPON] >= client->limit_models)
 	//	statsi[STAT_WEAPON] = 0;
 	statsf[STAT_AMMO] = ent->v.currentammo;
-	statsf[STAT_ARMOR] = ent->v.armorvalue;
+	statsf[STAT_ARMOR] = VR_ProtectionArmor(ent);
 	statsf[STAT_WEAPONFRAME] = ent->v.weaponframe;
 	statsf[STAT_SHELLS] = ent->v.ammo_shells;
 	statsf[STAT_NAILS] = ent->v.ammo_nails;
@@ -1070,7 +1070,7 @@ void SV_WriteClientdataToMessage (edict_t *ent, sizebuf_t *msg)
 	if (ent->v.weaponframe)
 		bits |= SU_WEAPONFRAME;
 
-	if (ent->v.armorvalue)
+	if (VR_ProtectionArmor(ent))
 		bits |= SU_ARMOR;
 
 //	if (ent->v.weapon)
@@ -1080,7 +1080,7 @@ void SV_WriteClientdataToMessage (edict_t *ent, sizebuf_t *msg)
 	if (sv.protocol != PROTOCOL_NETQUAKE)
 	{
 		if (bits & SU_WEAPON && SV_ModelIndex(PR_GetString(ent->v.weaponmodel)) & 0xFF00) bits |= SU_WEAPON2;
-		if ((int)ent->v.armorvalue & 0xFF00) bits |= SU_ARMOR2;
+		if ((int)VR_ProtectionArmor(ent) & 0xFF00) bits |= SU_ARMOR2;
 		if ((int)ent->v.currentammo & 0xFF00) bits |= SU_AMMO2;
 		if ((int)ent->v.ammo_shells & 0xFF00) bits |= SU_SHELLS2;
 		if ((int)ent->v.ammo_nails & 0xFF00) bits |= SU_NAILS2;
@@ -1123,7 +1123,7 @@ void SV_WriteClientdataToMessage (edict_t *ent, sizebuf_t *msg)
 	if (bits & SU_WEAPONFRAME)
 		MSG_WriteByte (msg, ent->v.weaponframe);
 	if (bits & SU_ARMOR)
-		MSG_WriteByte (msg, ent->v.armorvalue);
+		MSG_WriteByte (msg, VR_ProtectionArmor(ent));
 	if (bits & SU_WEAPON)
 		MSG_WriteByte (msg, SV_ModelIndex(PR_GetString(ent->v.weaponmodel)));
 
@@ -1154,7 +1154,7 @@ void SV_WriteClientdataToMessage (edict_t *ent, sizebuf_t *msg)
 	if (bits & SU_WEAPON2)
 		MSG_WriteByte (msg, SV_ModelIndex(PR_GetString(ent->v.weaponmodel)) >> 8);
 	if (bits & SU_ARMOR2)
-		MSG_WriteByte (msg, (int)ent->v.armorvalue >> 8);
+		MSG_WriteByte (msg, (int)VR_ProtectionArmor(ent) >> 8);
 	if (bits & SU_AMMO2)
 		MSG_WriteByte (msg, (int)ent->v.currentammo >> 8);
 	if (bits & SU_SHELLS2)

@@ -780,6 +780,7 @@ void(vector p1, vector p2, entity from, float damage) PlayerLightningDamage =
 	// Found a target to hit?
 	if (lighthit) {
 		// Check for any cell/lightning resistance
+        damage=damage*ADVR_LightningResistance(trace_ent);
 		if (trace_ent.resist_cells > 0) {
 			damage = Resist_Damage(trace_ent, IT_CELLS, damage);
 			Resist_Lightning(trace_ent, trace_endpos);

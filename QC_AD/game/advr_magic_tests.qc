@@ -141,16 +141,32 @@ void() ADVR_TestProgression = {
     book=ADVR_Record(IT_AXE);book.advr_kind=ADVR_TOME;
     ADVR_Assert(!self.advr_known && self.advr_mana_max==50,"new player has no spells and fifty capacity");
     ADVR_TomePickup(self,book);first=self.advr_known;
+<<<<<<< Updated upstream
     ADVR_Assert((first==1 || first==2 || first==4) && self.mana==30,"first standard tome teaches exactly one spell and grants thirty mana");
+=======
+    ADVR_Assert((first==1 || first==2 || first==4 || first==8 || first==16 || first==32 || first==64 || first==128) && self.mana==30,"first standard tome teaches exactly one spell and grants thirty mana");
+>>>>>>> Stashed changes
     ADVR_TomePickup(self,book);
     ADVR_Assert(self.advr_known==first && self.mana==30,"same physical tome cannot teach or refill twice");
     self.advr_off=book;self.button3=1;ADVR_MagicSelect();self.button3=0;ADVR_MagicSelect();
     ADVR_Assert(first & pow(2,self.advr_spell),"selection skips unknown spells");
     debug=ADVR_Record(IT_AXE);debug.advr_kind=ADVR_DEBUGTOME;ADVR_TomePickup(self,debug);
+<<<<<<< Updated upstream
     ADVR_Assert(ADVR_SpellMask(self,debug)==7 && self.advr_known==first,"debug exposes all spells without learning them");
     second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
     second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
     ADVR_Assert(self.advr_known==7 && ADVR_SpellMask(self,book)==7,"three new tomes teach all spells, visible in first tome");
+=======
+    ADVR_Assert(ADVR_SpellMask(self,debug)==255 && self.advr_known==first,"debug exposes all spells without learning them");
+    second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
+    second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
+    second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
+    second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
+    second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
+    second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
+    second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
+    ADVR_Assert(self.advr_known==255 && ADVR_SpellMask(self,book)==255,"eight new tomes teach all spells, visible in first tome");
+>>>>>>> Stashed changes
     self.mana=49;foe=spawn();foe.flags=FL_MONSTER;foe.classtype=CT_MONSKULLW;
     ADVR_ManaReward(foe,self);ADVR_Assert(self.mana==50,"magical kill reward clamps at mana capacity");remove(foe);
     power=spawn();self=power;other=player;ADVR_PowerPickup();ADVR_PowerPickup();self=player;
@@ -180,7 +196,11 @@ void() ADVR_TestProgression = {
     for(i=0;i<41;i=i+1)ADVR_MagicSelect();self.advr_magic_buttons=0;ADVR_MagicSelect();
     ADVR_Assert(self.advr_favorites[4]==1,"long D-pad hold rebinds instead of recalling old favorite");
     self.advr_main=debug;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();book=self.advr_off;
+<<<<<<< Updated upstream
     ADVR_Assert(self.advr_known==7 && self.advr_mana_max==60 && self.advr_favorites[4]==1 && self.advr_favorites[7]==2,"knowledge capacity and favorites survive map parms");
+=======
+    ADVR_Assert(self.advr_known==255 && self.advr_mana_max==60 && self.advr_favorites[4]==1 && self.advr_favorites[7]==2,"knowledge capacity and favorites survive map parms");
+>>>>>>> Stashed changes
     ADVR_Assert(book.advr_tome_read && self.advr_main.advr_kind==ADVR_DEBUGTOME,"read state and debug identity survive map parms");
     self.advr_known=1;self.advr_main=world;self.advr_spell=0;self.advr_magic_buttons=4;ADVR_MagicSelect();
     self.advr_magic_buttons=0;ADVR_MagicSelect();ADVR_Assert(self.advr_spell==0,"debug-only favorite cannot unlock an unknown spell in a standard tome");
@@ -217,7 +237,7 @@ void() ADVR_TestEnchant = {
     ADVR_Assert(!r.advr_enchant_type && self.mana==before && !self.advr_enchant_fx,"short enchant hold cancels free");
     self.advr_magic_sticks=2;
     for(i=0;i<65;i=i+1)ADVR_MagicFrame();
-    ADVR_Assert(r.advr_enchant_type==1 && r.advr_enchant_until==time+60 && self.mana==before-5,"three second hold enchants for one minute at five mana");
+    ADVR_Assert(r.advr_enchant_type==1 && r.advr_enchant_until==time+30 && self.mana==before-5,"three second hold enchants for thirty seconds at five mana");
     for(i=0;i<70;i=i+1)ADVR_MagicFrame();
     ADVR_Assert(self.mana==before-5 && !self.advr_enchant_record,"held click cannot spend repeatedly");
     self.advr_magic_sticks=0;ADVR_MagicFrame();
@@ -226,7 +246,7 @@ void() ADVR_TestEnchant = {
     ADVR_Catch(p,1);ADVR_Assert(self.advr_main==r && r.advr_enchant_type==1,"catch keeps same enchantment");
     self.advr_holster[0]=r;self.advr_main=world;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();
     r=self.advr_holster[0];book=self.advr_off;
-    ADVR_Assert(r.advr_enchant_type==1 && r.advr_enchant_until==time+60,"holstered enchant survives map transition with remaining duration");
+    ADVR_Assert(r.advr_enchant_type==1 && r.advr_enchant_until==time+30,"holstered enchant survives map transition with remaining duration");
     self.advr_main=r;self.advr_holster[0]=world;
     v=spawn();v.classname="advr_enchant_target";v.flags=FL_MONSTER;v.takedamage=DAMAGE_YES;v.health=1000;
     setmodel(v,"progs/player.mdl");setorigin(v,ADVR_Head(self)+'100 0 0');
@@ -269,8 +289,8 @@ void() ADVR_TestEnchantGlow = {
     ADVR_Reset();self.advr_initialized=1;self.health=100;self.flags=self.flags | FL_GODMODE;
     self.items=self.items | IT_SHOTGUN | IT_SUPER_SHOTGUN;
     self.advr_main=ADVR_Record(IT_SHOTGUN);self.advr_off=ADVR_Record(IT_SUPER_SHOTGUN);
-    self.advr_main.advr_enchant_type=1;self.advr_main.advr_enchant_until=time+60;
-    self.advr_off.advr_enchant_type=2;self.advr_off.advr_enchant_until=time+60;
+    self.advr_main.advr_enchant_type=1;self.advr_main.advr_enchant_until=time+30;
+    self.advr_off.advr_enchant_type=2;self.advr_off.advr_enchant_until=time+30;
     self.advr_main.advr_enchant_scale=self.advr_off.advr_enchant_scale=1;
     prop=ADVR_SpawnLoot(self,IT_SHOTGUN);prop.weaponinst.advr_enchant_type=1;prop.weaponinst.advr_enchant_until=time+2;
     setorigin(prop,self.origin+'64 0 8');
@@ -302,8 +322,13 @@ void() ADVR_TestFrost = {
     local float i,oldframe,before;
     player=self;oldframe=frametime;frametime=0.05;
     ADVR_TestFrostView();book=self.advr_off;
+<<<<<<< Updated upstream
     self.advr_known=3;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
     ADVR_Assert(self.advr_known==7 && self.advr_spell==2,"new standard tome teaches missing frost");remove(r);
+=======
+    self.advr_known=251;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
+    ADVR_Assert(self.advr_known==255 && self.advr_spell==2,"new standard tome teaches missing frost");remove(r);
+>>>>>>> Stashed changes
     self.advr_favorites[4]=3;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();book=self.advr_off;
     ADVR_Assert(self.advr_spell==2 && self.weaponframe2==2 && self.advr_favorites[4]==3,"frost selection and favorite survive map parms");
     self.vrbits0=16384;self.handpos=ADVR_Head(self)+'24 0 -8';self.offhandpos=ADVR_Head(self)+'24 16 -8';
@@ -317,14 +342,24 @@ void() ADVR_TestFrost = {
     v.enemy=player;v.switchattacker=player;v.switchtimer=time+100;
     setmodel(v,"progs/player.mdl");setorigin(v,ADVR_Head(self)+'100 0 0');
     shot.advr_magic_damage=1;self=shot;other=v;ADVR_FrostTouch();self=player;
+<<<<<<< Updated upstream
     ADVR_Assert(v.health==970 && v.advr_frost_until==time+4 && !v.advr_burn,"frost impact damages and chills without burning");
     v.advr_frost_until=time+1;ADVR_FrostHit(v);ADVR_FrostHit(v);
     ADVR_Assert(v.advr_frost_until==time+4,"repeat frost refreshes rather than stacks");
+=======
+    ADVR_Assert(v.health==970 && v.advr_frost_until==time+8 && !v.advr_burn,"frost impact damages and chills without burning");
+    v.advr_frost_until=time+1;ADVR_FrostHit(v);ADVR_FrostHit(v);
+    ADVR_Assert(v.advr_frost_until==time+8,"repeat frost refreshes rather than stacks");
+>>>>>>> Stashed changes
     r=ADVR_Record(IT_SHOTGUN);self.advr_main=r;self.handvel='0 0 0';self.advr_magic_sticks=2;
     for(i=0;i<65;i=i+1)ADVR_MagicFrame();
     ADVR_Assert(r.advr_enchant_type==3,"frost selection enchants held gun");r.advr_enchant_scale=1;
     advr_attack_actor=self;advr_attack_record=r;T_Damage(v,self,self,40,NOARMOR);
+<<<<<<< Updated upstream
     ADVR_Assert(v.health==928 && v.advr_frost_until==time+4,"frost hits add five percent and chill");
+=======
+    ADVR_Assert(v.health==928 && v.advr_frost_until==time+8,"frost hits add five percent and chill");
+>>>>>>> Stashed changes
     shot=spawn();shot.owner=self;ADVR_EnchantMissile(shot);advr_attack_actor=world;advr_attack_record=world;
     T_Damage(v,shot,self,40,NOARMOR);
     ADVR_Assert(v.health==886 && shot.advr_enchant_type==3,"frost projectile keeps enchant payload");remove(shot);
@@ -335,3 +370,145 @@ void() ADVR_TestFrost = {
     self.advr_magic_sticks=0;ADVR_MagicFrame();frametime=oldframe;ADVR_Sync();
     bprint("ADVR FROST PASS: learning, persistence, casting, damage, refresh, enchantments and immunity\n");
 };
+<<<<<<< Updated upstream
+=======
+
+void() ADVR_TestAcid = {
+    local entity player,v,shot,e,r;local float oldframe,start,i,hp,packed;
+    player=self;oldframe=frametime;frametime=0.05;
+    ADVR_TestMagicView();self.advr_known=247;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
+    ADVR_Assert(self.advr_known==255 && self.advr_spell==3,"standard tome teaches acid");remove(r);
+    self.advr_favorites[4]=4;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();
+    ADVR_Assert(self.advr_spell==3 && self.weaponframe2==3 && self.advr_favorites[4]==4,"acid selection and favorite persist");
+    self.vrbits0=16384;self.handpos=ADVR_Head(self)+'24 0 -8';self.handvel=self.offhandvel='0 0 0';
+    self.handrot=self.offhandrot='0 0 0';self.mainhand_hotspot=self.offhand_hotspot=0;
+    self.advr_magic_sticks=2;
+    for(i=0;i<15;i=i+1)ADVR_MagicFrame();
+    ADVR_Assert(self.advr_magic_ready && self.advr_magic_fx.model=="progs/advr_acid_charge.mdl","acid charges green orb");
+    hp=self.mana;self.handvel='0 1 0';self.advr_magic_sticks=0;ADVR_MagicFrame();shot=newmis;
+    ADVR_Assert(shot.advr_acidbolt && !shot.advr_fireball && self.mana==hp-1,"acid flick costs one mana");
+    v=spawn();v.classname="advr_acid_target";v.flags=FL_MONSTER;v.health=1000;v.takedamage=DAMAGE_YES;
+    setmodel(v,"progs/player.mdl");setorigin(v,ADVR_Head(self)+'100 0 0');v.enemy=player;v.switchattacker=player;v.switchtimer=time+100;
+    shot.advr_magic_damage=1;self=shot;other=v;ADVR_AcidTouch();self=player;
+    ADVR_Assert(v.health==980 && v.advr_acid && !v.advr_burn,"acid impact deals twenty and starts acid only");
+    e=v.advr_acid;ADVR_AcidApply(v,self,1);ADVR_AcidApply(v,self,1);
+    ADVR_Assert(v.advr_acid==e && e.advr_acid_end==time+4,"acid refresh uses one effect");
+    start=time;self=e;
+    for(i=1;i<=8;i=i+1){time=start+i*0.5;ADVR_AcidThink();}
+    ADVR_Assert(v.health==948,"eight acid ticks total thirty two damage");
+    time=start+4.1;ADVR_AcidThink();self=player;time=start;
+    ADVR_Assert(!v.advr_acid,"acid expiry cleans up");
+    v.classtype=CT_MONWIZARD;ADVR_AcidApply(v,self,1);e=v.advr_acid;hp=v.health;
+    self=e;ADVR_AcidThink();self=player;
+    ADVR_Assert(v.health==hp-2 && ADVR_AcidResistance(v)==0.5,"scrag takes half acid damage");
+    v.health=0;self=e;ADVR_AcidThink();self=player;ADVR_Assert(!v.advr_acid,"death removes acid");v.health=1000;
+    r=ADVR_Record(IT_SHOTGUN);r.advr_enchant_type=4;r.advr_enchant_until=time+30;r.advr_enchant_scale=1;
+    packed=ADVR_EnchantPack(r);r.advr_enchant_type=0;ADVR_EnchantRestore(r,packed);
+    ADVR_Assert(r.advr_enchant_type==4 && r.advr_enchant_until==time+30,"acid enchant survives packed map state");
+    advr_attack_actor=self;advr_attack_record=r;T_Damage(v,self,self,40,NOARMOR);
+    ADVR_Assert(v.health==959 && v.advr_acid,"scrag resists elemental bonus without reducing bullet damage");
+    advr_attack_actor=world;advr_attack_record=world;
+    e=v.advr_acid;v.health=0;self=e;ADVR_AcidThink();self=player;v.health=1000;v.classtype=CT_MONKNIGHT;v.classgroup=CG_STONE;
+    shot=spawn();shot.advr_fireball=1;shot.owner=self;T_Damage(v,shot,self,20,NOARMOR);
+    ADVR_Assert(v.health==990 && v.advr_burn,"stone resists fire impact");e=v.advr_burn;hp=v.health;
+    self=e;self.advr_fire_tick=0;ADVR_FireThink();self=player;
+    ADVR_Assert(v.health==hp-1,"stone resists burn damage");ADVR_FireOut(e);remove(shot);
+    ADVR_EnchantRestore(r,242);ADVR_Assert(r.advr_enchant_type==2 && r.advr_enchant_until==time+30,"legacy enchant packing remains readable");
+    remove(v);self.advr_main=r;self.advr_spell=3;self.handvel='0 0 0';self.advr_magic_sticks=2;
+    for(i=0;i<65;i=i+1)ADVR_MagicFrame();
+    ADVR_Assert(r.advr_enchant_type==4 && r.advr_enchant_until==time+30,"holding stick applies acid enchant");
+    self.advr_magic_sticks=0;ADVR_MagicFrame();frametime=oldframe;self.advr_spell=3;self.handvel='0 0 0';ADVR_Sync();
+    bprint("ADVR ACID PASS: learning, cast, DOT ticks, refresh, expiry, resistances and enchant persistence\n");
+};
+
+void() ADVR_TestHaste = {
+    local entity r,v;local float i,oldframe,before;
+    oldframe=frametime;frametime=0.05;ADVR_TestMagicView();
+    self.advr_known=223;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
+    ADVR_Assert(self.advr_known==255 && self.advr_spell==5,"tome teaches haste");remove(r);
+    self.advr_favorites[4]=6;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();
+    ADVR_Assert(self.advr_spell==5 && self.advr_favorites[4]==6,"haste favorite and selection persist");
+    self.vrbits0=16384;self.handpos=ADVR_Head(self)+'24 0 -8';self.handrot=self.offhandrot='0 0 0';
+    self.handvel=self.offhandvel=self.handavel=self.offhandavel='0 0 0';
+    self.mainhand_hotspot=self.offhand_hotspot=0;self.advr_magic_sticks=0;ADVR_MagicFrame();
+    self.advr_magic_sticks=2;for(i=0;i<15;i=i+1)ADVR_MagicFrame();
+    before=self.mana;newmis=world;self.advr_magic_sticks=0;ADVR_MagicFrame();
+    ADVR_Assert(self.advr_haste_until==time+30 && self.mana==before-1 && !newmis && !self.advr_magic_fx,"release casts haste without flick or projectile");
+    self.advr_spell=0;self.advr_magic_sticks=2;
+    for(i=0;i<10;i=i+1)ADVR_MagicFrame();
+    ADVR_Assert(self.advr_magic_charge<0.65,"haste still requires a deliberate charge");
+    ADVR_MagicFrame();ADVR_Assert(self.advr_magic_charge>=0.65 && self.advr_magic_ready,"haste charges another spell 25 percent faster");
+    ADVR_MagicClear();self.advr_magic_sticks=0;ADVR_MagicFrame();self.advr_haste_until=time-1;
+    self.advr_magic_sticks=2;for(i=0;i<11;i=i+1)ADVR_MagicFrame();
+    ADVR_Assert(self.advr_magic_charge<0.65 && !self.advr_magic_ready,"expired haste restores normal spell charge speed");
+    ADVR_MagicClear();self.advr_magic_sticks=0;ADVR_MagicFrame();self.advr_spell=5;self.advr_haste_until=time+30;
+    self.advr_magic_sticks=2;for(i=0;i<15;i=i+1)ADVR_MagicFrame();
+    self.advr_magic_sticks=0;ADVR_MagicFrame();ADVR_Assert(self.advr_haste_until==time+30,"haste refreshes without stacking");
+    r=ADVR_Record(IT_SHOTGUN);r.advr_enchant_type=6;r.advr_enchant_until=time+30;
+    ADVR_EnchantRestore(r,ADVR_EnchantPack(r));ADVR_Assert(ADVR_HasteRate(r)==1.25,"haste enchant persists and accelerates cadence");
+    v=spawn();v.flags=FL_MONSTER;v.health=100;advr_attack_actor=self;advr_attack_record=r;
+    ADVR_Assert(ADVR_EnchantDamage(v,self,self,40)==40 && !advr_enchant_stagger,"haste adds no damage or lightning stagger");
+    r.advr_enchant_until=time;ADVR_Assert(ADVR_HasteRate(r)==1,"expired haste restores ordinary cadence");
+    advr_attack_actor=advr_attack_record=world;remove(v);
+    self.advr_main=r;self.button0=1;self.advr_fg_rearm[1]=0;self.ammo_shells=50;r.wi_clip=8;
+    self.muzzlepos=ADVR_Head(self)+'24 0 0';self.shotrot='0 0 0';r.advr_cooldown=0;r.advr_animtime=0;
+    ADVR_Fire(1);before=r.advr_cooldown-time;ADVR_Assert(before>0,"ordinary shotgun schedules next shot");
+    r.advr_enchant_until=time+30;r.advr_cooldown=0;r.advr_animtime=0;ADVR_Fire(1);
+    ADVR_Assert(fabs((r.advr_cooldown-time)*1.25-before)<0.001,"haste accelerates actual shotgun cooldown");
+    self.button0=0;self.advr_main=world;remove(r);frametime=oldframe;ADVR_Sync();
+    bprint("ADVR HASTE PASS: learning, favorites, self cast, refresh, enchant persistence, cadence and damage isolation\n");
+};
+
+
+void() ADVR_TestProtection = {
+    local entity r,v,q,shot;local float i,oldframe,hp,stamina,packed;local vector hand;
+    oldframe=frametime;frametime=0.05;ADVR_TestMagicView();
+    self.advr_known=191;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
+    ADVR_Assert(self.advr_known==255 && self.advr_spell==6,"tome teaches protection");remove(r);
+    self.advr_favorites[4]=7;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();
+    ADVR_Assert(self.advr_spell==6 && self.advr_favorites[4]==7,"protection selection and favorite persist");
+    self.vrbits0=16384;self.handpos=ADVR_Head(self)+'24 0 -8';self.handrot=self.offhandrot='0 0 0';
+    self.handvel=self.offhandvel=self.handavel=self.offhandavel='0 0 0';
+    self.mainhand_hotspot=self.offhand_hotspot=0;self.advr_magic_sticks=0;ADVR_MagicFrame();
+    self.advr_magic_sticks=2;for(i=0;i<15;i=i+1)ADVR_MagicFrame();
+    hp=self.mana;newmis=world;self.advr_magic_sticks=0;ADVR_MagicFrame();
+    ADVR_Assert(self.advr_protection_armor==50 && self.advr_protection_until==time+60 && self.mana==hp-1 && !newmis,"self cast gives fifty armor for sixty seconds without projectile");
+    self.health=1000;self.armorvalue=100;self.armortype=0.3;self.moditems=0;self.invincible_finished=0;
+    self.flags=self.flags-(self.flags & FL_GODMODE);self.takedamage=DAMAGE_AIM;
+    v=spawn();v.flags=FL_MONSTER;setorigin(v,self.origin+'0 -80 11');
+    T_Damage(self,v,v,30,DAMARMOR);
+    ADVR_Assert(self.advr_protection_armor==26 && self.health==994 && self.armorvalue==100,"temporary red armor absorbs eighty percent and preserves regular armor");
+    self.advr_protection_until=time;hp=self.health;T_Damage(self,v,v,30,DAMARMOR);
+    ADVR_Assert(self.health==hp-21 && self.armorvalue==91,"expired protection uses ordinary armor");
+    r=ADVR_Record(IT_SHOTGUN);r.advr_enchant_type=7;r.advr_enchant_until=time+60;r.advr_shield_hp=300;self.advr_main=r;
+    self.handpos=self.origin+'-8 -10 9';stamina=self.vr_stamina_used;
+    ADVR_Assert(ADVR_ShieldPose(1) && advr_shield_normal_y<0,"right shield is on weapon right side");
+    ADVR_Assert(ADVR_ShieldDamage(self,v,v,100,DAMARMOR)==0 && r.advr_shield_hp==200 && self.vr_stamina_used==stamina,"shield blocks crossing attack without stamina");
+    setorigin(v,self.origin+'0 80 11');
+    ADVR_Assert(ADVR_ShieldDamage(self,v,v,100,DAMARMOR)==100 && r.advr_shield_hp==200,"shield does not block attacks from behind");
+    setorigin(v,self.origin+'160 -80 11');ADVR_Assert(ADVR_ShieldDamage(self,v,v,100,DAMARMOR)==100,"attacks outside disc miss shield");
+    setorigin(v,self.origin+'0 -80 11');
+    shot=spawn();shot.velocity='0 500 0';setorigin(shot,self.origin+'0 -8 11');
+    ADVR_Assert(ADVR_ShieldDamage(self,shot,v,40,DAMARMOR)==0 && r.advr_shield_hp==160,"projectile impact reconstructs incoming path across shield");remove(shot);
+    hp=self.health;ADVR_MeleeDamage(self,v,v,20,DAMARMOR);
+    ADVR_Assert(self.health==hp && r.advr_shield_hp==140 && self.vr_stamina_used==stamina,"shield intercepts melee before stamina parry");
+    r.advr_shield_hp=200;
+    ADVR_Assert(ADVR_ShieldDamage(self,v,v,350,DAMARMOR)==150 && r.advr_shield_hp==0 && r.advr_enchant_until<=time,"shield breaks at capacity with excess damage passing through");
+    r.advr_shield_hp=173;r.advr_enchant_until=time+60;packed=ADVR_EnchantPack(r);q=ADVR_Record(IT_SHOTGUN);ADVR_EnchantRestore(q,packed);
+    ADVR_Assert(q.advr_shield_hp==173 && q.advr_enchant_until==time+60 && q.advr_enchant_type==7,"shield capacity and sixty-second timer survive map encoding");remove(q);
+    self.advr_main=world;self.advr_holster[0]=r;ADVR_Assert(!ADVR_ShieldPose(1),"holstered shield cannot block");
+    self.advr_holster[0]=world;q=self.advr_off;self.advr_off=r;self.offhandpos=self.origin+'-8 10 9';
+    ADVR_Assert(ADVR_ShieldPose(0) && advr_shield_normal_y>0,"left shield mirrors outward side");
+    setorigin(v,self.origin+'0 80 11');ADVR_Assert(ADVR_ShieldDamage(self,v,v,50,DAMARMOR)==0 && r.advr_shield_hp==123,"left shield blocks from left");
+    r.advr_enchant_until=time;ADVR_Assert(!ADVR_ShieldPose(0),"expired weapon shield cannot block");
+    self.advr_off=q;self.advr_main=r;r.advr_shield_hp=300;r.advr_enchant_until=time+60;
+    r.advr_enchant_type=0;r.advr_enchant_until=0;r.advr_shield_hp=0;
+    self.advr_magic_sticks=0;ADVR_MagicFrame();self.advr_magic_sticks=2;
+    for(i=0;i<65;i=i+1)ADVR_MagicFrame();self.advr_magic_sticks=0;ADVR_MagicFrame();
+    ADVR_Assert(r.advr_enchant_type==7 && r.advr_enchant_until==time+60 && r.advr_shield_hp==300,"actual enchant grants full shield capacity and sixty seconds");
+    ADVR_ProtectionFrame();ADVR_Assert(r.advr_shield_fx && r.advr_shield_fx.model=="progs/advr_shield.mdl","held shield creates visible surface");
+    remove(v);self.health=100;frametime=oldframe;ADVR_Sync();
+    bprint("ADVR PROTECTION PASS: learning, self cast, armor, directional shields, capacity, expiry, hands and persistence\n");
+};
+
+>>>>>>> Stashed changes

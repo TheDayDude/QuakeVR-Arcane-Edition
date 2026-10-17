@@ -50,7 +50,11 @@ if __name__=='__main__':
   for a,b,c in [(0,1,2),(0,2,3)]:
    if side==1:b,c=c,b
    m.tris.append((1,base+a,base+b,base+c))
+<<<<<<< Updated upstream
  write_mesh(m,points);m.frames.extend([[*m.frames[0]],[*m.frames[0]]]);dest=ROOT/'QC_AD/runtime/progs';dest.mkdir(exist_ok=True,parents=True);(dest/'advr_tome.mdl').write_bytes(m.to_bytes())
+=======
+ write_mesh(m,points);m.frames.extend([[*m.frames[0]] for _ in range(7)]);dest=ROOT/'QC_AD/runtime/progs';dest.mkdir(exist_ok=True,parents=True);(dest/'advr_tome.mdl').write_bytes(m.to_bytes())
+>>>>>>> Stashed changes
  # The text sits on the open spread, facing up toward the reader.
  order=mdl.strip_order(m.tris);actual=[m.place(v) for v in m.pose_bytes()[0]]
  settings=dict(Scale=1,OffsetX=0,OffsetY=0,OffsetZ=0,Pitch=0,Yaw=0,Roll=-90,ZeroBlend=0,TwoHZeroBlend=0,HandOnlyX=3,HandOnlyY=2,HandOnlyZ=0,Hotspot1Type=0,Hotspot2Type=0,WpnButtonMode=0,WpnTextMode=1,WpnTextPitch=90,WpnTextYaw=0,WpnTextRoll=0,WpnTextScale=.48,Mass=.8,Balance=4,Span=35,Recoil=0,Flash=0)
@@ -72,3 +76,17 @@ if __name__=='__main__':
  fire.h[2:5]=[x*1.4 for x in fire.h[2:5]];fire.h[5:8]=[x*1.4 for x in fire.h[5:8]];fire.h[8]*=1.4
  (dest/'advr_frostbolt.mdl').write_bytes(fire.to_bytes());print('Built open tome and palm flame')
 
+
+ # Acid uses green variants of the existing bolt and charge meshes.
+ for source,name in [('advr_frostbolt.mdl','advr_acidbolt.mdl'),('advr_magic_charge.mdl','advr_acid_charge.mdl')]:
+  acid=mdl.Model((dest/source).read_bytes());green=[]
+  for c in acid.skins[0][2][0]:
+   lum=max(pal[c*3:c*3+3]);rgb=[lum*.3,lum,lum*.06]
+   green.append(min(range(256),key=lambda i:sum((pal[i*3+j]-rgb[j])**2 for j in range(3))))
+  acid.skins=[[0,b'',[bytes(green)]]];(dest/name).write_bytes(acid.to_bytes())
+
+ void=mdl.Model((dest/'advr_magic_charge.mdl').read_bytes());purple=[]
+ for c in void.skins[0][2][0]:
+  lum=max(pal[c*3:c*3+3]);rgb=[lum*.65,lum*.12,lum]
+  purple.append(min(range(256),key=lambda i:sum((pal[i*3+j]-rgb[j])**2 for j in range(3))))
+ void.skins=[[0,b'',[bytes(purple)]]];(dest/'advr_void_charge.mdl').write_bytes(void.to_bytes())

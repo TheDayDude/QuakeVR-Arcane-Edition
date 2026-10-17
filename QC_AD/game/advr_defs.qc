@@ -324,7 +324,33 @@ float(entity e,vector blade,float settle) ragdolldecap = #0;
 vector(entity e,float what) ragdollcut = #0;
 
 float ADVR_TOME=13, ADVR_DEBUGTOME=14;
+<<<<<<< Updated upstream
 float ADVR_SPELL_COUNT=3; // spell IDs: 0 fireball, 1 lightning, 2 frostbolt
+=======
+.float advr_haste_until;
+float(entity r) ADVR_HasteRate;
+void() ADVR_TestHaste;
+.float advr_protection_until,advr_protection_armor,advr_shield_hp,advr_shield_hand;
+.entity advr_shield_fx;
+entity advr_shield_skip;
+vector advr_shield_center,advr_shield_normal,advr_shield_point;
+void() ADVR_ProtectionFrame;
+float(float h) ADVR_ShieldPose;
+float(vector from,vector to) ADVR_ShieldCross;
+float(entity target,entity inflictor,entity attacker,float damage,float kind) ADVR_ShieldDamage;
+void() ADVR_TestProtection;
+.entity advr_slip_marker,advr_slip_pending;
+.float advr_slip_valid,advr_slip_next;
+.vector advr_slip_target;
+vector advr_slip_landing;
+float(entity e,vector at,float floorcheck) ADVR_SlipFit;
+float(entity e,vector floorpoint) ADVR_SlipLand;
+void(float h) ADVR_SlipPreview;
+float(float h) ADVR_SlipCast;
+void(entity target,entity attacker) ADVR_SlipHit;
+void() ADVR_TestSlipstep;
+float ADVR_SPELL_COUNT=8; // spell IDs: 0 fireball, 1 lightning, 2 frostbolt
+>>>>>>> Stashed changes
 float parm40,parm41,parm42,parm43,parm44;
 .float advr_magic_version,advr_known,advr_mana_max,advr_tome_read;
 .float advr_favorites[8]; // X,Y,A,B,Up,Down,Left,Right; spell ID + 1 (zero unassigned)
@@ -383,3 +409,30 @@ void() ADVR_TestFrost;
 void() ADVR_TestFrostView;
 
 .entity advr_fury_guide; // reusable dotted center-projectile preview
+<<<<<<< Updated upstream
+=======
+
+.float advr_acidbolt,advr_acid_end,advr_acid_model;
+.entity advr_acid;
+float(entity target) ADVR_FireResistance;
+void(entity target,entity attacker,float multiplier) ADVR_AcidApply;
+void() ADVR_TestAcid;
+void() ADVR_FireThink;
+
+.float advr_voidorb,advr_void_rolltime,advr_lightning_cast;
+.entity advr_void_pending;
+void() ADVR_VoidPrecache;
+void(vector at,vector direction,vector aim) ADVR_VoidLaunch;
+void(entity target,entity attacker,float roll) ADVR_VoidRoll;
+float(entity target) ADVR_LightningResistance;
+void() ADVR_TestVoid;
+
+.float advr_void_original,advr_acid_sound;
+.entity advr_homing_controller;
+void(entity missile) ADVR_VoidHoming;
+void(entity r) ADVR_VoidWeapon;
+void(entity r) ADVR_VoidRestore;
+void() ADVR_VoidWeaponThink;
+
+void() ADVR_TestMagicRefine;
+>>>>>>> Stashed changes

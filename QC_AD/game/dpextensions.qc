@@ -1063,7 +1063,7 @@ float(float i) argv_end_index = #516;
 //idea: id Software
 //darkplaces implementation: id Software
 //builtin definitions:
-void(vector v1, vector min, vector max, vector v2, float nomonsters, entity forent) tracebox = #90;
+void(vector v1, vector min, vector max, vector v2, float nomonsters, entity forent) tracebox = #0; // Resolve QuakeVR named builtin (not the DarkPlaces numeric slot).
 //description:
 //similar to traceline but much more useful, traces a box of the size specified (technical note: in quake1 and halflife bsp maps the mins and maxs will be rounded up to one of the hull sizes, quake3 bsp does not have this problem, this is the case with normal moving entities as well).
 

@@ -473,6 +473,17 @@ void() worldspawn =
     precache_model("progs/advr_tome.mdl");
     precache_model("progs/advr_magic_charge.mdl");
     precache_model("progs/advr_frostbolt.mdl");
+<<<<<<< Updated upstream
+=======
+    precache_model("progs/advr_acidbolt.mdl");
+    precache_model(MODEL_PROJ_WIZ);
+    precache_model("progs/advr_acid_charge.mdl");
+    precache_model("progs/advr_void_charge.mdl");
+    precache_model("progs/advr_shield.mdl");
+    precache_model("progs/advr_slip_marker.mdl");
+    precache_model(MODEL_PROJ_SHAL);
+    ADVR_VoidPrecache();
+>>>>>>> Stashed changes
     precache_model(MODEL_PROJ_LAVA);
     precache_sound("skullwiz/attack.wav");
     precache_sound("hknight/attack1.wav");

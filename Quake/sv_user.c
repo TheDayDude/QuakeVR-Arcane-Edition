@@ -241,11 +241,12 @@ void SV_WaterMove (void)
 	else
 		wishvel[2] += cmd.upmove;
 
+	VectorScale(wishvel, VR_HasteSpeedScale(sv_player), wishvel);
 	wishspeed = VectorLength(wishvel);
-	if (wishspeed > sv_maxspeed.value)
+	if (wishspeed > sv_maxspeed.value * VR_HasteSpeedScale(sv_player))
 	{
-		VectorScale (wishvel, sv_maxspeed.value/wishspeed, wishvel);
-		wishspeed = sv_maxspeed.value;
+		VectorScale (wishvel, sv_maxspeed.value*VR_HasteSpeedScale(sv_player)/wishspeed, wishvel);
+		wishspeed = sv_maxspeed.value * VR_HasteSpeedScale(sv_player);
 	}
 	wishspeed *= 0.7;
 
@@ -347,9 +348,10 @@ void SV_AirMove (void)
 	else
 		wishvel[2] = 0;
 
+	VectorScale (wishvel, VR_HasteSpeedScale(sv_player), wishvel);
 	VectorCopy (wishvel, wishdir);
 	wishspeed = VectorNormalize(wishdir);
-	maxspeed = sv_maxspeed.value; // QVR: tired, slower (vr_stamina_speed)
+	maxspeed = sv_maxspeed.value * VR_HasteSpeedScale(sv_player); // QVR: tired, slower (vr_stamina_speed)
 	if (sv_player->v.movetype != MOVETYPE_NOCLIP)
 		maxspeed *= VR_StaminaSpeedScale (sv_player);
 	if (wishspeed > maxspeed)

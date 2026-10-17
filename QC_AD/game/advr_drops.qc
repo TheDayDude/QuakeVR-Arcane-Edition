@@ -141,7 +141,7 @@ void(float h) ADVR_SawFrame = {
     if(!pressed || r.wi_clip<=0)return;
     r.advr_frame=1;
     if(time<r.advr_cooldown)return;
-    r.advr_cooldown=time+0.1;r.wi_clip=max(0,r.wi_clip-max(0,cvar("vr_chainsaw_fuel_use"))*0.1);
+    r.advr_cooldown=time+0.1/ADVR_HasteRate(r);r.wi_clip=max(0,r.wi_clip-max(0,cvar("vr_chainsaw_fuel_use"))*0.1);
     at=ADVR_Pos(h);tip=ADVR_WeaponTip(h);
     // Only the forward bar cuts, not the engine block or rear grip. Check the
     // whole path first so moving the bar inside a wall cannot cut through it.
@@ -182,7 +182,7 @@ void(float h,float pressed) ADVR_CrossbowFire = {
         else r.advr_frame=3;
     }
     if(!pressed || was || r.wi_clip<=0 || time<r.advr_cooldown)return;
-    r.wi_clip=r.wi_clip-1;r.advr_cooldown=time+0.8;
+    r.wi_clip=r.wi_clip-1;r.advr_cooldown=time+0.8/ADVR_HasteRate(r);
     r.advr_animtime=time+0.18;r.advr_frame=1;
     if(h){at=self.muzzlepos;ang=self.shotrot;channel=CHAN_WEAPON;}
     else{at=self.offmuzzlepos;ang=self.offshotrot;channel=CHAN_BODY;}

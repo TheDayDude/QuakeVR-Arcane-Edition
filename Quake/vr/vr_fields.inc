@@ -162,3 +162,9 @@ QVR_FIELD(advr_enchant_charge)
 QVR_FIELD(advr_enchant_spell)
 
 QVR_FIELD(advr_frost_until)
+<<<<<<< Updated upstream
+=======
+QVR_FIELD(advr_haste_until)
+QVR_FIELD(advr_protection_until)
+QVR_FIELD(advr_protection_armor)
+>>>>>>> Stashed changes

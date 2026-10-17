@@ -1652,6 +1652,16 @@ bool spawn(const glm::vec3& org, const glm::vec3& dir, Preset preset, int count)
         case Preset::BloodTrail: bloodTrail(org, dir, count); break;
         case Preset::Splash: splash(org, dir, count); break;
         case Preset::WoodDust: woodDust(org, dir, count); break;
+        case Preset::AcidMist:
+        {
+            const za::SizeT first=pool.size();
+            smoke(org,count,false);
+            for(za::SizeT i=first;i<pool.size();i++) {
+                Particle& p=pool[i];p.color=glm::vec4{0.3f,0.7f,0.06f,0.28f};
+                p.die=cl.time+0.8;p.scale=1.3f;p.vel=glm::vec3{rnd(-5,5),rnd(-5,5),rnd(6,12)};
+            }
+            break;
+        }
         case Preset::ChainsawSmoke: chainsawSmoke(org, glm::length(dir) > 0.01f ? glm::normalize(dir) : dir, count); break;
         default: blood(org, dir, count); break;
     }

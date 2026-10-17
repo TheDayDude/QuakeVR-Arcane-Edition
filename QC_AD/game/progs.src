@@ -186,8 +186,14 @@ advr_hammer.qc
 advr_hammer_tests.qc
 advr_range_tests.qc
 
+advr_protection.qc
 advr_magic.qc
+advr_void.qc
+advr_slipstep.qc
 advr_magic_tests.qc
+advr_slipstep_tests.qc
+advr_void_tests.qc
+advr_magic_refine_tests.qc
 advr_fury.qc
 advr_fury_tests.qc
 

@@ -157,12 +157,26 @@ int enchantCode(edict_t* record,edict_t* player=nullptr)
     if(!record || !bindings().isAdVrProgs)return 0;
     const FieldOffsets& f=fields();
     if(player && weaponInst(player,f.advr_enchant_record)==record) {
-        const int strength=CLAMP(1,static_cast<int>(fieldFloatOr(player,f.advr_enchant_charge,0.f)*21.f),63);
-        return (static_cast<int>(fieldFloatOr(player,f.advr_enchant_spell,0.f))+1) | (strength<<2);
+        const int strength=CLAMP(1,static_cast<int>(fieldFloatOr(player,f.advr_enchant_charge,0.f)*(31.f/3.f)),31);
+        return ((static_cast<int>(fieldFloatOr(player,f.advr_enchant_spell,0.f))+1)&7) | (strength<<3);
     }
     if(fieldFloatOr(record,f.advr_enchant_until,0.f)<=qcvm->time)return 0;
     const int type=static_cast<int>(fieldFloatOr(record,f.advr_enchant_type,0.f));
+<<<<<<< Updated upstream
     return type>=1 && type<=3 ? type | (63<<2) : 0;
+=======
+    return type>=1 && type<=8 ? (type & 7) | (31<<3) : 0;
+}
+
+// World entities carry their own missile enchantment, or a subtle frost sheen.
+int entityEnchantCode(edict_t* ent)
+{
+    if(!bindings().isAdVrProgs || NUM_FOR_EDICT(ent)<=svs.maxclients)return 0;
+    if((static_cast<int>(ent->v.flags)&FL_MONSTER) && ent->v.health>0 &&
+       fieldFloatOr(ent,fields().advr_frost_until,0.f)>qcvm->time)return 3 | (7<<3);
+    if(edict_t* record=weaponInst(ent,fields().weaponinst))return enchantCode(record);
+    return enchantCode(ent);
+>>>>>>> Stashed changes
 }
 
 void sweepWeaponInsts()
@@ -712,9 +726,10 @@ extern "C" int VR_EntityUpdateBits(edict_t* ent)
     }
     if(NUM_FOR_EDICT(ent) > svs.maxclients && weaponUid(weaponInst(ent, f.weaponinst)) != 0)
     {
-        if(enchantCode(weaponInst(ent,f.weaponinst)))bits |= U_QVR_ENCHANT;
+        
         bits |= U_QVR_WEAPONUID; // a weapon prop (not a player: his .weaponinst is his main hand's, sent as a stat)
     }
+    if(entityEnchantCode(ent))bits |= U_QVR_ENCHANT;
     return bits;
 }
 
@@ -751,7 +766,31 @@ extern "C" void VR_WriteEntityUpdate(sizebuf_t* msg, edict_t* ent, int bits)
     {
         MSG_WriteLong(msg, weaponUid(weaponInst(ent, f.weaponinst)));
     }
-    if(bits & U_QVR_ENCHANT)MSG_WriteByte(msg,enchantCode(weaponInst(ent,f.weaponinst)));
+    if(bits & U_QVR_ENCHANT)MSG_WriteByte(msg,entityEnchantCode(ent));
+}
+
+// Movement and attacks advance through these same animation/AI thinks. Do not
+// alter stored speed fields, so expiry, saves and overlapping effects stay safe.
+extern "C" float VR_ProtectionArmor(edict_t* ent)
+{
+    const float extra=bindings().isAdVrProgs && ent->v.health>0 &&
+        fieldFloatOr(ent,fields().advr_protection_until,0.f)>qcvm->time ?
+        fieldFloatOr(ent,fields().advr_protection_armor,0.f) : 0.f;
+    return ent->v.armorvalue+std::max(0.f,extra);
+}
+extern "C" float VR_HasteSpeedScale(edict_t* ent)
+{
+    return bindings().isAdVrProgs && ent->v.health>0 && ent->v.movetype!=MOVETYPE_NOCLIP &&
+        fieldFloatOr(ent,fields().advr_haste_until,0.f)>qcvm->time ? 1.25f : 1.f;
+}
+extern "C" void VR_FrostThink(edict_t* ent,double thinktime)
+{
+    if(ent->free || !bindings().isAdVrProgs || !(static_cast<int>(ent->v.flags)&FL_MONSTER) || ent->v.health<=0 ||
+       fieldFloatOr(ent,fields().vr_knockdown,0.f)!=0.f)return;
+    const double until=fieldFloatOr(ent,fields().advr_frost_until,0.f);
+    if(until<=thinktime || ent->v.nextthink<=thinktime)return;
+    const double delay=ent->v.nextthink-thinktime;
+    ent->v.nextthink+=static_cast<float>(std::min(delay*(1.0/0.65-1.0),std::max(0.0,until-ent->v.nextthink)));
 }
 
 // Movement and attacks advance through these same animation/AI thinks. Do not
@@ -1050,6 +1089,14 @@ void adTest_f()
             cl.stats[STAT_QVR_ENCHANT_OFF],cl.stats[STAT_QVR_ENCHANT_HOLSTER0],world);
         return;
     }
+    if(Cmd_Argc()>1 && !strcmp(Cmd_Argv(1),"magicfxprobe")) {
+        int mask=0,frost=0;
+        for(int i=1;i<cl.num_entities;i++)if(const auto* e=qvr::client::entityVr(i);e && e->enchant) {
+            if(e->enchant==(3|(7<<3)))frost++;
+            if((e->enchant>>3)==31)mask|=1<<((e->enchant&7) ? (e->enchant&7) : 8);
+        }
+        Con_Printf("MAGIC FX PROBE elements=%d frost=%d\n",mask,frost);return;
+    }
     PR_SwitchQCVM(&sv.qcvm);
     const char* fixture = "ADVR_Test";
     if(Cmd_Argc() > 1)
@@ -1079,6 +1126,16 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "decaprig")) fixture = "ADVR_TestDecapRig";
         else if(!strcmp(Cmd_Argv(1), "decapstate")) fixture = "ADVR_TestDecapState";
         else if(!strcmp(Cmd_Argv(1), "magic")) fixture = "ADVR_TestMagic";
+<<<<<<< Updated upstream
+=======
+        else if(!strcmp(Cmd_Argv(1), "slipview")) fixture = "ADVR_TestSlipView";
+        else if(!strcmp(Cmd_Argv(1), "slipstep")) fixture = "ADVR_TestSlipstep";
+        else if(!strcmp(Cmd_Argv(1), "protection")) fixture = "ADVR_TestProtection";
+        else if(!strcmp(Cmd_Argv(1), "haste")) fixture = "ADVR_TestHaste";
+        else if(!strcmp(Cmd_Argv(1), "magicrefine")) fixture = "ADVR_TestMagicRefine";
+        else if(!strcmp(Cmd_Argv(1), "void")) fixture = "ADVR_TestVoid";
+        else if(!strcmp(Cmd_Argv(1), "acid")) fixture = "ADVR_TestAcid";
+>>>>>>> Stashed changes
         else if(!strcmp(Cmd_Argv(1), "frost")) fixture = "ADVR_TestFrost";
         else if(!strcmp(Cmd_Argv(1), "frostview")) fixture = "ADVR_TestFrostView";
         else if(!strcmp(Cmd_Argv(1), "enchantglow")) fixture = "ADVR_TestEnchantGlow";
@@ -1375,6 +1432,15 @@ void adDefaults_f()
     if(adFlashlightVersion.value < 1.f) {
         Cvar_SetValueQuick(&vr_flashlight, 1.f);
         Cvar_SetValueQuick(&adFlashlightVersion, 1.f);
+    }
+    if(adFlashlightVersion.value < 2.f) {
+        // Match the shipped QuakeVR chest clip preset (quakevr/vr_defaults.cfg).
+        // The engine mount and its physical grab target share these offsets.
+        Cvar_SetValueQuick(&vr_flashlight_forward, 0.02f);
+        Cvar_SetValueQuick(&vr_flashlight_up, 0.25f);
+        Cvar_SetValueQuick(&vr_flashlight_out, -0.05f);
+        Cvar_SetValueQuick(&vr_flashlight_tilt, -5.f);
+        Cvar_SetValueQuick(&adFlashlightVersion, 2.f);
     }
     if(adBalanceVersion.value < 1.f) {
         Cvar_SetValueQuick(&vr_parry_stamina_max, 125.f);

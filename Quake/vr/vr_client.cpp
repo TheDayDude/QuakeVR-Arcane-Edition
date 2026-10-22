@@ -2,6 +2,7 @@
 // VR input commands, building the VR move from tracking, and parsing VR server data.
 
 #include "vr_client.hpp"
+#include "vr_body.hpp"
 #include "vr_chainsaw.hpp"
 #include "vr_held.hpp"
 #include "vr_decals.hpp"
@@ -280,12 +281,16 @@ VrMove unposed;
         // Muzzles come from the weapon models (vr_view.cpp), as of the last rendered frame; a carried gun's from
         // where it is drawn (handMuzzle).
         move.muzzlePos[h] = handMuzzle(hs, h);
+        move.loadPort[h] = hs.loadPortValid[h] ? hs.loadPort[h] : hs.pos[h];
 
         // Where its shots go: the aim turned by the weapon's Shot Pitch and Yaw (the drawn weapon doesn't move).
         move.shotRot[h] = weapons::shotAngles(hs.rot[h], weapons::heldSlot(h), h == HAND_OFF) + weaponfx::aimOffset(h);
     }
 
     move.headVel = hs.headVel;
+    move.ammoPouch = body::ammoPouchPosition(hs);
+    const auto holsters=body::holsterPositions(hs);
+    for(int i=0;i<6;i++)move.holsterPos[i]=holsters[i];
 
     // VR bits: current state only. The server fills in the "PREV" bits once per server
     // frame, so that press edges survive several moves arriving in one frame.
@@ -368,6 +373,9 @@ VrMove unposed;
             hand.velMag = 0.f;
             move.hotspots[h] = unposed.hotspots[h];
             move.muzzlePos[h] = unposed.muzzlePos[h] + walked;
+            move.loadPort[h] = unposed.loadPort[h] + walked;
+            move.ammoPouch = unposed.ammoPouch + walked;
+            for(int i=0;i<6;i++)move.holsterPos[i]=unposed.holsterPos[i]+walked;
             move.shotRot[h] = unposed.shotRot[h];
         }
         move.vrBits0 = static_cast<za::U16>(unposed.vrBits0 & (VRBITS0_OFFHAND_GRABBING | VRBITS0_MAINHAND_GRABBING |

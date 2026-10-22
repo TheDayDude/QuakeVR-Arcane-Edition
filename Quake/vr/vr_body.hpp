@@ -60,6 +60,7 @@ using HolsterPlates = za::Array<HolsterPlate, HolsterCount>;
 // at the small of the back, where a hand reaches for it, and (`plate`) the body's surface there (its `out` behind the
 // back; zero `out` without the body: the pouch then faces straight back). Placed as the hip holsters are: carried by
 // the pelvis with vr_body_anchors, round the hips' ring (never in the body), else the old placement's.
+[[nodiscard]] glm::vec3 ammoPouchPosition(const hands::State& s);
 [[nodiscard]] bool pouchEnabled();
 [[nodiscard]] glm::vec3 pouchPosition(const hands::State& s, HolsterPlate* plate = nullptr);
 [[nodiscard]] float pouchReach(); // world units (vr_grenade_pouch_thresh)

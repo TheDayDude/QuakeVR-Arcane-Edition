@@ -3,6 +3,7 @@
 
 #include "vr_body.hpp"
 #include "vr_engine.hpp"
+#include "vr_protocol.hpp"
 #include "vr_avatar.hpp"
 #include "vr_backend.hpp"
 #include "vr_cvars.hpp"
@@ -338,6 +339,17 @@ glm::vec3 holsterPosition(const hands::State& s, Holster holster)
     return followingHolsterPosition(avatar::Follower{s}, avatar::standing(s), holster);
 }
 
+glm::vec3 ammoPouchPosition(const hands::State& s)
+{
+    // The belt belongs to the pelvis, not the animated thighs. Use the same
+    // current torso frame as the avatar so locomotion, leaning and crouching
+    // cannot leave the pouch behind or average opposing leg motion.
+    const auto pelvis=avatar::torso(s).pelvis;
+    const float depth=0.115f*units::metresToUnits()*units::bodyScale();
+    return pelvis.pos + pelvis.rot[2]*(depth+vr_ad_reload_pouch_forward.value)
+        + pelvis.rot[0]*(vr_ad_reload_pouch_up.value-8.f);
+}
+
 HolsterPositions holsterPositions(const hands::State& s, HolsterPlates* plates)
 {
     HolsterPositions out;
@@ -497,6 +509,7 @@ void queueDebug(const hands::State& s)
 
 void updateHotspots(hands::State& s)
 {
+    if(cl.stats[protocol::STAT_QVR_ELDER]){s.hotspot[0]=s.hotspot[1]=HS_NONE;return;}
     const HolsterPositions holsters = holsterPositions(s);
     const bool withPouch = pouchEnabled();
     const glm::vec3 pouch = withPouch ? pouchPosition(s) : glm::vec3{0.f};

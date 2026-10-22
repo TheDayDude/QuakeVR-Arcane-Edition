@@ -54,7 +54,7 @@ void() ADVR_TestGuidance = {
 };
 void() ADVR_TestMagic = {
     local entity book,p,foe,shot,player;local float oldframe,i,before;local vector head;
-    player=self;oldframe=frametime;ADVR_TestMagicView();ADVR_TestGuidance();book=self.advr_off;
+    player=self;oldframe=frametime;ADVR_TestMagicView();self.advr_off.advr_kind=ADVR_TOME;self.advr_known=1791;ADVR_TestGuidance();book=self.advr_off;
     ADVR_Assert(self.mana==30 && self.advr_mana_seen,"first tome grants thirty mana");
     foe=spawn();foe.classtype=CT_MONSKULLW;setorigin(foe,self.origin+'0 0 16');
     ADVR_Assert(ADVR_LootType(foe,0,0)==IT_AXE+ADVR_TOME*65536,"Skull Wizard loot is a tome");
@@ -167,13 +167,13 @@ void() ADVR_TestProgression = {
     book=ADVR_Record(IT_AXE);book.advr_kind=ADVR_TOME;
     ADVR_Assert(!self.advr_known && self.advr_mana_max==50,"new player has no spells and fifty capacity");
     ADVR_TomePickup(self,book);first=self.advr_known;
-    ADVR_Assert((first==1 || first==2 || first==4 || first==8 || first==16 || first==32 || first==64 || first==128) && self.mana==30,"first standard tome teaches exactly one spell and grants thirty mana");
+    ADVR_Assert((first==1 || first==2 || first==4 || first==8 || first==16 || first==32 || first==64 || first==128 || first==512 || first==1024) && self.mana==30,"first standard tome teaches exactly one spell and grants thirty mana");
     ADVR_TomePickup(self,book);
     ADVR_Assert(self.advr_known==first && self.mana==30,"same physical tome cannot teach or refill twice");
     self.advr_off=book;self.button3=1;ADVR_MagicSelect();self.button3=0;ADVR_MagicSelect();
     ADVR_Assert(first & pow(2,self.advr_spell),"selection skips unknown spells");
     debug=ADVR_Record(IT_AXE);debug.advr_kind=ADVR_DEBUGTOME;ADVR_TomePickup(self,debug);
-    ADVR_Assert(ADVR_SpellMask(self,debug)==255 && self.advr_known==first,"debug exposes all spells without learning them");
+    ADVR_Assert(ADVR_SpellMask(self,debug)==1791 && self.advr_known==first,"debug exposes all spells without learning them");
     second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
     second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
     second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
@@ -181,7 +181,9 @@ void() ADVR_TestProgression = {
     second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
     second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
     second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
-    ADVR_Assert(self.advr_known==255 && ADVR_SpellMask(self,book)==255,"eight new tomes teach all spells, visible in first tome");
+    second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
+    second=ADVR_Record(IT_AXE);second.advr_kind=ADVR_TOME;ADVR_TomePickup(self,second);
+    ADVR_Assert(self.advr_known==1791 && ADVR_SpellMask(self,book)==1791,"ten new tomes teach all spells, visible in first tome");
     self.mana=49;foe=spawn();foe.flags=FL_MONSTER;foe.classtype=CT_MONSKULLW;
     ADVR_ManaReward(foe,self);ADVR_Assert(self.mana==50,"magical kill reward clamps at mana capacity");remove(foe);
     power=spawn();self=power;other=player;ADVR_PowerPickup();ADVR_PowerPickup();self=player;
@@ -211,7 +213,7 @@ void() ADVR_TestProgression = {
     for(i=0;i<41;i=i+1)ADVR_MagicSelect();self.advr_magic_buttons=0;ADVR_MagicSelect();
     ADVR_Assert(self.advr_favorites[4]==1,"long D-pad hold rebinds instead of recalling old favorite");
     self.advr_main=debug;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();book=self.advr_off;
-    ADVR_Assert(self.advr_known==255 && self.advr_mana_max==60 && self.advr_favorites[4]==1 && self.advr_favorites[7]==2,"knowledge capacity and favorites survive map parms");
+    ADVR_Assert(self.advr_known==1791 && self.advr_mana_max==60 && self.advr_favorites[4]==1 && self.advr_favorites[7]==2,"knowledge capacity and favorites survive map parms");
     ADVR_Assert(book.advr_tome_read && self.advr_main.advr_kind==ADVR_DEBUGTOME,"read state and debug identity survive map parms");
     self.advr_known=1;self.advr_main=world;self.advr_spell=0;self.advr_magic_buttons=4;ADVR_MagicSelect();
     self.advr_magic_buttons=0;ADVR_MagicSelect();ADVR_Assert(self.advr_spell==0,"debug-only favorite cannot unlock an unknown spell in a standard tome");
@@ -225,7 +227,7 @@ void() ADVR_TestEnchant = {
     local entity book,r,shot,v,player,p;
     local float i,h,oldframe,before;
     player=self;oldframe=frametime;frametime=0.05;
-    ADVR_TestMagicView();book=self.advr_off;self.vrbits0=16384;
+    ADVR_TestMagicView();self.advr_off.advr_kind=ADVR_TOME;self.advr_known=1791;book=self.advr_off;self.vrbits0=16384;
     self.handpos=ADVR_Head(self)+'24 0 -8';self.offhandpos=ADVR_Head(self)+'24 16 -8';
     self.handrot=self.offhandrot='0 0 0';self.handvel=self.offhandvel='0 0 0';
     self.mainhand_hotspot=self.offhand_hotspot=0;
@@ -332,9 +334,9 @@ void() ADVR_TestFrost = {
     local entity player,book,v,shot,r,timer;
     local float i,oldframe,before;
     player=self;oldframe=frametime;frametime=0.05;
-    ADVR_TestFrostView();book=self.advr_off;
-    self.advr_known=251;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
-    ADVR_Assert(self.advr_known==255 && self.advr_spell==2,"new standard tome teaches missing frost");remove(r);
+    ADVR_TestFrostView();self.advr_off.advr_kind=ADVR_TOME;self.advr_known=1791;book=self.advr_off;
+    self.advr_known=1787;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
+    ADVR_Assert(self.advr_known==1791 && self.advr_spell==2,"new standard tome teaches missing frost");remove(r);
     self.advr_favorites[4]=3;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();book=self.advr_off;
     ADVR_Assert(self.advr_spell==2 && self.weaponframe2==2 && self.advr_favorites[4]==3,"frost selection and favorite survive map parms");
     self.vrbits0=16384;self.handpos=ADVR_Head(self)+'24 0 -8';self.offhandpos=ADVR_Head(self)+'24 16 -8';
@@ -343,7 +345,8 @@ void() ADVR_TestFrost = {
     for(i=0;i<15;i=i+1)ADVR_MagicFrame();
     ADVR_Assert(self.advr_magic_ready && self.advr_magic_fx.skin==1,"frost charges blue orb");
     self.handvel='0 1 0';self.advr_magic_sticks=0;ADVR_MagicFrame();shot=newmis;
-    ADVR_Assert(self.mana==before-1 && shot.advr_frostbolt && !shot.advr_fireball && shot.velocity_y>540,"frost flick launches blue bolt for one mana");
+    ADVR_Assert(self.mana==before-1 && !shot,"frost flick emits cone for one mana without a projectile");
+    ADVR_FrostLaunch(self.handpos,'0 1 0');shot=newmis; // legacy impact callback remains valid for existing projectiles
     v=spawn();v.classname="advr_frost_target";v.flags=FL_MONSTER;v.takedamage=DAMAGE_YES;v.health=1000;
     v.enemy=player;v.switchattacker=player;v.switchtimer=time+100;
     setmodel(v,"progs/player.mdl");setorigin(v,ADVR_Head(self)+'100 0 0');
@@ -370,8 +373,8 @@ void() ADVR_TestFrost = {
 void() ADVR_TestAcid = {
     local entity player,v,shot,e,r,splash;local float oldframe,start,i,hp,packed;
     player=self;oldframe=frametime;frametime=0.05;
-    ADVR_TestMagicView();self.advr_known=247;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
-    ADVR_Assert(self.advr_known==255 && self.advr_spell==3,"standard tome teaches acid");remove(r);
+    ADVR_TestMagicView();self.advr_off.advr_kind=ADVR_TOME;self.advr_known=1791;self.advr_known=1783;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
+    ADVR_Assert(self.advr_known==1791 && self.advr_spell==3,"standard tome teaches acid");remove(r);
     self.advr_favorites[4]=4;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();
     ADVR_Assert(self.advr_spell==3 && self.weaponframe2==3 && self.advr_favorites[4]==4,"acid selection and favorite persist");
     self.vrbits0=16384;self.handpos=ADVR_Head(self)+'24 0 -8';self.handvel=self.offhandvel='0 0 0';
@@ -421,9 +424,9 @@ void() ADVR_TestAcid = {
 
 void() ADVR_TestHaste = {
     local entity r,v;local float i,oldframe,before;
-    oldframe=frametime;frametime=0.05;ADVR_TestMagicView();
-    self.advr_known=223;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
-    ADVR_Assert(self.advr_known==255 && self.advr_spell==5,"tome teaches haste");remove(r);
+    oldframe=frametime;frametime=0.05;ADVR_TestMagicView();self.advr_off.advr_kind=ADVR_TOME;self.advr_known=1791;
+    self.advr_known=1759;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
+    ADVR_Assert(self.advr_known==1791 && self.advr_spell==5,"tome teaches haste");remove(r);
     self.advr_favorites[4]=6;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();
     ADVR_Assert(self.advr_spell==5 && self.advr_favorites[4]==6,"haste favorite and selection persist");
     self.vrbits0=16384;self.handpos=ADVR_Head(self)+'24 0 -8';self.handrot=self.offhandrot='0 0 0';
@@ -460,9 +463,9 @@ void() ADVR_TestHaste = {
 
 void() ADVR_TestProtection = {
     local entity r,v,q,shot;local float i,oldframe,hp,stamina,packed;local vector hand;
-    oldframe=frametime;frametime=0.05;ADVR_TestMagicView();
-    self.advr_known=191;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
-    ADVR_Assert(self.advr_known==255 && self.advr_spell==6,"tome teaches protection");remove(r);
+    oldframe=frametime;frametime=0.05;ADVR_TestMagicView();self.advr_off.advr_kind=ADVR_TOME;self.advr_known=1791;
+    self.advr_known=1727;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
+    ADVR_Assert(self.advr_known==1791 && self.advr_spell==6,"tome teaches protection");remove(r);
     self.advr_favorites[4]=7;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();
     ADVR_Assert(self.advr_spell==6 && self.advr_favorites[4]==7,"protection selection and favorite persist");
     self.vrbits0=16384;self.handpos=ADVR_Head(self)+'24 0 -8';self.handrot=self.offhandrot='0 0 0';
@@ -508,4 +511,115 @@ void() ADVR_TestProtection = {
     remove(v);self.health=100;frametime=oldframe;ADVR_Sync();
     bprint("ADVR PROTECTION PASS: learning, self cast, armor, directional shields, capacity, expiry, hands and persistence\n");
 };
+
+
+void() ADVR_TestEarthView = {
+    ADVR_TestMagicView();configflag=configflag | SVR_RUNE_KEY1;self.advr_spell=8;self.mana=50;
+    self.advr_earth_until=time+60;ADVR_MagicInit(self);ADVR_Sync();
+};
+void() ADVR_TestEarth = {
+    local entity player,v,book;local float oldconfig,oldframe,i,hp;
+    player=self;oldconfig=configflag;oldframe=frametime;frametime=0.05;
+    configflag=configflag-(configflag & SVR_RUNE_KEY1);ADVR_TestMagicView();book=self.advr_off;book.advr_kind=ADVR_TOME;
+    ADVR_Assert(!(ADVR_SpellMask(self,book) & 256),"standard tome requires Earth rune");
+    book.advr_kind=ADVR_DEBUGTOME;
+    ADVR_Assert(ADVR_SpellMask(self,book) & 256,"debug tome unlocks Earth without rune");
+    book.advr_kind=ADVR_TOME;configflag=configflag | SVR_RUNE_KEY1;self.advr_spell=8;self.mana=29;self.vrbits0=16384;
+    self.handpos=ADVR_Head(self)+'24 0 -8';self.handrot=self.offhandrot='0 0 0';
+    self.handvel=self.offhandvel=self.handavel=self.offhandavel='0 0 0';
+    self.mainhand_hotspot=self.offhand_hotspot=0;self.advr_magic_sticks=2;ADVR_MagicFrame();
+    ADVR_Assert(!self.advr_magic_book,"Earth refuses charge below thirty essence");
+    self.advr_magic_sticks=0;ADVR_MagicFrame();self.mana=50;self.advr_magic_sticks=2;
+    for(i=0;i<30;i=i+1)ADVR_MagicFrame();
+    ADVR_Assert(!self.advr_magic_ready && self.advr_magic_fx.model=="progs/advr_earth_rune.mdl","rune materializes during slow charge");
+    for(i=0;i<32;i=i+1)ADVR_MagicFrame();
+    ADVR_Assert(self.advr_magic_ready,"Earth charge ready at three seconds");
+    self.advr_magic_sticks=0;ADVR_MagicFrame();
+    ADVR_Assert(self.mana==20 && self.advr_earth_until==time+60,"Earth release costs thirty and grants sixty seconds");
+    self.advr_favorites[4]=9;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();
+    ADVR_Assert(self.advr_spell==8 && self.advr_favorites[4]==9 && !self.advr_earth_until,"rune selection survives map transition; buff resets");
+    self.advr_earth_until=time+60;self.health=1000;self.armorvalue=100;self.armortype=0.6;
+    self.flags=self.flags-(self.flags & FL_GODMODE);self.invincible_finished=0;self.takedamage=DAMAGE_AIM;
+    v=spawn();v.flags=FL_MONSTER;setorigin(v,self.origin+'80 0 0');
+    for(i=0;i<3;i=i+1)T_Damage(self,v,v,100,DAMARMOR);
+    ADVR_Assert(self.health==940 && self.armorvalue==100,"infinite red armor absorbs eighty percent without depleting normal armor");
+    self.advr_earth_until=time;hp=self.health;T_Damage(self,v,v,100,DAMARMOR);
+    ADVR_Assert(hp-self.health>=39 && hp-self.health<=40 && self.armorvalue>=39 && self.armorvalue<=40,"expiry restores normal armor behavior");remove(v);
+    // Real physical empty-hand contact: fixed speed, no headshot rig.
+    self.advr_main=world;self.advr_magic_book=world;self.handpos=ADVR_Head(self);self.handrot='0 0 0';self.handvel='3 0 0';
+    self.mainhand_melee_attack_finished=0;self.advr_prevmain_time=0;self.super_damage_finished=0;
+    v=spawn();v.classname="earth_punch_target";v.classtype=CT_TARGETDUMMY;v.flags=FL_MONSTER;
+    v.movetype=MOVETYPE_STEP;v.solid=SOLID_BBOX;v.takedamage=DAMAGE_YES;v.health=1000;v.enemy=self;v.switchattacker=self;v.switchtimer=time+100;
+    setsize(v,'-4 -4 -4','4 4 4');setorigin(v,self.handpos+'6 0 0');
+    ADVR_Melee(1);hp=1000-v.health;
+    v.health=1000;self.mainhand_melee_attack_finished=0;self.advr_prevmain_time=0;self.advr_earth_until=time+60;
+    ADVR_Melee(1);
+    ADVR_Assert(v.health<=1000-hp*3.5 && v.health>=1000-hp*4.5,"Earth punch has quad damage");
+    ADVR_Assert(self.advr_earth_main_until>time && vlen(v.velocity)>0,"Earth punch emits quad feedback and knocks back");
+    if(v.advr_shove)remove(v.advr_shove);remove(v);
+    ADVR_Reset();self.velocity='0 0 0';configflag=oldconfig;frametime=oldframe;ADVR_TestMagicView();
+    bprint("ADVR EARTH PASS: rune gate, charge, cost, duration, armor, fists, knockback, transition\n");
+};
+
+void() ADVR_TestSightMagic = {
+    local float i,j,before,oldframe,packed;local entity r,v;local vector at;
+    oldframe=frametime;frametime=0.05;ADVR_TestMagicView();self.advr_off.advr_kind=ADVR_TOME;self.advr_known=1791;
+    self.vrbits0=16384;self.handpos=ADVR_Head(self)+'24 0 -8';self.handrot=self.offhandrot='0 0 0';
+    self.handvel=self.offhandvel=self.handavel=self.offhandavel='0 0 0';
+    self.mainhand_hotspot=self.offhand_hotspot=0;
+    for(j=9;j<=10;j=j+1){
+        self.advr_known=1791-pow(2,j);r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
+        ADVR_Assert(self.advr_known==1791 && self.advr_spell==j,"new spell is learnable");remove(r);
+        self.advr_magic_sticks=0;ADVR_MagicFrame();self.advr_magic_sticks=2;
+        for(i=0;i<15;i=i+1)ADVR_MagicFrame();
+        before=self.mana;self.advr_magic_sticks=0;ADVR_MagicFrame();
+        ADVR_Assert(self.mana==before-1 && !self.advr_magic_fx,"self cast costs one and clears charge");
+        if(j==9)ADVR_Assert(self.invisible_finished>=time+30 && (self.items & IT_INVISIBILITY),"ring invisibility active");
+        else ADVR_Assert(self.advr_darksight_until==time+30,"darksight timer active");
+        r=ADVR_Record(IT_SHOTGUN);self.advr_main=r;self.advr_enchant_latched=0;
+        self.advr_magic_sticks=2;for(i=0;i<65;i=i+1)ADVR_MagicFrame();
+        ADVR_Assert(r.advr_enchant_type==j+1 && r.advr_enchant_until==time+30,"new enchant applies");
+        packed=ADVR_EnchantPack(r);r.advr_enchant_type=0;ADVR_EnchantRestore(r,packed);
+        ADVR_Assert(r.advr_enchant_type==j+1 && r.advr_enchant_until==time+30,"new enchant persists");
+        self.advr_magic_sticks=0;ADVR_MagicFrame();self.advr_main=world;remove(r);
+    }
+    self.advr_spell=4;self.advr_magic_sticks=2;for(i=0;i<15;i=i+1)ADVR_MagicFrame();
+    ADVR_Assert(self.advr_magic_fx.model==MODEL_PROJ_SHAL,"Void charge uses vorepod");
+    ADVR_MagicClear();self.advr_magic_sticks=0;ADVR_MagicFrame();
+    at=ADVR_Head(self);v=spawn();v.flags=FL_MONSTER;v.takedamage=DAMAGE_AIM;v.health=1000;v.th_pain=SUB_Null;
+    setsize(v,'-4 -4 -4','4 4 4');setorigin(v,at+'50 0 0');
+    ADVR_FrostCone(at,'1 0 0');ADVR_Assert(v.health<1000 && v.advr_frost_until>time,"cone damages and slows in front");
+    before=v.health;setorigin(v,at+'0 50 0');ADVR_FrostCone(at,'1 0 0');ADVR_Assert(v.health==before,"cone excludes side targets");
+    setorigin(v,at+'-50 0 0');ADVR_FrostCone(at,'1 0 0');ADVR_Assert(v.health==before,"cone excludes rear targets");
+    setorigin(v,at+'2000 0 0');ADVR_FrostCone(at,'1 0 0');ADVR_Assert(v.health==before,"cone excludes distant targets");remove(v);
+    frametime=oldframe;ADVR_Sync();bprint("ADVR SIGHT MAGIC PASS\n");
+};
+
+void() ADVR_TestSightView = {
+    ADVR_TestMagicView();self.invisible_finished=0;self.items=self.items-(self.items & IT_INVISIBILITY);self.advr_darksight_until=0;
+    self.advr_main=ADVR_Record(IT_SHOTGUN);self.advr_main.advr_enchant_type=11;self.advr_main.advr_enchant_until=time+30;
+    self.advr_spell=10;ADVR_Sync();
+};
+void() ADVR_TestInvisibleView = {ADVR_TestSightView();self.advr_main.advr_enchant_type=10;ADVR_Sync();};
+void() ADVR_TestDarkView = {ADVR_TestSightView();self.advr_main.advr_enchant_type=0;self.advr_darksight_until=time+30;ADVR_Sync();};
+
+void() ADVR_TestFrostSsg = {
+    local entity e;local vector at;local float oldmode;
+    oldmode=cvar("vr_reload_mode");ADVR_TestSsgInput();
+    self.vrbits0=16384+4096;ADVR_ManualFrame();
+    ADVR_Assert(!self.advr_main.advr_ssg_open,"flick cannot open closed SSG");
+    self.vrbits0=16384+1048576;ADVR_ManualFrame();
+    ADVR_Assert(self.advr_main.advr_ssg_open,"B opens closed SSG");
+    self.advr_main.advr_reload_until=self.advr_main.advr_cooldown=0;
+    self.vrbits0=16384;ADVR_ManualFrame();self.vrbits0=16384+1048576;ADVR_ManualFrame();
+    ADVR_Assert(self.advr_main.advr_ssg_open,"B cannot close open SSG");
+    self.vrbits0=16384+4096;ADVR_ManualFrame();ADVR_Assert(!self.advr_main.advr_ssg_open,"flick closes open SSG");
+    at=ADVR_Head(self);ADVR_FrostLight(at,normalize('1 0 -1'),240);e=find(world,classname,"advr_frost_cone_light");
+    ADVR_Assert(e && !find(e,classname,"advr_frost_cone_light"),"Frost uses one cone anchor rather than three balls");
+    makevectors(e.angles);ADVR_Assert(v_forward*normalize('1 0 -1')>0.99,"cone illumination follows cast direction including pitch");
+    ADVR_Assert(e.origin==at && e.advr_enchant_until==time+1.25,"cone origin and readable fade duration");
+    remove(e);cvar_set("vr_reload_mode",ftos(oldmode));ADVR_TestMagicView();
+    bprint("ADVR FROST SSG PASS: button-only open, flick-only close, single directional cone\n");
+};
+
 

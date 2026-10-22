@@ -459,6 +459,7 @@ void() worldspawn =
 	precache_model ("progs/advr_widowmaker.mdl");
 	precache_model ("progs/advr_plasma.mdl");
 	precache_sound ("reload1.wav");
+    ADVR_ManualPrecache();
 	precache_sound("vr/headshot.wav");
     precache_sound("vr/parry.wav");
     precache_model("progs/v_ksword.mdl");
@@ -477,13 +478,21 @@ void() worldspawn =
     precache_model(MODEL_PROJ_WIZ);
     precache_model("progs/advr_acid_charge.mdl");
     precache_model("progs/advr_void_charge.mdl");
+    precache_model("progs/advr_elder_rune.mdl");
+    precache_model("progs/advr_fiend_body.mdl");
+    precache_model("progs/advr_fiend_claw.mdl");
+    precache_sound("demon/idle1.wav");precache_sound("demon/dpain1.wav");
+    precache_sound("demon/djump.wav");precache_sound("demon/dhit2.wav");precache_sound("demon/sight2.wav");
+    precache_model("progs/advr_earth_rune.mdl");
     precache_model("progs/advr_shield.mdl");
     precache_model("progs/advr_slip_marker.mdl");
     precache_model(MODEL_PROJ_SHAL);
-    ADVR_VoidPrecache();
+    ADVR_VoidPrecache();ADVR_DarkPrecache();
+    precache_model("progs/advr_dark_rune.mdl");
+    precache_model("progs/advr_nether_rune.mdl");precache_model("progs/advr_nether_arc.mdl");
     precache_model(MODEL_PROJ_LAVA);
     precache_sound("skullwiz/attack.wav");
-    precache_sound("hknight/attack1.wav");
+    precache_sound("hknight/attack1.wav");precache_sound("hknight/hit.wav");
     precache_model(MODEL_PROJ_FURY1);
     precache_model(MODEL_PROJ_RINGSHOCK);
     precache_sound("ogre/ham_wave.wav");
@@ -992,3 +1001,4 @@ void() dpcompiler_errors =
 	trace_dphitq3surfaceflags = 0;
 	trace_dphittexturename = "";
 };
+

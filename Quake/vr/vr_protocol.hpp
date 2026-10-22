@@ -108,7 +108,11 @@ enum Stat : int
     STAT_QVR_ENCHANT_MAIN,
     STAT_QVR_ENCHANT_OFF,
     STAT_QVR_ENCHANT_HOLSTER0, // six holsters
-    STAT_QVR_END = STAT_QVR_ENCHANT_HOLSTER0 + 6
+    STAT_QVR_EARTH = STAT_QVR_ENCHANT_HOLSTER0 + 6,
+    STAT_QVR_RELOAD_HANDS, // physical reload ammo held: off bit 0, main bit 1
+    STAT_QVR_DARKSIGHT,
+    STAT_QVR_ELDER,
+    STAT_QVR_END
 };
 
 inline constexpr int numHolsters = 6;

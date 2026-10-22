@@ -8,6 +8,8 @@ Copy-Item -LiteralPath "$PSScriptRoot\advr-progs.dat" -Destination "$overlay\pro
 Copy-Item -LiteralPath "$PSScriptRoot\runtime\advr_start.cfg" -Destination $overlay
 Copy-Item -LiteralPath "$PSScriptRoot\runtime\default.cfg" -Destination $overlay
 Copy-Item -LiteralPath "$PSScriptRoot\runtime\progs" -Destination $overlay -Recurse -Force
+Copy-Item -LiteralPath "$PSScriptRoot\runtime\sound" -Destination $overlay -Recurse -Force
+Copy-Item -LiteralPath "$PSScriptRoot\MANUAL-RELOADING.md" -Destination $destination
 Copy-Item -LiteralPath "$PSScriptRoot\runtime\QuakeVR-AD.bat" -Destination $destination
 Copy-Item -LiteralPath "$PSScriptRoot\runtime\QuakeVR-AD-Standard-Textures.bat" -Destination $destination
 

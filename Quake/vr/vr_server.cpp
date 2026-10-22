@@ -1,3 +1,6 @@
+#include "vr_body.hpp"
+#include "vr_avatar.hpp"
+#include "vr_hands.hpp"
 // vr_server.cpp -- server side of the Quake VR protocol extensions (see vr_protocol.hpp).
 
 #include "vr_fatigue.hpp"
@@ -156,12 +159,17 @@ int enchantCode(edict_t* record,edict_t* player=nullptr)
 {
     if(!record || !bindings().isAdVrProgs)return 0;
     const FieldOffsets& f=fields();
+    if(fieldFloatOr(record,f.advr_nether_until,0.f)>qcvm->time)return 1 | (31<<3);
     if(player && weaponInst(player,f.advr_enchant_record)==record) {
+        const int pending=static_cast<int>(fieldFloatOr(player,f.advr_enchant_spell,0.f))+1;
+        if(pending>=10)return 2; // green charge; invisibility applies only when complete
         const int strength=CLAMP(1,static_cast<int>(fieldFloatOr(player,f.advr_enchant_charge,0.f)*(31.f/3.f)),31);
         return ((static_cast<int>(fieldFloatOr(player,f.advr_enchant_spell,0.f))+1)&7) | (strength<<3);
     }
     if(fieldFloatOr(record,f.advr_enchant_until,0.f)<=qcvm->time)return 0;
     const int type=static_cast<int>(fieldFloatOr(record,f.advr_enchant_type,0.f));
+    if(type==10)return 1; // unused zero-strength codes preserve the byte protocol
+    if(type==11)return 2;
     return type>=1 && type<=8 ? (type & 7) | (31<<3) : 0;
 }
 
@@ -169,6 +177,8 @@ int enchantCode(edict_t* record,edict_t* player=nullptr)
 int entityEnchantCode(edict_t* ent)
 {
     if(!bindings().isAdVrProgs || NUM_FOR_EDICT(ent)<=svs.maxclients)return 0;
+    if(weaponInst(ent,fields().advr_dark_owner) && ent->v.health>0)return 5;
+    if(!strcmp(PR_GetString(ent->v.classname),"advr_frost_cone_light"))return 4;
     if((static_cast<int>(ent->v.flags)&FL_MONSTER) && ent->v.health>0 &&
        fieldFloatOr(ent,fields().advr_frost_until,0.f)>qcvm->time)return 3 | (7<<3);
     if(edict_t* record=weaponInst(ent,fields().weaponinst))return enchantCode(record);
@@ -512,6 +522,16 @@ extern "C" void VR_ReadMoveExtras(client_t* client)
     setFieldVec(ent, f.headpos, move.headPos);
     setFieldVec(ent, f.offmuzzlepos, move.muzzlePos[0]);
     setFieldVec(ent, f.muzzlepos, move.muzzlePos[1]);
+    setFieldVec(ent, f.loadportpos, move.loadPort[1]);
+    setFieldVec(ent, f.offloadportpos, move.loadPort[0]);
+    setFieldVec(ent, f.ammopouchpos, move.ammoPouch);
+    setFieldVec(ent,f.advr_holsterpos0,move.holsterPos[0]);
+    setFieldVec(ent,f.advr_holsterpos1,move.holsterPos[1]);
+    setFieldVec(ent,f.advr_holsterpos2,move.holsterPos[2]);
+    setFieldVec(ent,f.advr_holsterpos3,move.holsterPos[3]);
+    setFieldVec(ent,f.advr_holsterpos4,move.holsterPos[4]);
+    setFieldVec(ent,f.advr_holsterpos5,move.holsterPos[5]);
+
     setFieldVec(ent, f.offshotrot, move.shotRot[0]);
     setFieldVec(ent, f.shotrot, move.shotRot[1]);
     if(clientNum >= static_cast<int>(clientBits.size()))
@@ -629,7 +649,13 @@ extern "C" void VR_CalcStats(client_t* client, int* statsi, float* statsf)
     stat(STAT_QVR_WEAPONCLIPSIZE, f.weaponclipsize);
     stat(STAT_QVR_WEAPONCLIPSIZE2, f.weaponclipsize2);
     stat(STAT_QVR_MELEE, f.vr_melee_hud);
-    stat(STAT_QVR_MAGIC_KNOWN, f.advr_known);
+    stat(STAT_QVR_MAGIC_KNOWN, f.advr_available);
+    statsi[STAT_QVR_RELOAD_HANDS]=static_cast<int>(fieldFloatOr(ent,f.advr_reload_hands,0.f));
+    statsi[STAT_QVR_EARTH]=fieldFloatOr(ent,f.advr_earth_until,0.f)>qcvm->time && ent->v.health>0 ?
+        1 | (fieldFloatOr(ent,f.advr_earth_main_until,0.f)>qcvm->time ? 2 : 0) |
+        (fieldFloatOr(ent,f.advr_earth_off_until,0.f)>qcvm->time ? 4 : 0) : 0;
+    statsi[STAT_QVR_ELDER]=ent->v.health>0 && fieldFloatOr(ent,f.advr_elder_until,0.f)>qcvm->time;
+    statsi[STAT_QVR_DARKSIGHT]=ent->v.health>0 && fieldFloatOr(ent,f.advr_darksight_until,0.f)>qcvm->time;
     stat(STAT_QVR_MAGIC_MAX, f.advr_mana_max);
     stat(STAT_QVR_MAGIC_TOMES, f.advr_tome_flags);
     statsi[STAT_QVR_ENCHANT_MAIN]=enchantCode(inst(f.weaponinst),ent);
@@ -769,10 +795,15 @@ extern "C" void VR_WriteEntityUpdate(sizebuf_t* msg, edict_t* ent, int bits)
 // alter stored speed fields, so expiry, saves and overlapping effects stay safe.
 extern "C" float VR_ProtectionArmor(edict_t* ent)
 {
+    if(bindings().isAdVrProgs && ent->v.health>0 && fieldFloatOr(ent,fields().advr_earth_until,0.f)>qcvm->time)return 200.f;
     const float extra=bindings().isAdVrProgs && ent->v.health>0 &&
         fieldFloatOr(ent,fields().advr_protection_until,0.f)>qcvm->time ?
         fieldFloatOr(ent,fields().advr_protection_armor,0.f) : 0.f;
     return ent->v.armorvalue+std::max(0.f,extra);
+}
+extern "C" float VR_ElderAirLimit(edict_t* ent)
+{
+    return bindings().isAdVrProgs && ent->v.health>0 && fieldFloatOr(ent,fields().advr_elder_until,0.f)>qcvm->time ? 180.f : 30.f;
 }
 extern "C" float VR_HasteSpeedScale(edict_t* ent)
 {
@@ -857,6 +888,7 @@ void dumpPlayer_f()
     vec("handvel", f.handvel);
     vec("headpos", f.headpos);
     vec("muzzlepos", f.muzzlepos);
+    vec("loadportpos", f.loadportpos);vec("offloadportpos", f.offloadportpos);vec("ammopouchpos", f.ammopouchpos);
     vec("offhandpos", f.offhandpos);
     vec("offmuzzlepos", f.offmuzzlepos);
     Con_Printf("  vrbits0 %d  button3 %g  weapon %g  weapon2 %g\n",
@@ -892,7 +924,7 @@ void rebaseHands(edict_t* player)
 
     VrMove& move = m->move;
     const FieldOffsets& f = fields();
-    for(const int ofs : {f.handpos, f.offhandpos, f.muzzlepos, f.offmuzzlepos, f.handthrowpos, f.offhandthrowpos, f.headpos})
+    for(const int ofs : {f.handpos, f.offhandpos, f.muzzlepos, f.offmuzzlepos, f.handthrowpos, f.offhandthrowpos, f.headpos, f.loadportpos, f.offloadportpos, f.ammopouchpos})
     {
         setFieldVec(player, ofs, fieldVec(player, ofs) + delta);
     }
@@ -904,6 +936,8 @@ void rebaseHands(edict_t* player)
     }
     move.muzzlePos[0] += delta;
     move.muzzlePos[1] += delta;
+    move.loadPort[0] += delta;move.loadPort[1] += delta;move.ammoPouch += delta;
+    for(auto& p:move.holsterPos)p+=delta;
     move.headPos += delta;
 }
 
@@ -1081,6 +1115,13 @@ void adTest_f()
         }
         Con_Printf("MAGIC FX PROBE elements=%d frost=%d\n",mask,frost);return;
     }
+    if(Cmd_Argc()>1 && !strcmp(Cmd_Argv(1),"pouchfollow")) {
+        auto s=hands::current();const auto before=body::ammoPouchPosition(s);
+        const glm::vec3 delta{48.f,-32.f,12.f};s.head+=delta;s.playerOrigin+=delta;
+        const auto after=body::ammoPouchPosition(s);
+        const bool ok=glm::length(after-before-delta)<0.01f;
+        Con_Printf("ADVR POUCH FOLLOW %s error=%g\n",ok ? "PASS" : "FAIL",glm::length(after-before-delta));return;
+    }
     PR_SwitchQCVM(&sv.qcvm);
     const char* fixture = "ADVR_Test";
     if(Cmd_Argc() > 1)
@@ -1111,8 +1152,39 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "decapstate")) fixture = "ADVR_TestDecapState";
         else if(!strcmp(Cmd_Argv(1), "magic")) fixture = "ADVR_TestMagic";
         else if(!strcmp(Cmd_Argv(1), "slipview")) fixture = "ADVR_TestSlipView";
+        else if(!strcmp(Cmd_Argv(1), "earth")) fixture = "ADVR_TestEarth";
+        else if(!strcmp(Cmd_Argv(1), "manualreload")) fixture = "ADVR_TestManualReload";
+        else if(!strcmp(Cmd_Argv(1), "ssginput")) fixture = "ADVR_TestSsgInput";
+        else if(!strcmp(Cmd_Argv(1), "ssgopencheck")) fixture = "ADVR_TestSsgOpenCheck";
+        else if(!strcmp(Cmd_Argv(1), "ssgloadcheck")) fixture = "ADVR_TestSsgLoadedCheck";
+        else if(!strcmp(Cmd_Argv(1), "ssgclosecheck")) fixture = "ADVR_TestSsgClosedCheck";
+        else if(!strcmp(Cmd_Argv(1), "widowinput")) fixture = "ADVR_TestWidowInput";
+        else if(!strcmp(Cmd_Argv(1), "widowloadcheck")) fixture = "ADVR_TestWidowLoadCheck";
+        else if(!strcmp(Cmd_Argv(1), "ammorelease")) fixture = "ADVR_TestManualRelease";
+        else if(!strcmp(Cmd_Argv(1), "reloadbolt")) fixture = "ADVR_TestReloadBolt";
+        else if(!strcmp(Cmd_Argv(1), "reloadshells")) fixture = "ADVR_TestReloadShells";
+        else if(!strcmp(Cmd_Argv(1), "reloadsnail")) fixture = "ADVR_TestReloadSnail";
+        else if(!strcmp(Cmd_Argv(1), "manualinput")) fixture = "ADVR_TestManualInput";
+        else if(!strcmp(Cmd_Argv(1), "manualcheck")) fixture = "ADVR_TestManualCheck";
+        else if(!strcmp(Cmd_Argv(1), "manualejectcheck")) fixture = "ADVR_TestManualEjectCheck";
+        else if(!strcmp(Cmd_Argv(1), "manualview")) fixture = "ADVR_TestManualView";
+        else if(!strcmp(Cmd_Argv(1), "earthview")) fixture = "ADVR_TestEarthView";
         else if(!strcmp(Cmd_Argv(1), "slipstep")) fixture = "ADVR_TestSlipstep";
         else if(!strcmp(Cmd_Argv(1), "protection")) fixture = "ADVR_TestProtection";
+        else if(!strcmp(Cmd_Argv(1), "sightview")) fixture = "ADVR_TestSightView";
+        else if(!strcmp(Cmd_Argv(1), "invisibleview")) fixture = "ADVR_TestInvisibleView";
+        else if(!strcmp(Cmd_Argv(1), "darkview")) fixture = "ADVR_TestDarkView";
+        else if(!strcmp(Cmd_Argv(1), "darkruneview")) fixture = "ADVR_TestDarkRuneView";
+        else if(!strcmp(Cmd_Argv(1), "elder")) fixture = "ADVR_TestElder";
+        else if(!strcmp(Cmd_Argv(1), "elderstate")) fixture = "ADVR_TestElderState";
+        else if(!strcmp(Cmd_Argv(1), "elderexpire")) fixture = "ADVR_TestElderExpire";
+        else if(!strcmp(Cmd_Argv(1), "elderview")) fixture = "ADVR_TestElderView";
+        else if(!strcmp(Cmd_Argv(1), "frostssg")) fixture = "ADVR_TestFrostSsg";
+        else if(!strcmp(Cmd_Argv(1), "magicqol")) fixture = "ADVR_TestMagicQoL";
+        else if(!strcmp(Cmd_Argv(1), "netheraim")) fixture = "ADVR_TestNetherAim";
+        else if(!strcmp(Cmd_Argv(1), "netherrune")) fixture = "ADVR_TestNetherRune";
+        else if(!strcmp(Cmd_Argv(1), "darkrune")) fixture = "ADVR_TestDarkRune";
+        else if(!strcmp(Cmd_Argv(1), "sightmagic")) fixture = "ADVR_TestSightMagic";
         else if(!strcmp(Cmd_Argv(1), "haste")) fixture = "ADVR_TestHaste";
         else if(!strcmp(Cmd_Argv(1), "magicrefine")) fixture = "ADVR_TestMagicRefine";
         else if(!strcmp(Cmd_Argv(1), "void")) fixture = "ADVR_TestVoid";
@@ -1193,7 +1265,12 @@ void adShadowDefaults()
 cvar_t adWidowModelVersion{"advr_widow_model_version", "0", CVAR_ARCHIVE};
 void adWidowDefaults()
 {
-    if(adWidowModelVersion.value >= 4.f) return;
+    if(adWidowModelVersion.value >= 4.f){
+        if(adWidowModelVersion.value < 5.f){
+            Cvar_SetValueQuick(weapons::cvar(25,weapons::Key::Hotspot1X),14.f);
+            Cvar_SetValueQuick(&adWidowModelVersion,5.f);weapons::resetCaches();
+        }return;
+    }
     using weapons::Key;
     // Raising the mesh lowers the tracked main hand by about two finger widths.
     // Its support hotspot moves with the mesh, retaining the off-hand fit.
@@ -1234,7 +1311,12 @@ void adWidowDefaults()
 cvar_t adPlasmaModelVersion{"advr_plasma_model_version", "0", CVAR_ARCHIVE};
 void adPlasmaDefaults()
 {
-    if(adPlasmaModelVersion.value >= 3.f) return;
+    if(adPlasmaModelVersion.value >= 3.f){
+        if(adPlasmaModelVersion.value < 4.f){
+            Cvar_SetValueQuick(weapons::cvar(26,weapons::Key::Hotspot1X),9.5f);
+            Cvar_SetValueQuick(&adPlasmaModelVersion,4.f);weapons::resetCaches();
+        }return;
+    }
     Cvar_SetValueQuick(weapons::cvar(26, weapons::Key::Recoil), 1.f);
     Cvar_SetValueQuick(weapons::cvar(26, weapons::Key::RecoilStrength), 5.5f);
     Cvar_SetValueQuick(weapons::cvar(26, weapons::Key::RecoilTime), 0.8f);
@@ -1408,6 +1490,11 @@ cvar_t adFlashlightVersion{"advr_flashlight_version", "0", CVAR_ARCHIVE};
 cvar_t adBalanceVersion{"advr_balance_version", "0", CVAR_ARCHIVE};
 void adDefaults_f()
 {
+    if(cmd_source == src_command && vr_ad_manual_version.value < 2.f && vr_ad_manual_version.value >= 1.f){
+        if(vr_ad_reload_pouch_forward.value==9.f)Cvar_SetValueQuick(&vr_ad_reload_pouch_forward,3.f);
+        Cvar_SetValueQuick(&vr_ad_manual_version,2.f);
+    }
+    if(cmd_source == src_command && vr_ad_manual_version.value < 1.f){Cvar_SetValueQuick(&vr_reload_mode,3.f);Cvar_SetValueQuick(&vr_ad_manual_version,2.f);}
     adGrabDefaults(); adCrossbowDefaults(); adHammerDefaults(); adFuryDefaults(); adTomeDefaults();
     if(cmd_source != src_command) return;
     if(adFlashlightVersion.value < 1.f) {
@@ -1459,7 +1546,7 @@ void adDefaults_f()
         Cvar_SetValueQuick(weapons::cvar(slots[i], Key::RecoilTime), 0.18f);
     }
     Cvar_SetValueQuick(&vr_weapon_recoil, 1.f);
-    Cvar_SetValueQuick(&vr_reload_mode, 2.f);
+    Cvar_SetValueQuick(&vr_reload_mode, 3.f);
     Cvar_SetValueQuick(&vr_parry, 1.f);
     Cvar_SetValueQuick(&vr_deflect, 1.f);
     Cvar_SetValueQuick(&vr_parry_stamina, 1.f);

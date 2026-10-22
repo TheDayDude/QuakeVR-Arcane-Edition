@@ -2224,6 +2224,11 @@ SPECULAR_AA_FUNCTIONS
 #define QVR_ALIAS_FS_LIGHT \
 "	Wounds wounds = WoundsAt(uv, result.rgb); // QVR: wounds painted on the model (vr/vr_wounds.cpp)\n" \
 "	result.rgb = wounds.look;\n" \
+"\tif(instances[in_instance].Enchant.a > 0.5) {\n" \
+"\t    float grain=fract(sin(dot(floor(uv*420.0),vec2(12.9898,78.233)))*43758.5453);\n" \
+"\t    float veins=abs(sin(uv.x*85.0+sin(uv.y*53.0)*2.0));\n" \
+"\t    result.rgb=vec3(0.40,0.39,0.36)*(0.65+0.5*grain)*(0.65+0.35*smoothstep(0.02,0.12,veins));\n" \
+"\t}\n" \
 "#if ALPHATEST\n" \
 "	vec3 emissive = vec3(0.); // QVR\n" \
 "#else\n" \

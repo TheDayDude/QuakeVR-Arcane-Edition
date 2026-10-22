@@ -33,6 +33,9 @@ struct VrMove
     VrHandMove hands[2];       // [0] off hand, [1] main hand
     glm::vec3 headVel{0.f};
     glm::vec3 muzzlePos[2]{glm::vec3{0.f}, glm::vec3{0.f}}; // [0] off hand, [1] main hand
+    glm::vec3 loadPort[2]{glm::vec3{0.f}, glm::vec3{0.f}};
+    glm::vec3 ammoPouch{0.f};
+    glm::vec3 holsterPos[6]{};
     za::U16 vrBits0{0};  // low 14: QVR_VRBITS0_*; wire-only bits 14/15: off/main tome stick clicks
     glm::vec3 teleportTarget{0.f};
     za::U8 hotspots[2]{0, 0}; // QVR_HS_* for [0] off hand, [1] main hand

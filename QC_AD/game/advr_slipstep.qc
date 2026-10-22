@@ -60,10 +60,10 @@ void(float h) ADVR_SlipPreview = {
 float(float h) ADVR_SlipCast = {
     local vector at,delta;
     ADVR_SlipPreview(h); // Recheck on release: a monster or moving door may have arrived.
-    if(!self.advr_slip_valid || self.mana<1){haptic(h,0,0.08,40,0.2);return 0;}
+    if(!self.advr_slip_valid || ADVR_Mana()<1){haptic(h,0,0.08,40,0.2);return 0;}
     at=self.advr_slip_target;delta=at-self.origin;
     sound(self,CHAN_AUTO,"misc/r_tele1.wav",0.65,ATTN_NORM);particle(self.origin,'0 0 30',224,24);
-    self.mana=self.mana-1;self.velocity='0 0 0';self.oldorigin=at;self.teleport_time=time+0.3;self.carry_teleported=time+0.3;
+    ADVR_SpendMana(1);self.velocity='0 0 0';self.oldorigin=at;self.teleport_time=time+0.3;self.carry_teleported=time+0.3;
     self.headpos=self.headpos+delta;self.handpos=self.handpos+delta;self.offhandpos=self.offhandpos+delta;
     self.muzzlepos=self.muzzlepos+delta;self.offmuzzlepos=self.offmuzzlepos+delta;
     setorigin(self,at);particle(at,'0 0 30',224,24);haptic(h,0,0.12,110,0.5);return 1;

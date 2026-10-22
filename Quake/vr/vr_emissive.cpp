@@ -422,6 +422,10 @@ mem::Scratch<EmissiveScratch> scratch{"emissive"};
 
 glm::vec3 emissive::enchantColor(int code)
 {
+    if(code==1)return glm::vec3{0.f};
+    if(code==5)return glm::vec3{-0.12f,-0.12f,-0.12f};
+    if(code==4)return glm::vec3{0.15f,0.5f,1.f};
+    if(code==2 || code==3)return glm::vec3{0.18f,1.1f,0.3f};
     const int type=(code & 7) ? (code & 7) : 8;
     if(!code)return glm::vec3{0.f};
     const float strength=static_cast<float>((code>>3)&31)/31.f;
@@ -429,12 +433,13 @@ glm::vec3 emissive::enchantColor(int code)
 }
 void emissive::enchantLight(int index,const glm::vec3& pos,int code)
 {
+    if(code==5)return; // a dark surface aura, not a negative light
     const glm::vec3 color=enchantColor(code);
     if(color==glm::vec3{0.f})return;
     dlight_t* dl=CL_AllocDlight(-0x70000-index);
     for(int i=0;i<3;i++)dl->origin[i]=pos[i];
     dl->die=static_cast<float>(cl.time+0.05);
-    setGlow(dl,color*0.12f,45.f,0.f);
+    setGlow(dl,color*(code==3 ? 0.65f : code==2 ? 0.4f : code==4 ? 0.22f : 0.12f),code==3 ? 600.f : code==2 ? 240.f : code==4 ? 100.f : 45.f,0.f,code==4);
 }
 
 // Each frame a glowing projectile is relinked: its light where it is drawn, lasting until the next
@@ -448,7 +453,14 @@ extern "C" void VR_ProjectileLight(int ent)
         return;
     }
     if(const auto* data=client::entityVr(ent); data && data->enchant) {
-        emissive::enchantLight(8+ent,glm::vec3{e.origin[0],e.origin[1],e.origin[2]},data->enchant);
+        if(data->enchant==4){
+            dlight_t* dl=CL_AllocDlight(-0x70000-8-ent);
+            VectorCopy(e.origin,dl->origin);dl->die=static_cast<float>(cl.time+0.05);
+            vec3_t angles{e.angles[0],e.angles[1],e.angles[2]},forward,right,up;AngleVectors(angles,forward,right,up);
+            setGlow(dl,glm::vec3{0.15f,0.5f,1.f}*(0.65f*ENTALPHA_DECODE(e.alpha)),240.f*za::max(0.1f,vr_world_scale.value),0.f,true);
+            lighting::dlightLook(dl,1.f,0.f);
+            lighting::dlightSpot(dl,glm::vec3{forward[0],forward[1],forward[2]},13.f,15.f);
+        }else emissive::enchantLight(8+ent,glm::vec3{e.origin[0],e.origin[1],e.origin[2]},data->enchant);
         return; // The element owns the glow, including otherwise red/orange projectiles.
     }
     if(!strcmp(e.model->name, lavaNailModel))
@@ -880,3 +892,4 @@ void emissive::onGameDirChanged()
     torchWorld = nullptr;
     torchGeneration = -1;
 }
+

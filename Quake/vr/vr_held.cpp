@@ -1918,6 +1918,7 @@ bool handEmpty(int hand)
 {
     using namespace protocol;
     const bool main = hand == 1;
+    if(cl.stats[STAT_QVR_RELOAD_HANDS] & (1 << hand))return false;
     return cl.stats[main ? STAT_QVR_WEAPON : STAT_QVR_WEAPON2] == 0 && // QC's WID_FIST
            cl.stats[main ? STAT_QVR_CARRYMAIN : STAT_QVR_CARRYOFF] == 0;
 }

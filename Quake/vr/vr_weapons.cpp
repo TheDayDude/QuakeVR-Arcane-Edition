@@ -1173,6 +1173,8 @@ void onChanged(cvar_t* var)
     t.k = modelScale();
 
     const char* name = model->name;
+    // The loose bolt is extracted from the loaded crossbow in the same units.
+    if(!strcmp(name,"progs/advr_reload_bolt.mdl")){t.active=true;return t;}
     if(!strcmp(name, "progs/legholster.mdl"))
     {
         t.active = true;

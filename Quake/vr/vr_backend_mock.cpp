@@ -6,6 +6,7 @@
 
 #include "vr_angvel.hpp"
 #include "vr_backend.hpp"
+#include "vr_body.hpp"
 #include "vr_box3d.hpp"
 #include "vr_bullettime.hpp"
 #include "vr_cvars.hpp"
@@ -539,6 +540,15 @@ void moveHandTo(int hand, const glm::vec3& target)
 void mockHandTo_f()
 {
     const int hand = Cmd_Argc() >= 2 ? mockHand(Cmd_Argv(1)) : -1;
+    if(hand >= 0 && Cmd_Argc()==3 && !q_strcasecmp(Cmd_Argv(2),"ammopouch")) {
+        moveHandTo(hand,body::ammoPouchPosition(hands::current()));return;
+    }
+    if(hand >= 0 && Cmd_Argc()==3 && !q_strcasecmp(Cmd_Argv(2),"loadport")) {
+        const auto& st=hands::current();
+        if(st.loadPortValid[1-hand])moveHandTo(hand,st.loadPort[1-hand]);
+        else Con_Printf("manual reload: no loading port in the other hand\n");
+        return;
+    }
     const bool weapon = Cmd_Argc() >= 4 && !q_strcasecmp(Cmd_Argv(2), "weapon");
     const bool spot = Cmd_Argc() >= 4 && !q_strcasecmp(Cmd_Argv(2), "spot");
     const bool carried = Cmd_Argc() == 3 && !q_strcasecmp(Cmd_Argv(2), "carried");

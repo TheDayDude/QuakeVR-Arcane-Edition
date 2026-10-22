@@ -81,6 +81,10 @@ void writeVrMove(sizebuf_t* buf, const VrMove& move)
     writeVec3(buf, move.headPos);
     writeVec3(buf, move.shotRot[0]);
     writeVec3(buf, move.shotRot[1]);
+    writeVec3(buf, move.loadPort[0]);
+    writeVec3(buf, move.loadPort[1]);
+    writeVec3(buf, move.ammoPouch);
+    for(const auto& p:move.holsterPos)writeVec3(buf,p);
 }
 
 za::Optional<VrMove> readVrMove()
@@ -120,6 +124,10 @@ za::Optional<VrMove> readVrMove()
     move.headPos = in.vec3();
     move.shotRot[0] = in.vec3();
     move.shotRot[1] = in.vec3();
+    move.loadPort[0] = in.vec3();
+    move.loadPort[1] = in.vec3();
+    move.ammoPouch = in.vec3();
+    for(auto& p:move.holsterPos)p=in.vec3();
 
     if(!in.finite)
     {

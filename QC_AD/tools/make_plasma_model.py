@@ -49,7 +49,7 @@ anchor('WpnButtonAnchorVertex',['WpnButtonX','WpnButtonY','WpnButtonZ'],[3,-1.57
 anchor('WpnTextAnchorVertex',['WpnTextX','WpnTextY','WpnTextZ'],[3,-1.57,.1])
 settings.update(WpnButtonMode=1,WpnButtonPitch=0,WpnButtonYaw=0,WpnButtonRoll=0,WpnTextMode=1,WpnTextPitch=0,WpnTextYaw=0,WpnTextRoll=0,WpnTextScale=.22)
 # Support grip under the forward receiver; stock remains available for bracing.
-settings.update(Hotspot1Type=1,Hotspot1X=7,Hotspot1Y=-.02,Hotspot1Z=-3.5,Hotspot1Pitch=0,Hotspot1Yaw=0,Hotspot1Roll=0,
+settings.update(Hotspot1Type=1,Hotspot1X=9.5,Hotspot1Y=-.02,Hotspot1Z=-3.5,Hotspot1Pitch=0,Hotspot1Yaw=0,Hotspot1Roll=0,
                 Hotspot2Type=3,Hotspot2X=low[0],Hotspot2Y=-.02,Hotspot2Z=-.9)
 settings.update(Recoil=1,RecoilStrength=5.5,RecoilTime=.8)
 inc=ROOT/'Quake/vr/vr_ad_plasma.inc'

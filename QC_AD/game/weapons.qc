@@ -1249,7 +1249,7 @@ W_WeaponFrame
 ======================================================================*/
 void() W_WeaponFrame =
 {
-	if (ADVR_Tracked()) { ADVR_Frame(); return; }
+	if (ADVR_Tracked() || self.advr_elder_until) { ADVR_Frame(); return; }
 	ImpulseCommands ();
 	// Allow for impulse commands before weapon lockout
 	if (time < self.attack_finished) return;

@@ -891,6 +891,7 @@ void(entity targ) Client_LadderSounds =
 //----------------------------------------------------------------------
 void() PlayerPreThink =
 {
+    if(self.advr_elder_until && (time>=self.advr_elder_until || self.health<=0))ADVR_ElderEnd();
 	//----------------------------------------------------------------------
 	// This is just a fucked up messy situation ...
 	// The savegame data is not live until after frame 0 has finished
@@ -1432,7 +1433,7 @@ void() PlayerJump =
 			sound (self, CHAN_BODY, SOUND_ARTJUMPBOOTS3A, 1, ATTN_NORM);
 			// Jumps boots don't really work until in the air
 			// Start with original jump height
-			self.velocity_z = self.velocity_z + map_jumpheight;
+			self.velocity_z = self.velocity_z + map_jumpheight*(self.advr_elder_until>time ? 1.65 : 1);
 		}
 		// Still in the air (no ground contact)
 		// Allow for infinite jumps (airmax = -1)
@@ -1504,7 +1505,7 @@ void() PlayerJump =
 		self.button2 = 0;
 		
 		// player jumping sound
-		sound (self, CHAN_BODY, SOUND_PLAYER_JUMP, 1, ATTN_NORM);
+		sound (self, CHAN_BODY, self.advr_elder_until>time ? "demon/djump.wav" : SOUND_PLAYER_JUMP, 1, ATTN_NORM);
 		makevectors(self.v_angle);
 		self.velocity = v_forward * (map_jumpheight*1);
 	}
@@ -1521,8 +1522,8 @@ void() PlayerJump =
 		self.button2 = 0;
 		
 		// player jumping sound
-		sound (self, CHAN_BODY, SOUND_PLAYER_JUMP, 1, ATTN_NORM);
-		self.velocity_z = self.velocity_z + map_jumpheight;
+		sound (self, CHAN_BODY, self.advr_elder_until>time ? "demon/djump.wav" : SOUND_PLAYER_JUMP, 1, ATTN_NORM);
+		self.velocity_z = self.velocity_z + map_jumpheight*(self.advr_elder_until>time ? 1.65 : 1);
 	}
 };
 

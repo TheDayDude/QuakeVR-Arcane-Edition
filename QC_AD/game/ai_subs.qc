@@ -510,6 +510,7 @@ void(float wakeupothers) FoundHuntTarget =
 ======================================================================*/
 float() FindTarget =
 {
+    if(self.advr_dark_owner)return ADVR_DarkFindTarget();
 	local entity client, playtarg;
 
 	if (self.health < 1) return FALSE;	// Dead monsters don't hunt!

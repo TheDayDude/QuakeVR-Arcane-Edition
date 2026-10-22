@@ -931,6 +931,7 @@ Climber climbers[MAX_SCOREBOARD];
     {
         return h == 0 ? nullptr : "its weapon"; // another mod's progs: the main hand always holds its weapon
     }
+    if(static_cast<int>(fieldFloatOr(ent,f.advr_reload_hands,0.f)) & (1 << h))return "reload ammunition";
     const float weapon = h == 1 ? ent->v.weapon : fieldFloatOr(ent, f.weapon2, 0.f);
     if(weapon != 0.f)
     {

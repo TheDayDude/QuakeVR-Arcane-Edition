@@ -44,6 +44,7 @@ void(entity targ, entity attacker) Killed =
 
 	// Switch self for death functions
 	oself = self; self = targ;
+    if(self.advr_dark_owner){ADVR_DarkBurst(self);self=oself;return;}
 	self.activate = attacker;		// Always keep track of what did damage
 
 	// func bmodels, triggers, breakables etc
@@ -119,6 +120,10 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
         headkind=advr_hit_kind;headat=advr_hit_at;headvel=advr_hit_vel;
     }
     ADVR_HitClear();
+    // Dark allies cannot hurt clients or one another, nor retaliate against players.
+    if(attacker.advr_dark_owner && ((targ.flags & FL_CLIENT) || targ.advr_dark_owner))return;
+    if(targ.advr_dark_owner && (attacker.flags & FL_CLIENT))return;
+
 
 	// Cannot hurt the world or enemy targets (fake flying markers)
 	if (targ.classtype == CT_WORLD) return;
@@ -235,7 +240,11 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
     if(!skipshield && (checkarmor==DAMARMOR || checkarmor==DAMSPLASH))damage=ADVR_ShieldDamage(targ,inflictor,attacker,damage,checkarmor);
     if(damage<=0)return;
 	save = 0;
-    if(QVR_AD_API==1 && (targ.flags & FL_CLIENT) && targ.advr_protection_until>time &&
+    if(QVR_AD_API==1 && (targ.flags & FL_CLIENT) && targ.advr_earth_until>time &&
+       (checkarmor==DAMARMOR || checkarmor==DAMSPLASH)) {
+        save=ceil(damage*0.8);take=ceil(damage-save);
+    }
+    else if(QVR_AD_API==1 && (targ.flags & FL_CLIENT) && targ.advr_protection_until>time &&
        targ.advr_protection_armor>0 && (checkarmor==DAMARMOR || checkarmor==DAMSPLASH)) {
         save=min(targ.advr_protection_armor,ceil(damage*0.8));
         if(!noarmordmg)targ.advr_protection_armor=targ.advr_protection_armor-save;
@@ -437,7 +446,7 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 				// If previous switch target dead, focus on new target
 				if (self.switchattacker.health < 1) self.switchtimer = 0;
 				// Is the attacker a different classgroup and switching target available?
-				if ( self.classgroup != attacker.classgroup && self.switchtimer < time) {
+				if ( (self.classgroup != attacker.classgroup || attacker.advr_dark_owner) && self.switchtimer < time) {
 					// Prevent the monster from rapidily switching targets
 					if (self.switchattacker != attacker) self.switchtimer = time + self.switchoverride;
 					else self.switchtimer = time + ( (self.switchoverride + random()) * 0.5);

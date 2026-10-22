@@ -1127,6 +1127,7 @@ float() monster_checkspawn =
 ======================================================================*/
 void() monster_start =
 {
+    if(self.owner.advr_dark_owner)ADVR_DarkAdopt();
 	self.flags = FL_MONSTER;			// Always reset this flag
 	self.ticktimer = 0.1;				// Model animations at 10fps
 	self.skin_override = self.skin;		// Save for later

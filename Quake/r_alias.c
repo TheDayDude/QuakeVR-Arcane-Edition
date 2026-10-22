@@ -691,7 +691,7 @@ static void R_DrawAliasModel_Real (entity_t *e, aliasmode_t mode)
 	else
 		entalpha = ENTALPHA_DECODE(e->alpha);
 
-	if (entalpha == 0)
+	if (entalpha == 0 || VR_AliasInvisible(e))
 		return;
 
 	if (mode == ALIAS_SHOWSKEL && !VR_AliasBonePoses (e, NULL)) // QVR: see vr_body_debug instead

@@ -248,6 +248,7 @@ void VR_AfterPlayerPostThink (struct edict_s *ent);	// and after it
 float *VR_MoveAngles (struct edict_s *ent, float *fallback); // angles steering walk/swim moves
 float VR_WaterStickScale (struct edict_s *ent, int swimming); // SV_ClientThink, before SV_WaterMove / SV_AirMove: the stick's speed in water
 float VR_ProtectionArmor (struct edict_s *ent);
+float VR_ElderAirLimit (struct edict_s *ent);
 float VR_HasteSpeedScale (struct edict_s *ent);
 float VR_StaminaSpeedScale (struct edict_s *ent);	// SV_AirMove: tired, times the most walking speed (sv_maxspeed; vr_stamina_speed)
 void VR_AfterWaterMove (struct edict_s *ent, float forwardmove, float sidemove, float upmove); // after SV_WaterMove: swimming strokes (the stick steering them)

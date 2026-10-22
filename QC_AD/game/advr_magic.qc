@@ -1,3 +1,15 @@
+// Debug casting bypasses costs without changing the real essence pool.
+float() ADVR_Mana = {
+    if(self.advr_main.advr_kind==ADVR_DEBUGTOME || self.advr_off.advr_kind==ADVR_DEBUGTOME)return 100000;
+    return self.mana;
+};
+void(float amount) ADVR_SpendMana = {
+    if(self.advr_main.advr_kind!=ADVR_DEBUGTOME && self.advr_off.advr_kind!=ADVR_DEBUGTOME)self.mana=max(0,self.mana-amount);
+};
+float(float spell) ADVR_NextSpell = {
+    if(spell==7)return 9;if(spell==10)return 8;if(spell==8)return 11;
+    return mod(spell+1,ADVR_SPELL_COUNT);
+};
 float(entity r) ADVR_HasteRate = {
     if(r && r.advr_enchant_type==6 && r.advr_enchant_until>time)return 1.25;
     return 1;
@@ -10,13 +22,18 @@ void(entity player) ADVR_MagicInit = {
         if(player.advr_mana_seen)player.advr_known=3;
         player.advr_magic_version=1;
     }
+    player.advr_available=(player.advr_known & 1791);
+    if(query_configflag(SVR_RUNE_KEY1))player.advr_available=player.advr_available | 256;
+    if(query_configflag(SVR_RUNE_KEY2))player.advr_available=player.advr_available | 2048;
+    if(query_configflag(SVR_RUNE_KEY3))player.advr_available=player.advr_available | 4096;
+    if(query_configflag(SVR_RUNE_KEY4))player.advr_available=player.advr_available | 8192;
     player.advr_mana_max=max(50,player.advr_mana_max);
     player.mana=bound(0,player.mana,player.advr_mana_max);
 };
 float(entity player,entity book) ADVR_SpellMask = {
     if(!ADVR_IsTome(book))return 0;
     if(book.advr_kind==ADVR_DEBUGTOME)return pow(2,ADVR_SPELL_COUNT)-1;
-    return player.advr_known;
+    return (player.advr_known & 1791) + 256*query_configflag(SVR_RUNE_KEY1)+2048*(query_configflag(SVR_RUNE_KEY2)!=0)+4096*(query_configflag(SVR_RUNE_KEY3)!=0)+8192*(query_configflag(SVR_RUNE_KEY4)!=0);
 };
 void(entity player,entity book) ADVR_TomePickup = {
     local float spell,i;
@@ -24,14 +41,14 @@ void(entity player,entity book) ADVR_TomePickup = {
     if(!player.advr_mana_seen){player.advr_mana_seen=1;player.mana=min(player.advr_mana_max,player.mana+30);}
     if(book.advr_kind==ADVR_DEBUGTOME || book.advr_tome_read)return;
     book.advr_tome_read=1;
-    spell=floor(random()*ADVR_SPELL_COUNT);
-    for(i=0;i<ADVR_SPELL_COUNT;i=i+1) {
+    spell=floor(random()*10);if(spell>=8)spell=spell+1;
+    for(i=0;i<10;i=i+1) {
         if(!(player.advr_known & pow(2,spell))) {
             player.advr_known=player.advr_known | pow(2,spell);player.advr_spell=spell;
-            if(spell==0)sprint(player,"Learned Fire!\n");else if(spell==1)sprint(player,"Learned Lightning!\n");else if(spell==2)sprint(player,"Learned Frost!\n");else if(spell==3)sprint(player,"Learned Acid!\n");else if(spell==4)sprint(player,"Learned Void!\n");else if(spell==5)sprint(player,"Learned Haste!\n");else if(spell==6)sprint(player,"Learned Protection!\n");else sprint(player,"Learned Slipstep!\n");
+            if(spell==0)sprint(player,"Learned Fire!\n");else if(spell==1)sprint(player,"Learned Lightning!\n");else if(spell==2)sprint(player,"Learned Frost!\n");else if(spell==3)sprint(player,"Learned Acid!\n");else if(spell==4)sprint(player,"Learned Void!\n");else if(spell==5)sprint(player,"Learned Haste!\n");else if(spell==6)sprint(player,"Learned Protection!\n");else if(spell==7)sprint(player,"Learned Slipstep!\n");else if(spell==9)sprint(player,"Learned Invisibility!\n");else sprint(player,"Learned Darksight!\n");
             return;
         }
-        spell=mod(spell+1,ADVR_SPELL_COUNT);
+        spell=mod(spell+1,11);if(spell==8)spell=9;
     }
 };
 void() ADVR_PowerPickup = {
@@ -78,7 +95,7 @@ void() ADVR_MagicSelect = {
         if(h>=0){
             mask=ADVR_SpellMask(self,ADVR_Hand(h));
             for(i=0;i<ADVR_SPELL_COUNT;i=i+1) {
-                self.advr_spell=mod(self.advr_spell+1,ADVR_SPELL_COUNT);
+                self.advr_spell=ADVR_NextSpell(self.advr_spell);
                 if(mask & pow(2,self.advr_spell))break;
             }
             haptic(h,0,0.05,110,0.35);
@@ -143,6 +160,7 @@ void() ADVR_MagicGlowThink = {
     self.nextthink=time+0.05;
 };
 float(float h) ADVR_MagicBlocked = {
+    if(ADVR_HandBusy(h))return 1;
     if(ragdollheld(self,h)>0 || ADVR_Hand(h) || ADVR_Holster(h)>=0 || weaponanygrip(self,h)>0 || ADVR_FGPulled(h))return 1;
     if(h){if(self.vrbits0 & 262144)return 1;if(self.mainhand_hotspot==7)return 1;}
     else {if(self.vrbits0 & 131072)return 1;if(self.offhand_hotspot==7)return 1;}
@@ -260,6 +278,38 @@ void(vector at,vector direction) ADVR_FrostLaunch = {
     setmodel(newmis,"progs/advr_frostbolt.mdl");setsize(newmis,'-4 -4 -4','4 4 4');setorigin(newmis,at);
 };
 
+// Brief light emitters placed only along the unobstructed cast volume.
+void() ADVR_FrostLightThink = {
+    if(time>=self.advr_enchant_until){remove(self);return;}
+    self.alpha=max(0.01,(self.advr_enchant_until-time)/1.25);self.nextthink=time+0.05;
+};
+void(vector at,vector aim,float reach) ADVR_FrostLight = {
+    local entity glow;
+    glow=spawn();glow.classname="advr_frost_cone_light";glow.owner=self;
+    glow.movetype=MOVETYPE_NONE;glow.solid=SOLID_NOT;
+    // An invisible network anchor for one shadowed, per-pixel cone light.
+    setmodel(glow,"progs/advr_frostbolt.mdl");glow.alpha=1;
+    setorigin(glow,at);glow.angles=vectoangles(aim);glow.angles_x=-glow.angles_x;
+    glow.advr_enchant_until=time+1.25;glow.think=ADVR_FrostLightThink;glow.nextthink=time+0.05;
+};
+// 30-degree total cone, thirty physical feet at the configured world scale.
+void(vector at,vector direction) ADVR_FrostCone = {
+    local entity e,fx;local vector delta,aim,tip;local float reach,d,i;
+    aim=normalize(direction);reach=240*max(0.1,cvar("vr_world_scale"));
+    ADVR_FrostLight(at,aim,reach);
+    fx=spawn();fx.owner=self;fx.advr_frostbolt=1;setorigin(fx,at);
+    e=world;
+    while((e=nextent(e))){
+        if(e==self || !(e.flags & FL_MONSTER) || e.health<=0 || !e.takedamage)continue;
+        delta=modelcentre(e)-at;d=vlen(delta);
+        if(d>reach || (d>0 && normalize(delta)*aim<0.9659258))continue;
+        traceline(at,modelcentre(e),TRUE,self);if(trace_fraction<1)continue;
+        ADVR_FrostHit(e);
+        T_Damage(e,fx,self,16*ADVR_MagicMultiplier()*ADVR_FireResistance(e),DAMARMOR);
+    }
+    sound(self,CHAN_WEAPON,"weapons/lhit.wav",0.6,ATTN_NORM);remove(fx);
+};
+
 // Pending infusion belongs to a particular book, weapon and controller.
 // Releasing, swapping either item or losing tracking cancels without spending.
 void() ADVR_EnchantClear = {
@@ -269,7 +319,7 @@ void() ADVR_EnchantClear = {
 void(entity book,float h,float down,float old) ADVR_EnchantFrame = {
     local entity r;
     r=ADVR_Hand(h);
-    if(!down || !r || ADVR_IsTome(r) || ADVR_HandBusy(h) || self.mana<5) {ADVR_EnchantClear();return;}
+    if(!down || !r || ADVR_IsTome(r) || ADVR_HandBusy(h) || ADVR_Mana()<5) {ADVR_EnchantClear();return;}
     if(self.advr_enchant_record && (self.advr_enchant_record!=r || self.advr_enchant_book!=book || self.advr_enchant_hand!=h)) {
         ADVR_EnchantClear();return;
     }
@@ -285,18 +335,19 @@ void(entity book,float h,float down,float old) ADVR_EnchantFrame = {
     r.advr_enchant_type=self.advr_enchant_spell+1;r.advr_enchant_until=time+30;
     if(r.advr_enchant_type==5)ADVR_VoidWeapon(r);
     if(r.advr_enchant_type==7){r.advr_enchant_until=time+60;r.advr_shield_hp=300;}
-    r.advr_enchant_scale=ADVR_MagicMultiplier();self.mana=self.mana-5;
+    r.advr_enchant_scale=ADVR_MagicMultiplier();ADVR_SpendMana(5);
     self.advr_enchant_latched=1;
     haptic(h,0,0.12,150,0.7);haptic(h,0.2,0.12,150,0.7);
     sound(self,CHAN_AUTO,"skullwiz/attack.wav",0.45,ATTN_NORM);
     if(r.advr_enchant_type==1)sprint(self,"Fire enchantment: 30 seconds.\n");
-    else if(r.advr_enchant_type==2)sprint(self,"Lightning enchantment: 30 seconds.\n");else if(r.advr_enchant_type==3)sprint(self,"Frost enchantment: 30 seconds.\n");else if(r.advr_enchant_type==4)sprint(self,"Acid enchantment: 30 seconds.\n");else if(r.advr_enchant_type==5)sprint(self,"Void enchantment: 30 seconds.\n");else if(r.advr_enchant_type==6)sprint(self,"Haste enchantment: 30 seconds.\n");else if(r.advr_enchant_type==7)sprint(self,"Protection shield: 300 damage, 60 seconds.\n");else sprint(self,"Slipstep enchantment: 30 seconds.\n");
+    else if(r.advr_enchant_type==2)sprint(self,"Lightning enchantment: 30 seconds.\n");else if(r.advr_enchant_type==3)sprint(self,"Frost enchantment: 30 seconds.\n");else if(r.advr_enchant_type==4)sprint(self,"Acid enchantment: 30 seconds.\n");else if(r.advr_enchant_type==5)sprint(self,"Void enchantment: 30 seconds.\n");else if(r.advr_enchant_type==6)sprint(self,"Haste enchantment: 30 seconds.\n");else if(r.advr_enchant_type==7)sprint(self,"Protection shield: 300 damage, 60 seconds.\n");else if(r.advr_enchant_type==10)sprint(self,"Invisible weapon: 30 seconds.\n");else if(r.advr_enchant_type==11)sprint(self,"Darksight lantern: 30 seconds.\n");else sprint(self,"Slipstep enchantment: 30 seconds.\n");
     ADVR_EnchantClear();
 };
 // Projectile payload is copied at launch, never looked up from the shooter's
 // current hand at impact. Burning ticks and unrelated spells have no payload.
 void(entity missile) ADVR_EnchantMissile = {
     if(!advr_attack_record || missile.owner!=advr_attack_actor || time>=advr_attack_record.advr_enchant_until)return;
+    if(advr_attack_record.advr_enchant_type>=10)return; // utility enchantments affect the weapon, not its ammunition
     missile.advr_enchant_type=advr_attack_record.advr_enchant_type;
     missile.advr_enchant_until=advr_attack_record.advr_enchant_until;
     missile.advr_enchant_scale=advr_attack_record.advr_enchant_scale;
@@ -349,12 +400,14 @@ float(entity target,entity inflictor,entity attacker,float damage) ADVR_EnchantD
 float(entity r) ADVR_EnchantPack = {
     if(!r)return 0;
     if(time>=r.advr_enchant_until){ADVR_VoidRestore(r);return 0;}
+    if(r.advr_enchant_type>=10)return 4194304+r.advr_enchant_type*64+ceil(bound(0,r.advr_enchant_until-time,30));
     if(r.advr_enchant_type==8)return 2097152+ceil(bound(0,r.advr_enchant_until-time,30));
     if(r.advr_enchant_type==7)return 1048576+floor(bound(0,r.advr_shield_hp,300))*512+ceil(bound(0,r.advr_enchant_until-time,60))*8+7;
     return r.advr_void_original*8192+4096+r.advr_enchant_type+ceil(bound(0,r.advr_enchant_until-time,30))*8;
 };
 void(entity r,float packed) ADVR_EnchantRestore = {
     if(!r || packed<=0)return;
+    if(packed>=4194304){packed=packed-4194304;r.advr_enchant_type=floor(packed/64);r.advr_enchant_until=time+bound(0,mod(packed,64),30);return;}
     if(packed>=2097152){r.advr_enchant_type=8;r.advr_enchant_until=time+bound(0,packed-2097152,30);return;}
     if(packed>=1048576){
         packed=packed-1048576;r.advr_enchant_type=7;r.advr_shield_hp=floor(packed/512);
@@ -389,10 +442,17 @@ void() ADVR_MagicFrame = {
         else if(ADVR_SpellMask(self,book) & 32)self.advr_spell=5;
         else if(ADVR_SpellMask(self,book) & 64)self.advr_spell=6;
         else if(ADVR_SpellMask(self,book) & 128)self.advr_spell=7;
+        else if(ADVR_SpellMask(self,book) & 256)self.advr_spell=8;
+        else if(ADVR_SpellMask(self,book) & 512)self.advr_spell=9;
+        else if(ADVR_SpellMask(self,book) & 1024)self.advr_spell=10;
+        else if(ADVR_SpellMask(self,book) & 2048)self.advr_spell=11;
+        else if(ADVR_SpellMask(self,book) & 4096)self.advr_spell=12;
+        else if(ADVR_SpellMask(self,book) & 8192)self.advr_spell=13;
         else return;
     }
     if(ADVR_Hand(h)) {
         if(self.advr_magic_book || self.advr_magic_fx)ADVR_MagicClear();
+        if(self.advr_spell==8 || self.advr_spell==11 || self.advr_spell==12 || self.advr_spell==13){ADVR_EnchantClear();return;}
         ADVR_EnchantFrame(book,h,stick,oldstick);return;
     }
     ADVR_EnchantClear();
@@ -402,7 +462,7 @@ void() ADVR_MagicFrame = {
     if(self.advr_magic_control){grip=stick;old=oldstick;}
     if(self.advr_magic_book && (self.advr_magic_book!=book || self.advr_magic_hand!=h)){ADVR_MagicClear();return;}
     if(!self.advr_magic_book) {
-        if(!grip || old || self.mana<1)return;
+        if(!grip || old || ADVR_Mana()<((self.advr_spell==8 || self.advr_spell==11 || self.advr_spell==12 || self.advr_spell==13) ? 30 : 1))return;
         self.advr_magic_book=book;self.advr_magic_hand=h;
         ADVR_FGSet(h,world,0);
     }
@@ -421,16 +481,45 @@ void() ADVR_MagicFrame = {
             self.advr_magic_peak=vel;self.advr_magic_peak_time=time;
         }
     }
-    if(self.advr_spell==7 && !grip) {
-        if(old && self.advr_magic_charge>=0.65 && self.mana>=1)ADVR_SlipCast(h);
+    if(self.advr_spell==13 && !grip){
+        if(old && self.advr_magic_charge>=0.65 && ADVR_Mana()>=30 && (book.advr_kind==ADVR_DEBUGTOME || query_configflag(SVR_RUNE_KEY4))){
+            // Pay before putting away a Debug Tome (which bypasses the cost).
+            ADVR_SpendMana(30);ADVR_ElderCast(1-h);haptic(h,0,0.25,60,0.9);
+        }ADVR_MagicClear();return;
+    }
+    if(self.advr_spell==12 && !grip){
+        if(old && self.advr_magic_charge>=0.65 && ADVR_Mana()>=30 && (book.advr_kind==ADVR_DEBUGTOME || query_configflag(SVR_RUNE_KEY3))){
+            ADVR_SpendMana(30);ADVR_NetherCast(h);haptic(h,0,0.25,85,0.9);
+        }ADVR_MagicClear();return;
+    }
+    if(self.advr_spell==11 && !grip){
+        if(old && self.advr_magic_charge>=0.65 && ADVR_Mana()>=30 && (book.advr_kind==ADVR_DEBUGTOME || query_configflag(SVR_RUNE_KEY2))){
+            ADVR_SpendMana(30);ADVR_DarkCast();haptic(h,0,0.25,65,0.9);
+        }ADVR_MagicClear();return;
+    }
+    if(self.advr_spell==8 && !grip) {
+        if(old && self.advr_magic_charge>=0.65 && ADVR_Mana()>=30 && (book.advr_kind==ADVR_DEBUGTOME || query_configflag(SVR_RUNE_KEY1))) {
+            ADVR_SpendMana(30);self.advr_earth_until=time+60;
+            sound(self,CHAN_AUTO,"misc/r_tele1.wav",1,ATTN_NORM);
+            haptic(h,0,0.25,80,0.9);particle(self.origin+'0 0 24','0 0 60',8,100);
+            sprint(self,"Earth Rune: stone form for 60 seconds!\n");
+        }
         ADVR_MagicClear();return;
     }
-    if(!grip && old && self.advr_spell>=5 && self.advr_magic_charge>=0.65 && self.mana>=1) {
-        self.mana=self.mana-1;
+    if(self.advr_spell==7 && !grip) {
+        if(old && self.advr_magic_charge>=0.65 && ADVR_Mana()>=1)ADVR_SlipCast(h);
+        ADVR_MagicClear();return;
+    }
+    if(!grip && old && self.advr_spell>=5 && self.advr_magic_charge>=0.65 && ADVR_Mana()>=1) {
+        ADVR_SpendMana(1);
         if(self.advr_spell==5)self.advr_haste_until=time+30;
+        else if(self.advr_spell==9){self.items=self.items | IT_INVISIBILITY;self.invisible_time=1;self.invisible_finished=max(self.invisible_finished,time+30);self.invisible_sound=time+1;}
+        else if(self.advr_spell==10)self.advr_darksight_until=time+30;
         else {self.advr_protection_until=time+60;self.advr_protection_armor=50;}
         sound(self,CHAN_AUTO,"misc/r_tele1.wav",0.6,ATTN_NORM);haptic(h,0,0.12,110,0.6);
         if(self.advr_spell==5)sprint(self,"Haste: 25% faster movement for 30 seconds.\n");
+        else if(self.advr_spell==9)sprint(self,"Invisibility: 30 seconds.\n");
+        else if(self.advr_spell==10)sprint(self,"Darksight: 30 seconds.\n");
         else sprint(self,"Protection: 50 temporary red armor for 60 seconds.\n");
         ADVR_MagicClear();return;
     }
@@ -443,15 +532,15 @@ void() ADVR_MagicFrame = {
         }
         if(time>self.advr_magic_release_until){ADVR_MagicClear();return;}
         if(self.advr_magic_fx)setorigin(self.advr_magic_fx,at);
-        if(self.advr_magic_charge>=0.65 && self.mana>=1 && time-self.advr_magic_peak_time<=0.18 && vlen(self.advr_magic_peak)>=0.45) {
+        if(self.advr_magic_charge>=0.65 && ADVR_Mana()>=1 && time-self.advr_magic_peak_time<=0.18 && vlen(self.advr_magic_peak)>=0.45) {
             dir=normalize(self.advr_magic_peak);traceline(at,at+dir*6,TRUE,self);
             if(trace_fraction==1 && pointcontents(trace_endpos)!=CONTENT_SOLID) {
                 if(self.advr_spell==1) {
-                    self.mana=self.mana-1;ADVR_MagicClear();
+                    ADVR_SpendMana(1);ADVR_MagicClear();
                     self.advr_magic_book=book;self.advr_magic_hand=h;
                     self.advr_magic_direction=dir;self.advr_magic_burst=0.6;
                     fx=spawn();fx.classname="advr_magic_beam";fx.owner=self;
-                    if(self.advr_spell>=5){fx.advr_enchant_type=self.advr_spell+1;fx.advr_enchant_until=time+3600;}
+                    if((self.advr_spell>=5 && self.advr_spell<8) || (self.advr_spell>=9 && self.advr_spell<=10)){fx.advr_enchant_type=self.advr_spell+1;fx.advr_enchant_until=time+3600;}
         self.advr_magic_fx=fx;setorigin(fx,at);
                     sound(self,CHAN_WEAPON,"weapons/lhit.wav",1,ATTN_NORM);
                     ADVR_MagicBeam(at,h);return;
@@ -459,13 +548,13 @@ void() ADVR_MagicFrame = {
                 at=trace_endpos;newmis=world;
                 if(self.advr_spell==4){makevectors(ADVR_Angles(h));ADVR_VoidLaunch(at,dir,v_forward);}
                 else if(self.advr_spell==3)ADVR_AcidLaunch(at,dir);
-                else if(self.advr_spell==2)ADVR_FrostLaunch(at,dir);
+                else if(self.advr_spell==2){ADVR_FrostCone(at,dir);ADVR_SpendMana(1);haptic(h,0,0.12,85,0.6);ADVR_MagicClear();return;}
                 else Launch_Missile(at,dir,'0 0 0',CT_PROJ_FIRETOP,550);
                 if(newmis) {
                     setsize(newmis,'-4 -4 -4','4 4 4');
                     ADVR_GuideBolt(newmis,h);
                     newmis.advr_fireball=self.advr_spell==0;newmis.advr_magic_damage=ADVR_MagicMultiplier();newmis.poisonous=0;
-                    self.mana=self.mana-1;
+                    ADVR_SpendMana(1);
                     sound(self,CHAN_WEAPON,"skullwiz/attack.wav",1,ATTN_NORM);
                     haptic(h,0,0.12,85,0.6);
                 }
@@ -475,16 +564,20 @@ void() ADVR_MagicFrame = {
         return;
     }
     self.advr_magic_release_until=0; // re-gripping resumes the held charge
-    self.advr_magic_charge=min(1,self.advr_magic_charge+bound(0,frametime,0.05)*(1+0.25*(self.advr_haste_until>time)));
+    self.advr_magic_charge=min(1,self.advr_magic_charge+bound(0,frametime,0.05)*((self.advr_spell==8 || self.advr_spell==11 || self.advr_spell==12 || self.advr_spell==13) ? 0.2166667 : 1)*(1+0.25*(self.advr_haste_until>time)));
     if(self.advr_spell==7 && self.advr_magic_charge>=0.65)ADVR_SlipPreview(h);
     if(!self.advr_magic_fx) {
         fx=spawn();fx.classname="advr_magic_charge";fx.owner=self;fx.solid=SOLID_NOT;fx.movetype=MOVETYPE_NONE;
-        if(self.advr_spell==4)setmodel(fx,"progs/advr_void_charge.mdl");else if(self.advr_spell==3)setmodel(fx,"progs/advr_acid_charge.mdl");else setmodel(fx,"progs/advr_magic_charge.mdl");fx.effects=EF_DIMLIGHT;fx.think=ADVR_MagicGlowThink;fx.nextthink=time+0.05;
+        if(self.advr_spell==13)setmodel(fx,"progs/advr_elder_rune.mdl");else if(self.advr_spell==12)setmodel(fx,"progs/advr_nether_rune.mdl");else if(self.advr_spell==11)setmodel(fx,"progs/advr_dark_rune.mdl");else if(self.advr_spell==8)setmodel(fx,"progs/advr_earth_rune.mdl");else if(self.advr_spell==4)setmodel(fx,MODEL_PROJ_SHAL);else if(self.advr_spell==3)setmodel(fx,"progs/advr_acid_charge.mdl");else setmodel(fx,"progs/advr_magic_charge.mdl");fx.effects=EF_DIMLIGHT;fx.think=ADVR_MagicGlowThink;fx.nextthink=time+0.05;
         fx.skin=min(self.advr_spell,1);if(self.advr_spell>=3)fx.skin=0;
-        if(self.advr_spell>=5){fx.advr_enchant_type=self.advr_spell+1;fx.advr_enchant_until=time+3600;}
+        if((self.advr_spell>=5 && self.advr_spell<8) || (self.advr_spell>=9 && self.advr_spell<=10)){fx.advr_enchant_type=self.advr_spell+1;fx.advr_enchant_until=time+3600;}
         self.advr_magic_fx=fx;
     }
     setorigin(self.advr_magic_fx,at);self.advr_magic_fx.alpha=0.2+0.8*self.advr_magic_charge;
+    if(self.advr_spell==8 || self.advr_spell==11 || self.advr_spell==12 || self.advr_spell==13) {
+        self.advr_magic_fx.alpha=bound(0.02,self.advr_magic_charge/0.65,1);
+        self.advr_magic_fx.model_scale='1 1 1'*(0.25+0.75*min(1,self.advr_magic_charge/0.65));
+    }
     if(!self.advr_magic_ready && self.advr_magic_charge>=0.65) {
         self.advr_magic_ready=1;
         haptic(h,0,0.09,150,0.7);haptic(h,0.16,0.09,150,0.7);
@@ -495,3 +588,4 @@ void() ADVR_MagicFrame = {
         else {self.advr_magic_haptic=time+0.12;haptic(h,0,0.06,65,0.1+0.25*self.advr_magic_charge);}
     }
 };
+

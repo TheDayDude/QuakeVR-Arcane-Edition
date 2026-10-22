@@ -8,6 +8,7 @@ void(float h,entity e,float locked) ADVR_FGSet = {
 };
 float(entity e) ADVR_FGEligible = {
     if(e==world || e.fg_state || !e.model || e.solid==SOLID_NOT)return 0;
+    if(e.classname=="advr_reload_round")return !e.advr_round_holder && time>=e.advr_cooldown;
     if(e.classname=="advr_dropped_weapon")return e.weaponinst!=world;
     return !deathmatch && !coop && e.touch==item_touch && e.touch2==weapon_touch && (e.flags & FL_ITEM) && !(e.estate & ESTATE_BLOCK) && e.attack_finished<=time;
 };
@@ -41,14 +42,15 @@ void() ADVR_FGFlight = {
     e=self;player=e.fg_player;h=e.fg_hand;
     if(player==world || player.health<=0){ADVR_FGRestore(e);return;}
     self=player;
-    if(ADVR_Hand(h) || !cvar("vr_forcegrab_mode")){ADVR_FGRestore(e);self=e;return;}
+    if(ADVR_HandBusy(h) || ADVR_Hand(h) || !cvar("vr_forcegrab_mode")){ADVR_FGRestore(e);self=e;return;}
     pos=ADVR_Pos(h);at=forcegrabpoint(e);
     if(vlen(pos-at)<max(4,cvar("vr_forcegrab_catch_radius")) && ADVR_Grip(h)){
         flew=e.origin;turned=e.angles;
         ADVR_FGRestore(e);ADVR_FGSet(h,world,0);
         // The selection trigger must be released before the caught gun can fire.
         self.advr_fg_rearm[h]=1;
-        if(e.classname=="advr_dropped_weapon")ADVR_Catch(e,h);
+        if(e.classname=="advr_reload_round")ADVR_ManualCatch(e,h);
+        else if(e.classname=="advr_dropped_weapon")ADVR_Catch(e,h);
         else{
             self.advr_pickup_hand=h+1;oldother=other;self=e;other=player;e.touch();
             self=player;other=oldother;self.advr_pickup_hand=0;

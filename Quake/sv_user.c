@@ -188,8 +188,8 @@ void SV_AirAccelerate (float wishspeed, vec3_t wishveloc)
 	float		addspeed, wishspd, accelspeed, currentspeed;
 
 	wishspd = VectorNormalize (wishveloc);
-	if (wishspd > 30)
-		wishspd = 30;
+	if (wishspd > VR_ElderAirLimit(sv_player))
+		wishspd = VR_ElderAirLimit(sv_player);
 	currentspeed = DotProduct (velocity, wishveloc);
 	addspeed = wishspd - currentspeed;
 	if (addspeed <= 0)

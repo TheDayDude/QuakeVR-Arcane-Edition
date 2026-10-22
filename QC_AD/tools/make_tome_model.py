@@ -50,7 +50,7 @@ if __name__=='__main__':
   for a,b,c in [(0,1,2),(0,2,3)]:
    if side==1:b,c=c,b
    m.tris.append((1,base+a,base+b,base+c))
- write_mesh(m,points);m.frames.extend([[*m.frames[0]] for _ in range(7)]);dest=ROOT/'QC_AD/runtime/progs';dest.mkdir(exist_ok=True,parents=True);(dest/'advr_tome.mdl').write_bytes(m.to_bytes())
+ write_mesh(m,points);m.frames.extend([[*m.frames[0]] for _ in range(13)]);dest=ROOT/'QC_AD/runtime/progs';dest.mkdir(exist_ok=True,parents=True);(dest/'advr_tome.mdl').write_bytes(m.to_bytes())
  # The text sits on the open spread, facing up toward the reader.
  order=mdl.strip_order(m.tris);actual=[m.place(v) for v in m.pose_bytes()[0]]
  settings=dict(Scale=1,OffsetX=0,OffsetY=0,OffsetZ=0,Pitch=0,Yaw=0,Roll=-90,ZeroBlend=0,TwoHZeroBlend=0,HandOnlyX=3,HandOnlyY=2,HandOnlyZ=0,Hotspot1Type=0,Hotspot2Type=0,WpnButtonMode=0,WpnTextMode=1,WpnTextPitch=90,WpnTextYaw=0,WpnTextRoll=0,WpnTextScale=.48,Mass=.8,Balance=4,Span=35,Recoil=0,Flash=0)

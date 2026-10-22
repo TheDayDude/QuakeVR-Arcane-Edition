@@ -22,6 +22,32 @@ var float QVR_AD_API = 1;
 .vector offhandthrowflick;
 .vector headvel;
 .vector headpos;
+.float advr_reload_hands;
+.vector loadportpos;
+.vector offloadportpos;
+.vector ammopouchpos;
+.entity advr_round[2];
+.float advr_round_guard[2];
+.float advr_round_hover[2];
+.float advr_round_secondary[2];
+.float advr_round_grip[2];
+.float advr_ssg_open;
+.float advr_ssg_spent;
+.float advr_round_kind;
+float(entity r) ADVR_ManualSsg;
+void(float h) ADVR_SsgToggle;
+.float advr_round_count;
+.float advr_round_type;
+.float advr_round_weapon;
+.float advr_round_expire;
+.entity advr_round_holder;
+void() ADVR_ManualFrame;
+void() ADVR_ManualPrecache;
+void() ADVR_ManualRefund;
+float(float h) ADVR_MagicBlocked;
+float(entity r) ADVR_ManualType;
+void(float h) ADVR_ManualEject;
+void(entity p,float h) ADVR_ManualCatch;
 .vector muzzlepos;
 .vector offmuzzlepos;
 .vector shotrot;
@@ -72,6 +98,8 @@ var float QVR_AD_API = 1;
 .entity weaponinst2;
 .float wi_uid;
 .float wi_clip;
+.float advr_mag_absent;
+.float advr_dry_next;
 .float weaponclipsize;
 .float weaponclipsize2;
 .float currentammo2;
@@ -325,8 +353,10 @@ vector(entity e,float what) ragdollcut = #0;
 
 float ADVR_TOME=13, ADVR_DEBUGTOME=14;
 .float advr_haste_until;
+.float advr_darksight_until;
 float(entity r) ADVR_HasteRate;
 void() ADVR_TestHaste;
+.float advr_earth_until,advr_earth_main_until,advr_earth_off_until,advr_available;
 .float advr_protection_until,advr_protection_armor,advr_shield_hp,advr_shield_hand;
 .entity advr_shield_fx;
 entity advr_shield_skip;
@@ -346,7 +376,7 @@ void(float h) ADVR_SlipPreview;
 float(float h) ADVR_SlipCast;
 void(entity target,entity attacker) ADVR_SlipHit;
 void() ADVR_TestSlipstep;
-float ADVR_SPELL_COUNT=8; // spell IDs: 0 fireball, 1 lightning, 2 frostbolt
+float ADVR_SPELL_COUNT=14; // spell IDs: 0 fireball, 1 lightning, 2 frostbolt
 float parm40,parm41,parm42,parm43,parm44;
 .float advr_magic_version,advr_known,advr_mana_max,advr_tome_read;
 .float advr_favorites[8]; // X,Y,A,B,Up,Down,Left,Right; spell ID + 1 (zero unassigned)
@@ -429,3 +459,28 @@ void(entity r) ADVR_VoidRestore;
 void() ADVR_VoidWeaponThink;
 
 void() ADVR_TestMagicRefine;
+
+.entity advr_dark_owner,advr_dark_control;
+.float advr_dark_until,advr_dark_used;
+float() ADVR_DarkFindTarget;
+void() ADVR_DarkCast;
+void() ADVR_DarkPrecache;
+void(entity e) ADVR_DarkBurst;
+
+void() ADVR_DarkAdopt;
+
+.float advr_nether_until,advr_nether_ready,advr_nether_next;
+.vector advr_nether_swing;
+void(float h) ADVR_NetherCast;
+void(float h,vector tip,vector velocity,float speed,float dt,float hit) ADVR_NetherSwing;
+
+float() ADVR_Mana;
+void(float amount) ADVR_SpendMana;
+.float advr_nether_travel,advr_nether_swingtime;
+.vector advr_nether_plane;
+
+.float advr_elder_until,advr_elder_health,advr_elder_maxhealth,advr_elder_idle;
+.vector advr_holsterpos0,advr_holsterpos1,advr_holsterpos2,advr_holsterpos3,advr_holsterpos4,advr_holsterpos5;
+void(float h) ADVR_ElderCast;
+void() ADVR_ElderEnd;
+float() ADVR_ElderFrame;

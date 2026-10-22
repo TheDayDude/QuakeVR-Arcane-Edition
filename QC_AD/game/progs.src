@@ -169,6 +169,7 @@ mon_bossnour.qc
 
 advr.qc
 advr_forcegrab.qc
+advr_reload.qc
 advr_drops.qc
 advr_impacts.qc
 advr_drop_tests.qc
@@ -200,3 +201,8 @@ advr_fury_tests.qc
 advr_decap.qc
 advr_decap_tests.qc
 advr_burning.qc
+
+advr_dark.qc
+
+advr_nether.qc
+advr_elder.qc

@@ -1,8 +1,8 @@
 void() ADVR_TestVoid = {
     local entity actor,v,r,shot,n,job,near,far;local float i,oldframe,hp,total;local vector at;
     actor=self;oldframe=frametime;frametime=0.05;
-    ADVR_TestMagicView();self.advr_known=239;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
-    ADVR_Assert(self.advr_known==255 && self.advr_spell==4,"tome learns void");remove(r);
+    ADVR_TestMagicView();self.advr_known=1775;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
+    ADVR_Assert(self.advr_known==1791 && self.advr_spell==4,"tome learns void");remove(r);
     self.advr_favorites[4]=5;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();
     ADVR_Assert(self.advr_spell==4 && self.weaponframe2==4 && self.advr_favorites[4]==5,"void selection and shortcut persist");
     self.vrbits0=16384;self.handpos=ADVR_Head(self)+'24 0 -8';self.handvel=self.offhandvel='0 0 0';

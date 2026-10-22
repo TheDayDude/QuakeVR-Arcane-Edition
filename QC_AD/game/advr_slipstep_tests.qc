@@ -1,8 +1,8 @@
 void() ADVR_TestSlipstep = {
     local entity r,v,block,job,actor;local float i,oldframe,hp,packed,found;local vector before,target,actorpos,angles;
     actor=self;oldframe=frametime;frametime=0.05;ADVR_TestMagicView();
-    self.advr_known=127;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
-    ADVR_Assert(self.advr_known==255 && self.advr_spell==7,"tome learns Slipstep");remove(r);
+    self.advr_known=1663;r=ADVR_Record(IT_AXE);r.advr_kind=ADVR_TOME;ADVR_TomePickup(self,r);
+    ADVR_Assert(self.advr_known==1791 && self.advr_spell==7,"tome learns Slipstep");remove(r);
     self.advr_favorites[4]=8;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();
     ADVR_Assert(self.advr_spell==7 && self.advr_favorites[4]==8,"eighth spell selection and favorite survive map state");
     self.headpos=self.origin+self.view_ofs;self.handpos=self.headpos-'0 0 8';self.vrbits0=16384;

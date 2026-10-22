@@ -101,6 +101,7 @@ typedef struct vraliasinstance_s
 	float		retropart[4]; // your body's parts by bone (vr_retro.cpp bodyParts): xy the low bits, zw the high bits of each bone's part
 	float		enchant[4]; // additive elemental rim, RGB intensity
 } vraliasinstance_t;
+int VR_AliasInvisible (const struct entity_s *e);
 void VR_AliasInstance (const struct entity_s *e, const float matrix[16], const void *aliashdr, int kind, vraliasinstance_t *out); // R_DrawAliasModel_Real: kind 1 standard, 0 showtris/showskel, 2 depth only (all zero)
 void VR_AliasFlameRefs (const void *aliashdr, unsigned short *refs); // GLMesh_LoadVertexBuffer: per VBO vertex, 0 or 1 + the gun vertex a muzzle flash's vertex rides on
 void VR_AliasMorph (const struct entity_s *e, const void *aliashdr, float ambient[24]); // instance: a weapon's morph into its other model (Ambient[2..5].w)

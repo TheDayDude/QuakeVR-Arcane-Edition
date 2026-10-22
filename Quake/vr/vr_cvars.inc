@@ -2117,6 +2117,12 @@ QVR_CVAR(vr_jobs_threads, "0", CVAR_NONE)             // the game's thread pool 
 QVR_CVAR(vr_jobs_parallel, "1", CVAR_NONE)            // parallelFor (the grasp solve, the liquids' volume, the occlusion bakes) split between the pool's threads; 0: the calling thread runs every chunk (the single-threaded reference: the same results)
 QVR_CVAR(vr_hand_rig, "1", CVAR_ARCHIVE)               // round 21: the jointed hand (progs/hand_rig.md5mesh: three joints a finger, an opposable thumb, continuous curls; vr_handrig.cpp). 0: the palm and five finger models as before
 QVR_CVAR(vr_reload_mode, "2", CVAR_ARCHIVE)
+QVR_CVAR(vr_ad_manual_version, "0", CVAR_ARCHIVE)
+QVR_CVAR(vr_ad_reload_pouch_forward, "3", CVAR_ARCHIVE)
+QVR_CVAR(vr_ad_reload_pouch_up, "8", CVAR_ARCHIVE)
+QVR_CVAR(vr_ad_reload_pouch_reach, "7", CVAR_ARCHIVE)
+QVR_CVAR(vr_ad_reload_port_reach, "6", CVAR_ARCHIVE)
+QVR_CVAR(vr_ad_reload_show_ports, "1", CVAR_ARCHIVE)
 QVR_CVAR(vr_show_weapon_text, "1", CVAR_ARCHIVE)
 QVR_CVAR(vr_weapon_screen, "1", CVAR_ARCHIVE)          // the weapons' ammo counters on a small screen (colours: vr_gadget_screen_*)
 QVR_CVAR(vr_weapon_screen_padding, "1", CVAR_ARCHIVE)  // room around the text on it

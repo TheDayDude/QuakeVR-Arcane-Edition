@@ -435,6 +435,7 @@ void() PainSound =
 
 	// don't make multiple pain sounds right after each other
 	self.pain_finished = time + 0.5;
+    if(self.advr_elder_until>time){self.axhitme=0;sound(self,CHAN_VOICE,"demon/dpain1.wav",1,ATTN_NORM);return;}
 
 	if (damage_attacker.classname == "teledeath") {
 		sound (self, CHAN_VOICE, "player/teledth1.wav", 1, ATTN_NONE);

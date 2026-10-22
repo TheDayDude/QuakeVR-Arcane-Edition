@@ -28,7 +28,7 @@ float(entity r) ADVR_RecordCapacity = {
     if(r.advr_weapon==IT_SUPER_SHOTGUN)return 2;
     return ADVR_Capacity(r.advr_weapon);
 };
-float(entity r) ADVR_PackRecord = {return r.advr_weapon+r.advr_kind*65536+(r.advr_tome_read!=0)*1048576;};
+float(entity r) ADVR_PackRecord = {if(r.advr_nether_until)return 0;return r.advr_weapon+r.advr_kind*65536+(r.advr_tome_read!=0)*1048576;};
 vector(float h) ADVR_WeaponTip = {
     local vector at,tip;local float reach;local entity r;
     at=ADVR_Pos(h);r=ADVR_Hand(h);

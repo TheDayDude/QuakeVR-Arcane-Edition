@@ -9,6 +9,7 @@
 //     * S(model scale) * T(network model_offset)                               (post)
 
 #include "vr_render.hpp"
+#include "vr_protocol.hpp"
 #include "vr_emissive.hpp"
 #include "vr_engine.hpp"
 #include "vr_anchor.hpp"
@@ -234,6 +235,12 @@ extern "C" int VR_AliasZeroBlend(const entity_t* e, const void* aliashdr, int to
 
 // R_DrawAliasModel_Real: the instance's Quake VR data (vraliasinstance_t). kind 1: drawn as usual; 0: r_showtris or
 // r_showbboxes' skeletons; 2: a shadow map's caster, depth only: nothing of the light, glows or surface (all zero).
+extern "C" int VR_AliasInvisible(const entity_t* e) {
+    const auto* ve=view::find(e);const auto* world=ve ? nullptr : networkData(e);
+    const int code=ve ? ve->enchant : world ? world->enchant : 0;
+    // Frost cone emitters contribute light, never a visible model or shadow.
+    return code==1 || code==4;
+}
 extern "C" void VR_AliasInstance(const entity_t* e, const float matrix[16], const void* aliashdr, int kind,
     vraliasinstance_t* out)
 {
@@ -253,6 +260,15 @@ extern "C" void VR_AliasInstance(const entity_t* e, const float matrix[16], cons
     const glm::vec3 enchant=emissive::enchantColor(enchantedView ? enchantedView->enchant : enchantedWorld ? enchantedWorld->enchant : 0);
     for(int i=0;i<3;i++)out->enchant[i]=standard ? enchant[i] : 0.f;
     out->enchant[3]=0.f;
+    const char* earthModel=e->model ? e->model->name : "";
+    const bool earthBody=!strncmp(earthModel,"progs/vrbody",12) || !strcmp(earthModel,"progs/vrtorso.mdl") ||
+        !strncmp(earthModel,"progs/hand",10) || !strncmp(earthModel,"progs/finger_",13);
+    if(standard && earthBody && (cl.stats[protocol::STAT_QVR_EARTH]&1)) {
+        out->enchant[3]=1.f;
+        if(cl.stats[protocol::STAT_QVR_EARTH]&6) {
+            out->enchant[0]=0.1f;out->enchant[1]=0.2f;out->enchant[2]=0.9f;
+        }
+    }
     out->glow[0] = VR_EntityGlow(e);
     gltexture_t* skin = hdr->gltextures[e->skinnum >= 0 && e->skinnum < hdr->numskins ? e->skinnum : 0][0];
     const int authored = TexMgr_NormalMapAuthored(skin); // its skin's normal map is an authored file's

@@ -47,7 +47,7 @@ double lastSpinTime = -1.0; // vr_gametime of the last spin step: every rendered
     const int weapon = cl.stats[main ? STAT_QVR_WEAPON : STAT_QVR_WEAPON2];
     const int clip = cl.stats[main ? STAT_QVR_WEAPONCLIP : STAT_QVR_WEAPONCLIP2];
     const int clipSize = cl.stats[main ? STAT_QVR_WEAPONCLIPSIZE : STAT_QVR_WEAPONCLIPSIZE2];
-    return !isWidowmaker(hand) && weapon == widSuperShotgun && clip != clipSize && twohand::flickAllowed(hand);
+    return !isWidowmaker(hand) && weapon == widSuperShotgun && (clip != clipSize || vr_reload_mode.value == 3.f) && twohand::flickAllowed(hand);
 }
 
 } // namespace
@@ -114,7 +114,7 @@ bool allowed(int hand)
 
 void spin(int hand)
 {
-    if(!isWidowmaker(hand)) spinLeft[hand] = 360.f;
+    if(!isWidowmaker(hand) && vr_reload_mode.value != 3.f) spinLeft[hand] = 360.f;
 }
 
 float spinAngle(int hand)

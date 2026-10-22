@@ -525,7 +525,7 @@ void resetHandMoves()
         open("Haptics: VR Settings", pageIndex(pageMain)).help("Haptics on or off is on VR Settings."),
         header("Weapons and Holsters"),
         cycle("Weapon Mode", "vr_holster_mode", {{0.f, "Immersive"}, {1.f, "Quick Slots"}}).help("Immersive: a holster holds one weapon, and taking it out empties it. Quick Slots: holsters never empty (with weapon cycling)."),
-        cycle("Weapon Reloading Mode", "vr_reload_mode", {{0.f, "None"}, {1.f, "All Holsters"}, {2.f, "Hip Holsters"}}).help("Enables weapon reloading mechanics. Weapons can be reloaded by moving them towards an holster. Reloading only works with 'immersive' weapon mode."),
+        cycle("Weapon Reloading Mode", "vr_reload_mode", {{0.f, "None"}, {1.f, "All Holsters"}, {2.f, "Hip Holsters"}, {3.f, "Manual (Ammo Pouch)"}}).help("Manual: grip ammunition from the front belt pouch and insert it at the other gun loading point. Poke its red button to eject. Holster modes retain simple reloading."),
         cycle("Holster Haptics", "vr_holster_haptics", {{0.f, "Off"}, {1.f, "Continuous"}, {2.f, "Once"}}).help("Haptic feedback when hovering a usable holster slot."),
         slider("Holster Haptic Time", "vr_holster_haptic_time", 0.05f, 0.6f, 0.05f, "%.2f s").extend().help("How long the buzz lasts as a hand reaches a holster (Holster Haptics: Once)."),
         slider("Draw Blend Time", "vr_weapon_draw_blend", 0.f, 1.f, 0.05f, "%.2f s").help("A gun drawn from a holster eases from its holstered pose into your hand over this time, turning the shortest way (0: at once). It fires at once: only its look eases."),

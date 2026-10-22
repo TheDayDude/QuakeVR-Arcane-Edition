@@ -338,6 +338,11 @@ void update(const InputState& tracked)
                     logButton(h, b, now, b.key[h], "the weapon posing mode");
                     continue;
                 }
+                if(b.button==&HandInput::grip && (cl.stats[protocol::STAT_QVR_RELOAD_HANDS] & (1<<h))){
+                    keyEvent(b.key[h],now);
+                    logButton(h,b,now,b.key[h],"held ammunition");
+                    continue;
+                }
                 // Consume the click only for the hand opposite a tome, keeping movement axes free.
                 if(b.button==&HandInput::stickClick && (tomeStick[h] ||
                     (now && key_dest==key_game && tomeHand(1-h) && !tomeHand(h))))

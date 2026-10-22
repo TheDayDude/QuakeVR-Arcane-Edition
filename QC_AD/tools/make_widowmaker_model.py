@@ -49,7 +49,7 @@ anchor('WpnButtonAnchorVertex',['WpnButtonX','WpnButtonY','WpnButtonZ'],[.8,-2.2
 anchor('WpnTextAnchorVertex',['WpnTextX','WpnTextY','WpnTextZ'],[.8,-2.25,-.3])
 settings.update(WpnButtonMode=1,WpnButtonPitch=0,WpnButtonYaw=0,WpnButtonRoll=0,WpnTextMode=1,WpnTextPitch=0,WpnTextYaw=0,WpnTextRoll=0,WpnTextScale=.22)
 # Support grip under the forward receiver; no stock brace on this pistol-grip model.
-settings.update(Hotspot1Type=1,Hotspot1X=10.8,Hotspot1Y=-.02,Hotspot1Z=-3.2,Hotspot1Pitch=0,Hotspot1Yaw=0,Hotspot1Roll=0,
+settings.update(Hotspot1Type=1,Hotspot1X=14,Hotspot1Y=-.02,Hotspot1Z=-3.2,Hotspot1Pitch=0,Hotspot1Yaw=0,Hotspot1Roll=0,
                 Hotspot2Type=0,Hotspot2X=low[0],Hotspot2Y=-.02,Hotspot2Z=-1.4)
 settings.update(Recoil=1,RecoilStrength=7,RecoilTime=.95)
 settings.update(Mass=6,Span=115,Balance=32) # heavier and more forward-heavy than the 3.5 kg SSG

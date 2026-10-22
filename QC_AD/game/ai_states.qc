@@ -41,6 +41,7 @@ void(float dist) ai_walk =
 	movedist = dist;
 	if (FindTarget ()) return;			// Found a player?
 	
+	if(self.advr_dark_owner && !self.goalentity){self.th_stand();return;}
 	// Allow for flying units to move up/down between path corners
 	if (self.classmove == MON_MOVEFLY) {
 		// Allow for some Z axis tolerance

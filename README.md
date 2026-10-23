@@ -11,6 +11,8 @@ I've taken the framework for VR weapons, physics and enemies and applied those t
 Additional features (WIP):
 Usable Crossbows, Widowmakers, Plasma Guns, and Shadow Axes
 
+[Manual reloading](QC_AD/MANUAL-RELOADING.md): physical shells, magazines, cells, launcher rounds and crossbow bolts from a belt pouch.
+
 [Tome magic](QC_AD/MAGIC.md): Skull Wizard tomes, free-hand fireballs, and Arcane Essence.
 
 TODO:

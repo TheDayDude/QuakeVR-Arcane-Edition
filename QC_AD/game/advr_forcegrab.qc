@@ -85,6 +85,7 @@ void(float h,entity e) ADVR_FGLaunch = {
 };
 void(float h) ADVR_ForceGrab = {
     local entity e,best,old;local float trigger,score,dot;local vector pos,dir;
+    if((self.advr_earth_until>time || self.advr_dark_until>time) && !ADVR_Hand(h)){ADVR_FGSet(h,world,0);return;}
     if(ADVR_HandBusy(h)){ADVR_FGSet(h,world,0);return;}
     if(self.advr_magic_book && self.advr_magic_hand==h){ADVR_FGSet(h,world,0);return;}
     if(h)trigger=self.button0;else trigger=self.button3;

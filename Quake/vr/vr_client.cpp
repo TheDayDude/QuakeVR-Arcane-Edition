@@ -640,7 +640,7 @@ extern "C" float VR_BeamScale(qmodel_t* model)
     {
         return 1.f;
     }
-    if(!strcmp(model->name, "progs/bolt2.mdl"))
+    if(!strcmp(model->name, "progs/bolt2.mdl") || !strcmp(model->name,"progs/advr_necrotic_bolt.mdl"))
     {
         return 0.5f;
     }

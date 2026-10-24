@@ -12,6 +12,7 @@ float() ADVR_StaminaMax = {return max(1,cvar("vr_parry_stamina_max"));};
 // self is the defending player. Use the engine's calibrated muzzle/tip position.
 float(float h) ADVR_GuardLine = {
     local vector pos,tip;
+    if(ADVR_RuneCrossed()){advr_guard_a=ADVR_Pos(0);advr_guard_b=ADVR_Pos(1);return 1;}
     if(!ADVR_CanParry(ADVR_Hand(h)))return 0;
     pos=ADVR_Pos(h);if(h)tip=self.muzzlepos;else tip=self.offmuzzlepos;
     if(vlen(tip-pos)<2 || vlen(tip-pos)>128) {
@@ -71,6 +72,7 @@ void(float h,vector at,vector away,float quiet) ADVR_ParryFeedback = {
 // as in base QuakeVR. Picking it up while exhausted cannot bypass the limit.
 void(float h) ADVR_ParrySpend = {
     local float cost,remaining,warn;
+    if(ADVR_RuneActive()){self.vr_stamina_used=0;return;}
     if(!cvar("vr_parry_stamina")) {
         if(!ADVR_TwoHands(h) && random()<bound(0,cvar("vr_parry_drop_chance"),1)){ADVR_Drop(h);ADVR_Sync();}
         return;
@@ -99,7 +101,7 @@ void(entity targ,entity inflictor,entity attacker,float damage,float armor) ADVR
     saved=self;oldf=v_forward;oldr=v_right;oldu=v_up;self=targ;
     if(targ.classname=="player" && targ.health>0 && ADVR_Tracked() && cvar("vr_parry") &&
        inflictor==attacker && (attacker.flags & FL_MONSTER) && damage>0 &&
-       (!cvar("vr_parry_stamina") || self.vr_stamina_used<ADVR_StaminaMax())) {
+       (ADVR_RuneActive() || !cvar("vr_parry_stamina") || self.vr_stamina_used<ADVR_StaminaMax())) {
         toward=attacker.origin-targ.origin;toward_z=0;
         if(vlen(toward)<=150 && vlen(toward)>0) {
             toward=normalize(toward);h=-1;
@@ -190,8 +192,8 @@ float(entity e,float h) ADVR_BatProjectile = {
     local vector from,to,vel,normal,rel,aim;
     local float i,j,radius,window,hit,step,speed;
     r=ADVR_Hand(h);
-    if(!ADVR_CanParry(r) || !ADVR_CanDeflect(e) || !cvar("vr_deflect") ||
-       (cvar("vr_parry_stamina") && self.vr_stamina_used>=ADVR_StaminaMax()))return 0;
+    if((!ADVR_CanParry(r) && !ADVR_RuneCrossed()) || !ADVR_CanDeflect(e) || !cvar("vr_deflect") ||
+       (!ADVR_RuneActive() && cvar("vr_parry_stamina") && self.vr_stamina_used>=ADVR_StaminaMax()))return 0;
     from=e.origin-e.velocity*min(0.025,frametime);to=e.origin+e.velocity*min(0.05,frametime);
     radius=max(0,cvar("vr_deflect_radius"))+min(16,vlen(e.maxs-e.mins)*0.5);
     window=bound(0,cvar("vr_deflect_window"),0.2);hit=0;
@@ -207,6 +209,7 @@ float(entity e,float h) ADVR_BatProjectile = {
         }
         if(hit)break;
     }
+    if(ADVR_RuneCrossed() && ADVR_SegmentDistance(from,to,ADVR_Pos(0),ADVR_Pos(1))<=radius+5){hit=1;vel='0 0 0';}
     if(!hit)return 0;
     // A nearby projectile on the other side of a wall cannot be batted.
     traceline(ADVR_Pos(h),e.origin,TRUE,self);
@@ -223,7 +226,7 @@ float(entity e,float h) ADVR_BatProjectile = {
     e.finalangle=normalize(e.velocity);e.mangle=e.velocity;
     ADVR_ParryFeedback(h,e.origin,-normalize(e.velocity),0);
     // One paid effort per batting motion, even for a volley of projectiles.
-    if(time-r.advr_bat_paid>0.3 || r.advr_bat_paid==0){r.advr_bat_paid=time;ADVR_ParrySpend(h);}
+    if(r && (time-r.advr_bat_paid>0.3 || r.advr_bat_paid==0)){r.advr_bat_paid=time;ADVR_ParrySpend(h);}
     advr_deflections=advr_deflections+1;
     return 1;
 };
@@ -249,8 +252,9 @@ void() ADVR_ParryFrame = {
     if(!cvar("vr_parry_stamina") && !(cvar("vr_climb") && cvar("vr_climb_stamina")))self.vr_stamina_used=0;
     else if(time-self.vr_stamina_time>=max(0,cvar("vr_parry_stamina_delay")))
         self.vr_stamina_used=max(0,self.vr_stamina_used-max(0,cvar("vr_parry_stamina_regen"))*frametime);
+    if(ADVR_RuneActive())self.vr_stamina_used=0;
     ADVR_TrackBat(1);ADVR_TrackBat(0);
-    if(cvar("vr_deflect") && (ADVR_CanParry(self.advr_main) || ADVR_CanParry(self.advr_off))) {
+    if(cvar("vr_deflect") && (ADVR_RuneCrossed() || ADVR_CanParry(self.advr_main) || ADVR_CanParry(self.advr_off))) {
         e=findradius(ADVR_Head(self),192);
         while(e){next=e.chain;if(!ADVR_BatProjectile(e,1))ADVR_BatProjectile(e,0);e=next;}
     }

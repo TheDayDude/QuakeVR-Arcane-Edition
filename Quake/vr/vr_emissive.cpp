@@ -422,6 +422,7 @@ mem::Scratch<EmissiveScratch> scratch{"emissive"};
 
 glm::vec3 emissive::enchantColor(int code)
 {
+    if(code==6)return glm::vec3{1.8f,0.45f,0.06f};
     if(code==1)return glm::vec3{0.f};
     if(code==5)return glm::vec3{-0.12f,-0.12f,-0.12f};
     if(code==4)return glm::vec3{0.15f,0.5f,1.f};
@@ -453,6 +454,18 @@ extern "C" void VR_ProjectileLight(int ent)
         return;
     }
     if(const auto* data=client::entityVr(ent); data && data->enchant) {
+        if(data->enchant==6){
+            const glm::vec3 at{e.origin[0],e.origin[1],e.origin[2]};
+            vec3_t angles{e.angles[0],e.angles[1],e.angles[2]},f,r,u;AngleVectors(angles,f,r,u);
+            const glm::vec3 along{r[0],r[1],r[2]};
+            if(!strcmp(e.model->name,"progs/advr_nether_arc.mdl")) {
+                const glm::vec3 up{u[0],u[1],u[2]};
+                auto point=[&](float a){return at-along*(23.f*sinf(a))+up*(23.f*cosf(a)-18.f);};
+                for(int i=0;i<6;++i)particles::netherFlames(point(-1.350885f+i*.450295f),point(-1.350885f+(i+1)*.450295f),1.1f,30.f);
+            }
+            else if(!strcmp(e.model->name,"progs/proj_golemrock1.mdl") || !strcmp(e.model->name,"progs/proj_golemrock2.mdl"))particles::netherFlames(at,at,0.65f,100.f);
+            else particles::netherFlames(at,at+glm::vec3{f[0],f[1],f[2]}*20.f,0.7f);
+        }
         if(data->enchant==4){
             dlight_t* dl=CL_AllocDlight(-0x70000-8-ent);
             VectorCopy(e.origin,dl->origin);dl->die=static_cast<float>(cl.time+0.05);

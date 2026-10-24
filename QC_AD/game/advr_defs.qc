@@ -484,3 +484,17 @@ void(float amount) ADVR_SpendMana;
 void(float h) ADVR_ElderCast;
 void() ADVR_ElderEnd;
 float() ADVR_ElderFrame;
+
+.float advr_rune_until,advr_rune_smoke;
+.float advr_rune_tick[2],advr_raise_time[2];
+.entity advr_raise_target[2],advr_necrotic_fx[2];
+float() ADVR_RuneActive;
+float() ADVR_RuneCrossed;
+void() ADVR_RuneFrame;
+void() ADVR_RuneClear;
+void(float h) ADVR_RuneStow;
+float(entity e) ADVR_Raiseable;
+entity(entity e) ADVR_RaiseCorpse;
+
+.float advr_hell_until;
+.float advr_rock_charge[2],advr_raise_seen[2];

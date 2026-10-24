@@ -75,6 +75,53 @@ static music_handler_t *music_handlers = NULL;
 
 static snd_stream_t *bgmstream = NULL;
 
+// Keep the original decoder open so Rune music returns at the previous position.
+static snd_stream_t *rune_saved_stream = NULL;
+static qboolean rune_music_active = false, rune_saved_loop;
+static double rune_music_until;
+
+static void BGM_Rune_f (void)
+{
+    snd_stream_t *replacement;
+    if (cls.state != ca_connected || no_extmusic || !bgm_extmusic.value)
+        return;
+    if (rune_music_active)
+    {
+        rune_music_until = cl.time + 75.0;
+        Con_DPrintf("Rune music: extended to 75 seconds\n");
+        return;
+    }
+    // Do not interrupt the current music if the optional track is absent/broken.
+    replacement = S_CodecOpenStreamType("music/track02.ogg", CODECTYPE_VORBIS, true);
+    if (!replacement)
+    {
+        Con_DPrintf("Rune music: track02.ogg unavailable; keeping current music\n");
+        return;
+    }
+    rune_saved_stream = bgmstream;
+    rune_saved_loop = bgmloop;
+    bgmstream = replacement;
+    bgmloop = true;
+    s_rawend = 0;
+    rune_music_active = true;
+    rune_music_until = cl.time + 75.0;
+    Con_DPrintf("Rune music: track02.ogg for 75 seconds\n");
+}
+
+static void BGM_RuneUpdate (void)
+{
+    if (!rune_music_active || cl.time < rune_music_until)
+        return;
+    if (bgmstream) S_CodecCloseStream(bgmstream);
+    bgmstream = rune_saved_stream;
+    rune_saved_stream = NULL;
+    bgmloop = rune_saved_loop;
+    rune_music_active = false;
+    s_rawend = 0;
+    Con_DPrintf("Rune music: restored %s\n", bgmstream ? bgmstream->name : "silence");
+}
+
+
 static void BGM_Play_f (void)
 {
 	if (Cmd_Argc() == 2) {
@@ -145,6 +192,8 @@ qboolean BGM_Init (void)
 
 	Cvar_RegisterVariable(&bgm_extmusic);
 	Cmd_AddCommand("music", BGM_Play_f);
+	Cmd_AddCommand("music_rune", BGM_Rune_f);
+	Cmd_AddCommand_ServerCommand("music_rune", BGM_Rune_f);
 	Cmd_AddCommand("music_pause", BGM_Pause_f);
 	Cmd_AddCommand("music_resume", BGM_Resume_f);
 	Cmd_AddCommand("music_loop", BGM_Loop_f);
@@ -307,6 +356,8 @@ void BGM_PlayCDtrack (byte track, qboolean looping)
 	unsigned int path_id, prev_id, type;
 	music_handler_t *handler;
 
+	if (rune_music_active) BGM_Stop();
+
 	/* if replaying the same track, just resume playing instead of stopping and restarting*/
 	if (bgmstream)
 	{
@@ -365,6 +416,11 @@ void BGM_PlayCDtrack (byte track, qboolean looping)
 
 void BGM_Stop (void)
 {
+    // Explicit music changes, disconnects and map loads cancel the old override.
+    if (rune_music_active) bgmloop = rune_saved_loop;
+    if (rune_saved_stream) S_CodecCloseStream(rune_saved_stream);
+    rune_saved_stream = NULL;
+    rune_music_active = false;
 	if (bgmstream)
 	{
 		bgmstream->status = STREAM_NONE;
@@ -493,6 +549,7 @@ static void BGM_UpdateStream (void)
 
 void BGM_Update (void)
 {
+	BGM_RuneUpdate();
 	if (old_volume != bgmvolume.value)
 	{
 		if (bgmvolume.value < 0)

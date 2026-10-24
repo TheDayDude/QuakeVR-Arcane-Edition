@@ -258,7 +258,8 @@ extern "C" void VR_AliasInstance(const entity_t* e, const float matrix[16], cons
     const auto* enchantedView=view::find(e);
     const auto* enchantedWorld=enchantedView ? nullptr : networkData(e);
     const glm::vec3 enchant=emissive::enchantColor(enchantedView ? enchantedView->enchant : enchantedWorld ? enchantedWorld->enchant : 0);
-    for(int i=0;i<3;i++)out->enchant[i]=standard ? enchant[i] : 0.f;
+    const bool runeRock=e->model && (!strcmp(e->model->name,"progs/proj_golemrock1.mdl") || !strcmp(e->model->name,"progs/proj_golemrock2.mdl"));
+    for(int i=0;i<3;i++)out->enchant[i]=standard && !runeRock ? enchant[i] : 0.f;
     out->enchant[3]=0.f;
     const char* earthModel=e->model ? e->model->name : "";
     const bool earthBody=!strncmp(earthModel,"progs/vrbody",12) || !strcmp(earthModel,"progs/vrtorso.mdl") ||
@@ -269,6 +270,7 @@ extern "C" void VR_AliasInstance(const entity_t* e, const float matrix[16], cons
             out->enchant[0]=0.1f;out->enchant[1]=0.2f;out->enchant[2]=0.9f;
         }
     }
+    if(standard && (!strncmp(earthModel,"progs/hand",10) || !strncmp(earthModel,"progs/finger_",13)) && (cl.stats[protocol::STAT_QVR_EARTH]&8)){out->enchant[0]=-0.15f;out->enchant[1]=-0.15f;out->enchant[2]=-0.15f;}
     out->glow[0] = VR_EntityGlow(e);
     gltexture_t* skin = hdr->gltextures[e->skinnum >= 0 && e->skinnum < hdr->numskins ? e->skinnum : 0][0];
     const int authored = TexMgr_NormalMapAuthored(skin); // its skin's normal map is an authored file's

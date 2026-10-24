@@ -484,25 +484,25 @@ void() ADVR_MagicFrame = {
     if(self.advr_spell==13 && !grip){
         if(old && self.advr_magic_charge>=0.65 && ADVR_Mana()>=30 && (book.advr_kind==ADVR_DEBUGTOME || query_configflag(SVR_RUNE_KEY4))){
             // Pay before putting away a Debug Tome (which bypasses the cost).
-            ADVR_SpendMana(30);ADVR_ElderCast(1-h);haptic(h,0,0.25,60,0.9);
+            ADVR_SpendMana(30);ADVR_ElderCast(1-h);self.advr_rune_until=time+70;stuffcmd(self,"music_rune\n");haptic(h,0,0.25,60,0.9);
         }ADVR_MagicClear();return;
     }
     if(self.advr_spell==12 && !grip){
         if(old && self.advr_magic_charge>=0.65 && ADVR_Mana()>=30 && (book.advr_kind==ADVR_DEBUGTOME || query_configflag(SVR_RUNE_KEY3))){
-            ADVR_SpendMana(30);ADVR_NetherCast(h);haptic(h,0,0.25,85,0.9);
+            ADVR_SpendMana(30);ADVR_NetherCast(h);self.advr_hell_until=time+70;self.advr_rune_until=time+70;ADVR_RuneStow(1-h);stuffcmd(self,"music_rune\n");haptic(h,0,0.25,85,0.9);
         }ADVR_MagicClear();return;
     }
     if(self.advr_spell==11 && !grip){
         if(old && self.advr_magic_charge>=0.65 && ADVR_Mana()>=30 && (book.advr_kind==ADVR_DEBUGTOME || query_configflag(SVR_RUNE_KEY2))){
-            ADVR_SpendMana(30);ADVR_DarkCast();haptic(h,0,0.25,65,0.9);
+            ADVR_SpendMana(30);ADVR_DarkCast();self.advr_rune_until=time+70;self.advr_dark_until=time+70;ADVR_RuneStow(1-h);stuffcmd(self,"music_rune\n");haptic(h,0,0.25,65,0.9);
         }ADVR_MagicClear();return;
     }
     if(self.advr_spell==8 && !grip) {
         if(old && self.advr_magic_charge>=0.65 && ADVR_Mana()>=30 && (book.advr_kind==ADVR_DEBUGTOME || query_configflag(SVR_RUNE_KEY1))) {
-            ADVR_SpendMana(30);self.advr_earth_until=time+60;
+            ADVR_SpendMana(30);self.advr_earth_until=time+70;self.advr_rune_until=time+70;ADVR_RuneStow(1-h);stuffcmd(self,"music_rune\n");
             sound(self,CHAN_AUTO,"misc/r_tele1.wav",1,ATTN_NORM);
             haptic(h,0,0.25,80,0.9);particle(self.origin+'0 0 24','0 0 60',8,100);
-            sprint(self,"Earth Rune: stone form for 60 seconds!\n");
+            sprint(self,"Earth Rune: stone form for 70 seconds!\n");
         }
         ADVR_MagicClear();return;
     }

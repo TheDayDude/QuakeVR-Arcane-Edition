@@ -479,6 +479,11 @@ void() worldspawn =
     precache_model("progs/advr_acid_charge.mdl");
     precache_model("progs/advr_void_charge.mdl");
     precache_model("progs/advr_elder_rune.mdl");
+    precache_model("progs/advr_rune_rock.mdl");
+    precache_model(MODEL_PROJ_GROCK1);precache_model(MODEL_PROJ_GROCK2);
+    precache_sound("golem/rockstorm.wav");precache_sound(SOUND_IMP_ROCK1);
+    precache_model("progs/advr_necrotic_ray.mdl");
+    precache_model("progs/advr_necrotic_bolt.mdl");
     precache_model("progs/advr_fiend_body.mdl");
     precache_model("progs/advr_fiend_claw.mdl");
     precache_sound("demon/idle1.wav");precache_sound("demon/dpain1.wav");

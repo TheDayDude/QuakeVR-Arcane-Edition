@@ -542,13 +542,14 @@ void(float h) ADVR_Melee = {
         damage=ADVR_MeleeHeadDamage(victim,self,trace_endpos,pos-start,damage);
         SpawnBlood(victim,trace_endpos,vel,damage);
         T_Damage(victim,self,self,damage,DAMARMOR);
-        if(ADVR_Hand(h).advr_nether_until>time && victim.health>0)ADVR_Ignite(victim,self);
+        if((ADVR_Hand(h).advr_nether_until>time || (!ADVR_Hand(h) && self.advr_hell_until>time)) && victim.health>0)ADVR_Ignite(victim,self);
     }
     if(h)self.mainhand_melee_attack_finished=time+0.35;else self.offhand_melee_attack_finished=time+0.35;
 };
 void() ADVR_Frame = {
     local float desired;
-    if(ADVR_ElderFrame())return;
+    ADVR_RuneFrame();
+    if(ADVR_ElderFrame()){ADVR_ParryFrame();return;}
     if(self.health<=0)self.advr_earth_until=0;
     ADVR_SawAudio(1);ADVR_SawAudio(0);
     if(self.health<=0 || intermission_running || cinematic_running){ADVR_FuryClear();ADVR_MagicClear();ADVR_EnchantClear();}
@@ -581,7 +582,7 @@ void() ADVR_Frame = {
 
 void() ADVR_Reset = {
     local float i;
-    ADVR_ElderEnd();
+    ADVR_RuneClear();ADVR_ElderEnd();
     ADVR_ManualRefund();
     self.advr_reload_hands=0;self.advr_round_guard[0]=self.advr_round_guard[1]=0;
     ADVR_EnchantClear();self.advr_enchant_latched=0;self.advr_magic_sticks=0;self.advr_magic_oldsticks=0;
@@ -660,7 +661,7 @@ void() SetNewParms = {
     parm26=parm27=parm28=parm29=parm30=parm31=parm32=parm33=parm34=parm35=parm36=parm37=parm38=parm39=0;
 };
 void() SetChangeParms = {
-    ADVR_ElderEnd();
+    ADVR_RuneClear();ADVR_ElderEnd();
     ADVR_ManualRefund();
     ADVR_AD_SetChangeParms();
     if(self.health>0)ADVR_SaveParms();

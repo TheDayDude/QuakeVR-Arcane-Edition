@@ -120,6 +120,12 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
         headkind=advr_hit_kind;headat=advr_hit_at;headvel=advr_hit_vel;
     }
     ADVR_HitClear();
+    // Nether protects against fire, not unrelated explosions or acid damage.
+    if((targ.flags & FL_CLIENT) && targ.advr_hell_until>time &&
+       (inflictor.advr_fireball || inflictor.classname=="advr_burn" ||
+        inflictor.classtype==CT_FIREBALL || inflictor.classtype==CT_PROJ_FLAME ||
+        inflictor.classtype==CT_PROJ_LAVA || inflictor.classtype==CT_PROJ_CHTHON || inflictor.classtype==CT_PROJ_FIRETOP ||
+        inflictor.classtype==CT_PROJ_DGUARDQ || inflictor.classtype==CT_PROJ_DROLE || inflictor.classtype==CT_PROJ_GARG))return;
     // Dark allies cannot hurt clients or one another, nor retaliate against players.
     if(attacker.advr_dark_owner && ((targ.flags & FL_CLIENT) || targ.advr_dark_owner))return;
     if(targ.advr_dark_owner && (attacker.flags & FL_CLIENT))return;
@@ -647,5 +653,6 @@ void(entity attacker, float damage) T_BeamDamage =
 		head = head.chain;
 	}
 }; */
+
 
 

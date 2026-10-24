@@ -32,6 +32,7 @@
 #include "vr_shells.hpp"
 #include "vr_explosiondebris.hpp"
 #include "vr_fireparticles.hpp"
+#include "vr_particles.hpp"
 #include "vr_shock.hpp"
 #include "vr_stereo.hpp"
 #include "vr_window.hpp"
@@ -1275,6 +1276,7 @@ void setupWeapon(hands::State& s, int hand, qmodel_t* model, int frame, bool flo
             static_cast<int>(weapons::value(slot, Key::MuzzleAnchorVertex)),
             weapons::vec(slot, Key::MuzzleOffsetX, Key::MuzzleOffsetY, Key::MuzzleOffsetZ));
         s.muzzleValid[hand] = true;
+        if(ve.enchant==6)particles::netherFlames(glm::mix(held.pos,s.muzzle[hand],0.3f),s.muzzle[hand],1.0f);
     }
     else
     {
@@ -4634,6 +4636,11 @@ void setupHolsters(const hands::State& s, bool queueTexts)
         if(!previewHere && !posedHere) {
             ve.enchant=cl.stats[STAT_QVR_ENCHANT_HOLSTER0+stat];
             emissive::enchantLight(2+stat,pose.weaponPos,ve.enchant);
+            if(ve.enchant==6 && model){
+                const int slot=weapons::slotForModel(model);
+                const glm::vec3 tip=view::anchorPosition(ve,static_cast<int>(weapons::value(slot,Key::MuzzleAnchorVertex)),weapons::vec(slot,Key::MuzzleOffsetX,Key::MuzzleOffsetY,Key::MuzzleOffsetZ));
+                particles::netherFlames(glm::mix(pose.weaponPos,tip,0.3f),tip,1.f);
+            }
         }
         highlight(ve, hover);
         // Just holstered: eased from the hand into the holster (vr_drawblend.cpp).
@@ -6185,6 +6192,7 @@ extern "C" void VR_SetupViewEntities()
     }
     for(int hand = 0; hand < 2; hand++)
     {
+        if(cl.stats[protocol::STAT_QVR_EARTH]&16)particles::netherFlames(s.pos[hand],s.pos[hand]+hands::forward(s.rot[hand])*3.f,0.45f,65.f);
         updateFist(s, hand);
         updateGripFrame(s, hand);
     }

@@ -188,3 +188,5 @@ QVR_FIELD(advr_dark_owner)
 QVR_FIELD(advr_dark_until)
 
 QVR_FIELD(advr_nether_until)
+
+QVR_FIELD(advr_hell_until)

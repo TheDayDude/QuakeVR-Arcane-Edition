@@ -1795,6 +1795,21 @@ int fireSource(const glm::vec3& at, float sourceScale)
     return static_cast<int>(pool.size() - before);
 }
 
+// Frame-rate independent tongues of fire along a Nether blade/arc, not collision props.
+void netherFlames(const glm::vec3& from, const glm::vec3& to, float scale, float rate)
+{
+    if(!vr_particles.value || !r_particles.value || !ensureAtlas())return;
+    const float dt=static_cast<float>(CLAMP(0.0,cl.time-cl.oldtime,0.05));
+    make(rate*dt+rnd(0.f,1.f),[&](Particle& p,int){
+        p.cell=CellFire;p.type=Custom;p.additive=true;
+        p.org=glm::mix(from,to,rnd(0.f,1.f))+inBox(0.5f)*scale;
+        p.vel=inBox(3.f)+glm::vec3{0.f,0.f,18.f*scale};
+        p.scale=rnd(2.5f,3.5f)*scale;p.color=glm::vec4{fireColor(),0.8f};
+        p.die=cl.time+rnd(.25f,.45f);p.fade=-3.f;p.grow=2.f*scale;
+        p.angle=-1.5707963f;p.spin=rnd(-.4f,.4f);
+    },false);
+}
+
 // Incandescent physical chunks leave short flame tongues and slower, lingering smoke.
 void explosionDebrisTrail(const glm::vec3& from, const glm::vec3& to, float size, float heat)
 {

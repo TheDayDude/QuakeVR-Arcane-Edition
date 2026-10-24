@@ -159,7 +159,7 @@ int enchantCode(edict_t* record,edict_t* player=nullptr)
 {
     if(!record || !bindings().isAdVrProgs)return 0;
     const FieldOffsets& f=fields();
-    if(fieldFloatOr(record,f.advr_nether_until,0.f)>qcvm->time)return 1 | (31<<3);
+    if(fieldFloatOr(record,f.advr_nether_until,0.f)>qcvm->time)return 6; // dedicated Hell Sword flame code
     if(player && weaponInst(player,f.advr_enchant_record)==record) {
         const int pending=static_cast<int>(fieldFloatOr(player,f.advr_enchant_spell,0.f))+1;
         if(pending>=10)return 2; // green charge; invisibility applies only when complete
@@ -179,6 +179,7 @@ int entityEnchantCode(edict_t* ent)
     if(!bindings().isAdVrProgs || NUM_FOR_EDICT(ent)<=svs.maxclients)return 0;
     if(weaponInst(ent,fields().advr_dark_owner) && ent->v.health>0)return 5;
     if(!strcmp(PR_GetString(ent->v.classname),"advr_frost_cone_light"))return 4;
+    if(!strcmp(PR_GetString(ent->v.classname),"advr_nether_arc") || !strcmp(PR_GetString(ent->v.classname),"advr_rune_rock"))return 6;
     if((static_cast<int>(ent->v.flags)&FL_MONSTER) && ent->v.health>0 &&
        fieldFloatOr(ent,fields().advr_frost_until,0.f)>qcvm->time)return 3 | (7<<3);
     if(edict_t* record=weaponInst(ent,fields().weaponinst))return enchantCode(record);
@@ -654,6 +655,8 @@ extern "C" void VR_CalcStats(client_t* client, int* statsi, float* statsf)
     statsi[STAT_QVR_EARTH]=fieldFloatOr(ent,f.advr_earth_until,0.f)>qcvm->time && ent->v.health>0 ?
         1 | (fieldFloatOr(ent,f.advr_earth_main_until,0.f)>qcvm->time ? 2 : 0) |
         (fieldFloatOr(ent,f.advr_earth_off_until,0.f)>qcvm->time ? 4 : 0) : 0;
+    if(ent->v.health>0 && fieldFloatOr(ent,f.advr_dark_until,0.f)>qcvm->time)statsi[STAT_QVR_EARTH]|=8;
+    if(ent->v.health>0 && fieldFloatOr(ent,f.advr_hell_until,0.f)>qcvm->time)statsi[STAT_QVR_EARTH]|=16;
     statsi[STAT_QVR_ELDER]=ent->v.health>0 && fieldFloatOr(ent,f.advr_elder_until,0.f)>qcvm->time;
     statsi[STAT_QVR_DARKSIGHT]=ent->v.health>0 && fieldFloatOr(ent,f.advr_darksight_until,0.f)>qcvm->time;
     stat(STAT_QVR_MAGIC_MAX, f.advr_mana_max);
@@ -1181,6 +1184,9 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "elderview")) fixture = "ADVR_TestElderView";
         else if(!strcmp(Cmd_Argv(1), "frostssg")) fixture = "ADVR_TestFrostSsg";
         else if(!strcmp(Cmd_Argv(1), "magicqol")) fixture = "ADVR_TestMagicQoL";
+        else if(!strcmp(Cmd_Argv(1), "netherview")) fixture = "ADVR_TestNetherView";
+        else if(!strcmp(Cmd_Argv(1), "runeabilityview")) fixture = "ADVR_TestRuneAbilityView";
+        else if(!strcmp(Cmd_Argv(1), "runeexpansion")) fixture = "ADVR_TestRuneExpansion";
         else if(!strcmp(Cmd_Argv(1), "netheraim")) fixture = "ADVR_TestNetherAim";
         else if(!strcmp(Cmd_Argv(1), "netherrune")) fixture = "ADVR_TestNetherRune";
         else if(!strcmp(Cmd_Argv(1), "darkrune")) fixture = "ADVR_TestDarkRune";

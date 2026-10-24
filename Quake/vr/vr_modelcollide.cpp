@@ -431,7 +431,7 @@ za::Vector<double> restSeen; // by entity: vr_gametime it last lay on a hand
         }
         // AD reload props follow a tracked hand; never push that hand away
         // from its own ammunition. Dropped rounds remain ordinary objects.
-        if((!strcmp(PR_GetString(ed->v.classname),"advr_reload_round") || !strcmp(PR_GetString(ed->v.classname),"advr_magic_charge") || !strcmp(PR_GetString(ed->v.classname),"advr_frost_cone_light")) &&
+        if((!strcmp(PR_GetString(ed->v.classname),"advr_reload_round") || !strcmp(PR_GetString(ed->v.classname),"advr_magic_charge") || !strcmp(PR_GetString(ed->v.classname),"advr_frost_cone_light") || !strcmp(PR_GetString(ed->v.classname),"advr_necrotic_ray")) &&
             ed->v.movetype==MOVETYPE_NONE && ed->v.solid==SOLID_NOT)return Kind::None;
         const int flags = static_cast<int>(ed->v.flags);
         if(flags & (FL_MONSTER | FL_CLIENT))

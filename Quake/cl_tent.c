@@ -225,6 +225,10 @@ void CL_ParseTEnt (void)
 		CL_ParseBeam (Mod_ForName("progs/bolt.mdl", true));
 		break;
 
+	case TE_ADVR_NECROTIC:
+        CL_ParseBeam (Mod_ForName("progs/advr_necrotic_bolt.mdl", true));
+        break;
+
 	case TE_LIGHTNING2:				// lightning bolts
 		CL_ParseBeam (Mod_ForName("progs/bolt2.mdl", true));
 		break;
@@ -391,6 +395,7 @@ void CL_UpdateTEnts (void)
 				return;
 			VectorCopy (org, ent->origin);
 			ent->model = b->model;
+            if (!strcmp(b->model->name,"progs/advr_necrotic_bolt.mdl")) ent->alpha=ENTALPHA_ENCODE(0.35f);
 			ent->angles[0] = pitch;
 			ent->angles[1] = yaw;
 			ent->angles[2] = rope ? 0 : rand()%360; // QVR

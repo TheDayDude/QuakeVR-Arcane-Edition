@@ -27,11 +27,11 @@ void(float h) ADVR_ElderCast = {
     // Normally the casting hand is empty; defend against an input/pickup race.
     if(ADVR_Hand(1-h))ADVR_Displace(1-h);
     self.advr_elder_health=self.health;self.advr_elder_maxhealth=self.max_health;
-    self.health=500;self.max_health=500;self.advr_elder_until=time+60;
+    self.health=500;self.max_health=500;self.advr_elder_until=time+70;
     self.advr_elder_idle=time+4;self.vr_flashlight_state=0;
     self.advr_prevmain_time=self.advr_prevoff_time=0;
     sound(self,CHAN_VOICE,"demon/sight2.wav",1,ATTN_NORM);
-    sprint(self,"Elder Rune: Fiend form for 60 seconds!\n");ADVR_Sync();
+    sprint(self,"Elder Rune: Fiend form for 70 seconds!\n");ADVR_Sync();
 };
 float() ADVR_ElderFrame = {
     if(!self.advr_elder_until)return 0;
@@ -69,7 +69,7 @@ void() ADVR_TestElder = {
     for(i=0;i<62;i=i+1)ADVR_MagicFrame();
     ADVR_Assert(self.advr_magic_ready && self.advr_magic_fx.model=="progs/advr_elder_rune.mdl","Elder rune materializes during charge");
     self.advr_magic_sticks=0;ADVR_MagicFrame();
-    ADVR_Assert(self.mana==20 && self.advr_elder_until==time+60 && self.health==500,"Elder paid cost, duration and health");
+    ADVR_Assert(self.mana==20 && self.advr_elder_until==time+70 && self.health==500,"Elder paid cost, duration and health");
     ADVR_Assert(self.advr_holster[5]==book && !self.advr_main && !self.advr_off,"book goes to nearest available holster");
     ADVR_Select(IT_AXE);ADVR_Assert(!self.advr_main,"selection cannot access hidden equipment");
     self.velocity='0 0 0';self.waterlevel=0;self.onladder=0;self.jump_flag=0;

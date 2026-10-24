@@ -535,10 +535,10 @@ void() ADVR_TestEarth = {
     for(i=0;i<32;i=i+1)ADVR_MagicFrame();
     ADVR_Assert(self.advr_magic_ready,"Earth charge ready at three seconds");
     self.advr_magic_sticks=0;ADVR_MagicFrame();
-    ADVR_Assert(self.mana==20 && self.advr_earth_until==time+60,"Earth release costs thirty and grants sixty seconds");
+    ADVR_Assert(self.mana==20 && self.advr_earth_until==time+70,"Earth release costs thirty and grants sixty seconds");
     self.advr_favorites[4]=9;ADVR_SaveParms();ADVR_Reset();ADVR_LoadParms();
     ADVR_Assert(self.advr_spell==8 && self.advr_favorites[4]==9 && !self.advr_earth_until,"rune selection survives map transition; buff resets");
-    self.advr_earth_until=time+60;self.health=1000;self.armorvalue=100;self.armortype=0.6;
+    self.advr_earth_until=time+70;self.health=1000;self.armorvalue=100;self.armortype=0.6;
     self.flags=self.flags-(self.flags & FL_GODMODE);self.invincible_finished=0;self.takedamage=DAMAGE_AIM;
     v=spawn();v.flags=FL_MONSTER;setorigin(v,self.origin+'80 0 0');
     for(i=0;i<3;i=i+1)T_Damage(self,v,v,100,DAMARMOR);
@@ -552,7 +552,7 @@ void() ADVR_TestEarth = {
     v.movetype=MOVETYPE_STEP;v.solid=SOLID_BBOX;v.takedamage=DAMAGE_YES;v.health=1000;v.enemy=self;v.switchattacker=self;v.switchtimer=time+100;
     setsize(v,'-4 -4 -4','4 4 4');setorigin(v,self.handpos+'6 0 0');
     ADVR_Melee(1);hp=1000-v.health;
-    v.health=1000;self.mainhand_melee_attack_finished=0;self.advr_prevmain_time=0;self.advr_earth_until=time+60;
+    v.health=1000;self.mainhand_melee_attack_finished=0;self.advr_prevmain_time=0;self.advr_earth_until=time+70;
     ADVR_Melee(1);
     ADVR_Assert(v.health<=1000-hp*3.5 && v.health>=1000-hp*4.5,"Earth punch has quad damage");
     ADVR_Assert(self.advr_earth_main_until>time && vlen(v.velocity)>0,"Earth punch emits quad feedback and knocks back");

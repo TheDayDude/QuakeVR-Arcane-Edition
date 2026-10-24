@@ -195,13 +195,13 @@ entity(entity corpse,vector at,string name,entity caster,float undead) ADVR_Dark
     particle2(n.origin,'0 0 40',4,10);return n;
 };
 void() ADVR_DarkCast = {
-    local entity e,next,n,caster;local float reach,i,count;local string name;local vector at;
+    local entity e,next,n,caster;local float reach,i,count,raised;local string name;local vector at;
     caster=self;reach=400*max(0.1,cvar("vr_world_scale"));e=nextent(world);
     while(e){next=nextent(e);
-        if((e.flags & FL_MONSTER) && e.health<=0 && e.modelindex && !e.gibbed && !e.bossflag && !e.advr_dark_used && !e.advr_dark_owner && vlen(e.origin-caster.origin)<=reach){
+        if(raised<20 && ADVR_Raiseable(e) && vlen(e.origin-caster.origin)<=reach){
             name=e.classname;
             if(ADVR_DarkHumanoid(e)){if(random()<0.5)name="monster_zombie";else name="monster_zombiek";}
-            ADVR_DarkCreate(e,e.origin+'0 0 8',name,caster,ADVR_DarkHumanoid(e));
+            n=ADVR_DarkCreate(e,e.origin+'0 0 8',name,caster,ADVR_DarkHumanoid(e));if(n)raised=raised+1;
         }e=next;
     }
     count=3+floor(random()*3);

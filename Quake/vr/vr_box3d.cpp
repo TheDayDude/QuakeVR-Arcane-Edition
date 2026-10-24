@@ -1597,7 +1597,7 @@ void addPropShapes(edict_t* ent, int num, qmodel_t* model, const glm::vec3& lo, 
     {
         return Kind::None;
     }
-    if((!strcmp(PR_GetString(ent->v.classname),"advr_reload_round") || !strcmp(PR_GetString(ent->v.classname),"advr_magic_charge") || !strcmp(PR_GetString(ent->v.classname),"advr_frost_cone_light")) &&
+    if((!strcmp(PR_GetString(ent->v.classname),"advr_reload_round") || !strcmp(PR_GetString(ent->v.classname),"advr_magic_charge") || !strcmp(PR_GetString(ent->v.classname),"advr_frost_cone_light") || !strcmp(PR_GetString(ent->v.classname),"advr_necrotic_ray")) &&
         movetype==MOVETYPE_NONE && ent->v.solid==SOLID_NOT)return Kind::None;
     if(num < static_cast<int>(carried.size()) && carried[num])
     {

@@ -226,7 +226,7 @@ void transition(float& var, bool on, float speed)
 // Stickiness; 0 in an old config: 1).
 [[nodiscard]] float stickinessOf(float own)
 {
-    return stickiness * (own > 0.f ? own : 1.f);
+    return stickiness * (own > 0.f ? own : 1.f) * ((cl.stats[protocol::STAT_QVR_ENCHANT_MAIN]==6 || cl.stats[protocol::STAT_QVR_ENCHANT_OFF]==6) ? 2.f : 1.f);
 }
 
 // The two-handed aim's angle threshold (vr_2h_angle_threshold, a cosine) for a grip already held with stickiness

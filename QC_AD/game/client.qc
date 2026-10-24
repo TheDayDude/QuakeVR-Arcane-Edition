@@ -1571,7 +1571,7 @@ void() WaterMove =
 	if (self.watertype == CONTENT_LAVA) {
 		// Check for lava shield and play reminder it exists
 		if (self.moditems & IT_ARTLAVASHIELD) PlayLavaShieldSound(self);
-		else {
+		else if(self.advr_hell_until<=time) {
 			// Check for lava damage timer
 			if (self.dmgtime < time) {
 				// Unknown feature : env suit gives lava protection

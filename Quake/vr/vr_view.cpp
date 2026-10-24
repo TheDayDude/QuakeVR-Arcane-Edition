@@ -279,6 +279,7 @@ struct Entities
     view::ViewEntity ammoPouch;
     view::ViewEntity reloadMag[2];
     view::ViewEntity pouchBolts[3];
+    view::ViewEntity pouchGrenades[3];
     view::ViewEntity ssgFrame[8],ssgBarrels[8];
     view::ViewEntity pouch;      // the grenade pouch at the small of the back (vr_handgrenade)
     view::ViewEntity sawHandle;  // the chainsaw's cord's handle out of its seat (vr_chainsaw.cpp handleEntity)
@@ -332,6 +333,7 @@ void forEachEntity(F&& f)
     f(entities.ammoPouch);
     for(auto& ve:entities.reloadMag)f(ve);
     for(auto& ve:entities.pouchBolts)f(ve);
+    for(auto& ve:entities.pouchGrenades)f(ve);
     for(auto& ve:entities.ssgFrame)f(ve);
     for(auto& ve:entities.ssgBarrels)f(ve);
     f(entities.sawHandle);
@@ -4753,7 +4755,7 @@ bool adSsgReplaced(const view::ViewEntity& ve){
 void setupAmmoPouch(const hands::State& s)
 {
     for(auto& bolt:entities.pouchBolts)bolt.visible=false;
-    int boltCount=0;
+    int boltCount=0,grenadeCount=0;
     auto& ve = entities.ammoPouch;
     auto* model = vr_reload_mode.value == 3.f && cl.stats[STAT_HEALTH] > 0 ? viewModel("progs/vrpouch_ammo.mdl") : nullptr;
     if(!model){ve.visible=false;return;}
@@ -4775,10 +4777,15 @@ void setupAmmoPouch(const hands::State& s)
         else if(!strcmp(n,"progs/v_light.mdl") || !strcmp(n,"progs/advr_plasma.mdl")){first=11;most=3;each=!strcmp(n,"progs/advr_plasma.mdl") ? 24 : 36;}
         else if(!strcmp(n,"progs/v_rock2.mdl")){first=14;most=3;}
         else if(!strcmp(n,"progs/advr_crossbow.mdl")){first=17;boltCount=za::min(ammo,3);}
-        else if(!strcmp(n,"progs/v_rock.mdl"))first=17;
+        else if(!strcmp(n,"progs/v_rock.mdl")){first=17;grenadeCount=za::min(ammo,3);}
         if(first){pouchFrame=first+za::min(most,(ammo+each-1)/each)-1;break;}
     }
     place(ve,model,at,aliasAngles(fwd,up),pouchFrame,false);
+    for(int i=0;i<grenadeCount;++i){
+        auto& grenade=entities.pouchBolts[i];
+        place(grenade,viewModel("progs/advr_handgrenade.mdl"),at+up*1.8f+glm::cross(fwd,up)*((i-1)*2.5f),aliasAngles(up,fwd),0,false);
+        grenade.ent.skinnum=1;
+    }
     for(int i=0;i<boltCount;++i){
         // Compact horizontal reserve display; held and loaded bolts retain full size.
         const auto where=at+up*(0.8f+i*0.65f);
@@ -4791,6 +4798,7 @@ void setupAmmoPouch(const hands::State& s)
 
 void setupPouch(const hands::State& s)
 {
+    for(auto& grenade:entities.pouchGrenades)grenade.visible=false;
     view::ViewEntity& ve = entities.pouch;
     qmodel_t* const model = body::pouchEnabled() ? viewModel("progs/vrpouch.mdl") : nullptr;
     if(!model)
@@ -4819,7 +4827,13 @@ void setupPouch(const hands::State& s)
     HolsterPose pose{at - frame.out * clearance, aliasAngles(frame.out, frame.up), at, glm::vec3{0.f}};
     turnHolster(pose, at, frame,
         {vr_grenade_pouch_pitch.value, vr_grenade_pouch_yaw.value, vr_grenade_pouch_roll.value});
-    place(ve, model, pose.slotPos, pose.slotAngles, cl.stats[STAT_ROCKETS] >= 1 ? 0 : 1, false);
+    place(ve, model, pose.slotPos, pose.slotAngles, 1, false);
+    const int count=za::min(3,cl.stats[STAT_ROCKETS]);
+    for(int i=0;i<count;++i){
+        auto& grenade=entities.pouchGrenades[i];
+        place(grenade,viewModel("progs/advr_handgrenade.mdl"),pose.slotPos+frame.up*2.f+outwards*((i-1)*2.5f),aliasAngles(frame.up,frame.out),0,false);
+        grenade.ent.skinnum=1;
+    }
     highlight(ve, s.hotspot[HAND_OFF] == body::HS_GRENADE_POUCH || s.hotspot[HAND_MAIN] == body::HS_GRENADE_POUCH);
 }
 
@@ -6250,6 +6264,7 @@ extern "C" void VR_SetupViewEntities()
         for(auto& ve:entities.frontButton)ve.visible=false;
         for(auto& ve:entities.reloadMag)ve.visible=false;
         for(auto& ve:entities.pouchBolts)ve.visible=false;
+        for(auto& ve:entities.pouchGrenades)ve.visible=false;
         for(auto& ve:entities.ssgFrame)ve.visible=false;
         for(auto& ve:entities.ssgBarrels)ve.visible=false;
         entities.gadget.visible=entities.flashlight.visible=entities.pouch.visible=entities.ammoPouch.visible=entities.sawHandle.visible=false;

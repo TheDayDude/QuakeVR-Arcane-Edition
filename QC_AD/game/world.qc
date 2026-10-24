@@ -474,6 +474,7 @@ void() worldspawn =
     precache_model("progs/advr_tome.mdl");
     precache_model("progs/advr_magic_charge.mdl");
     precache_model("progs/advr_frostbolt.mdl");
+    precache_sound("ambience/windgust1.wav");
     precache_model("progs/advr_acidbolt.mdl");
     precache_model(MODEL_PROJ_WIZ);
     precache_model("progs/advr_acid_charge.mdl");

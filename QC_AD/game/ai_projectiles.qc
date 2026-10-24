@@ -2001,6 +2001,7 @@ void(vector org, vector dir, vector avel, float proj_type) Launch_Grenade =
 	newmis.angles = vectoangles(newmis.velocity);
 	setsize (newmis, newmis.bbmins, newmis.bbmaxs);
 	setorigin (newmis, org);
+    if(proj_type==CT_PROJ_GL || proj_type==CT_PROJ_GLMON)ADVR_GrenadeSetup(newmis,1);
 };
 
 //======================================================================

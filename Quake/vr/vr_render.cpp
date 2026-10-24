@@ -292,7 +292,16 @@ extern "C" void VR_AliasInstance(const entity_t* e, const float matrix[16], cons
         VR_AliasSurface(e, out->surface);
     }
     VR_AliasAO(e, out->ao); // dynamic ambient occlusion (vr_ao.cpp)
-    out->ao[2] = VR_ModelNormalMapScale(authored); // how much its normal map bends the normal (authored ones their own strength)
+    out->ao[2] = VR_ModelNormalMapScale(authored);
+    // Use the same matte material on held, holstered, dropped, and break-open weapons.
+    const int weaponSlot=weapons::slotForModel(e->model);
+    const bool matteWeapon=(weaponSlot>=0 && weaponSlot!=weapons::fistSlot()) ||
+        !strncmp(earthModel,"progs/vr_ssg_",13) || !strncmp(earthModel,"progs/g_",8);
+    if(matteWeapon) {
+        out->surface[0]=out->surface[1]=out->surface[2]=0.f;out->surface[3]=-1.f;
+        out->ao[2]=0.f;out->glow[3]=0.f;
+        out->glow[1]=VR_ModelLightParity() ? 1.f : -1.f;
+    } // how much its normal map bends the normal (authored ones their own strength)
     if(standard) // wounds painted on it (vr_wounds.cpp)
     {
         VR_AliasWound(e, out->wound, out->woundside);

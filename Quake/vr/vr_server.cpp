@@ -1156,6 +1156,7 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "magic")) fixture = "ADVR_TestMagic";
         else if(!strcmp(Cmd_Argv(1), "slipview")) fixture = "ADVR_TestSlipView";
         else if(!strcmp(Cmd_Argv(1), "earth")) fixture = "ADVR_TestEarth";
+        else if(!strcmp(Cmd_Argv(1), "grenades")) fixture = "ADVR_TestGrenades";
         else if(!strcmp(Cmd_Argv(1), "manualreload")) fixture = "ADVR_TestManualReload";
         else if(!strcmp(Cmd_Argv(1), "ssginput")) fixture = "ADVR_TestSsgInput";
         else if(!strcmp(Cmd_Argv(1), "ssgopencheck")) fixture = "ADVR_TestSsgOpenCheck";
@@ -1182,6 +1183,7 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "elderstate")) fixture = "ADVR_TestElderState";
         else if(!strcmp(Cmd_Argv(1), "elderexpire")) fixture = "ADVR_TestElderExpire";
         else if(!strcmp(Cmd_Argv(1), "elderview")) fixture = "ADVR_TestElderView";
+        else if(!strcmp(Cmd_Argv(1), "frostvolumeview")) fixture = "ADVR_TestFrostVolumeView";
         else if(!strcmp(Cmd_Argv(1), "frostssg")) fixture = "ADVR_TestFrostSsg";
         else if(!strcmp(Cmd_Argv(1), "magicqol")) fixture = "ADVR_TestMagicQoL";
         else if(!strcmp(Cmd_Argv(1), "netherview")) fixture = "ADVR_TestNetherView";

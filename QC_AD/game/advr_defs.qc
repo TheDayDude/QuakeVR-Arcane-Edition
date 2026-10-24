@@ -498,3 +498,18 @@ entity(entity e) ADVR_RaiseCorpse;
 
 .float advr_hell_until;
 .float advr_rock_charge[2],advr_raise_seen[2];
+
+// Grenade fuse runs in a separate controller, including during force-grab flight.
+.float advr_grenade;
+.float advr_grenade_fuse;
+.float advr_grenade_tick;
+.float advr_grenade_caught;
+.float advr_grenade_trigger[2];
+.entity advr_grenade_control;
+.entity advr_grenade_attacker;
+void(entity g,float live) ADVR_GrenadeSetup;
+void(entity g,entity attacker) ADVR_GrenadeDamage;
+void(entity g,float h) ADVR_GrenadeCaught;
+void(entity g,float h) ADVR_GrenadeHeld;
+void(entity g) ADVR_GrenadeReleased;
+void(float h) ADVR_GrenadeTake;

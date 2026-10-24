@@ -80,6 +80,7 @@ void bloodSpecks(const glm::vec3& org, const glm::vec3& normal, int count, const
 // Exact burst of additional fire particles for a flame-model source.
 int largeExplosionCount(); // diagnostic: live large textured blast fireballs
 int fireSource(const glm::vec3& at, float sourceScale);
+void frostWind(const glm::vec3& at, const glm::vec3& aim, float reach, float alpha);
 void netherFlames(const glm::vec3& from, const glm::vec3& to, float scale, float rate = 150.f);
 
 // Fiery/smoky trail of an incandescent physical explosion chunk; size in world units, heat 0..1.

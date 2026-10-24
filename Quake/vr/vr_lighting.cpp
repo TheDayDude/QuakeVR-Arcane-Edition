@@ -12,6 +12,7 @@
 #include "vr_profile.hpp"
 #include "vr_stereo.hpp"
 #include "vr_water.hpp"
+#include "vr_client.hpp"
 
 #include "Zancle/Algorithm/AnyOf.hpp"
 #include "Zancle/Algorithm/Sort.hpp"
@@ -1603,6 +1604,17 @@ extern "C" void VR_PushMapLights(void)
     r_framedata.shadowflags = static_cast<int>(flags);
     // Lightmap contrast about Quake's full light (a lightmap value of a half, before the doubling):
     // shade darker, well lit walls as they were, the brightest a little brighter.
+    memset(r_framedata.frostorigin,0,sizeof(r_framedata.frostorigin));
+    memset(r_framedata.frostdirection,0,sizeof(r_framedata.frostdirection));
+    int frostCount=0;
+    for(int n=1;n<cl.num_entities && frostCount<4;++n) {
+        const entity_t& e=cl_entities[n];const auto* data=client::entityVr(n);
+        if(!e.model || !data || data->enchant!=4)continue;
+        float* at=r_framedata.frostorigin[frostCount];float* dir=r_framedata.frostdirection[frostCount++];
+        for(int j=0;j<3;++j)at[j]=e.origin[j];at[3]=ENTALPHA_DECODE(e.alpha);
+        vec3_t angles{0,e.angles[1],0},f,right,up;AngleVectors(angles,f,right,up);
+        dir[0]=f[0];dir[1]=f[1];dir[3]=320.f*za::max(0.1f,vr_world_scale.value);
+    }
     r_framedata.lighttweak[0] = lighting::lightContrast();
     // How much the normal maps shade the baked light (from a direction the shader guesses from the lightmap).
     r_framedata.lighttweak[1] = za::clamp(vr_normalmap_baked.value, 0.f, 2.f);

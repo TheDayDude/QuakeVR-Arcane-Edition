@@ -98,6 +98,8 @@ QVR_TONE_GLSL
 "	uint	ShadowFlags; // QVR\n" \
 "	vec4	LightTweak; // QVR: lightmap contrast, the normal maps' share of the baked light, specular intensity, normal map strength\n" \
 "	vec4	Parallax; // QVR: parallax mapping: depth in units (0 off), the distance it ends at, the most steps; w specular anti-aliasing (vr_specular_aa, 0 off)\n" \
+"\tvec4 FrostOrigin[4];\n" \
+"\tvec4 FrostDirection[4];\n" \
 "	vec4	Water; // QVR: liquids (vr/vr_water.cpp): waves, fresnel, refraction (0: no scene to read), glints\n" \
 "	vec4	Water2; // QVR: lava glow, caustics (0 off), the eye in a liquid (1), unused\n" \
 "	vec4	CausticsOrigin; // QVR: xyz where the liquid volume (LiquidVolume) starts, in the world; w its cell size\n" \
@@ -141,6 +143,8 @@ QVR_TONE_GLSL
 "	uint	ShadowFlags;\n"\
 "	vec4	LightTweak;\n"\
 "	vec4	Parallax;\n"\
+"\tvec4 FrostOrigin[4];\n" \
+"\tvec4 FrostDirection[4];\n" \
 "	vec4	FrameWater; // QVR: the rest as FRAMEDATA_BUFFER's, up to SceneTone\n"\
 "	vec4	FrameWater2;\n"\
 "	vec4	FrameCausticsOrigin;\n"\
@@ -1316,8 +1320,28 @@ LIQUID_SWELL \
 "	const vec3 decal_mod = vec3(1.0);\n" \
 "#endif\n"
 
+#define QVR_FROST_SURFACE \
+"vec3 FrostSurface(vec3 color, vec3 position) {\n" \
+"    float coverage=0.0;\n" \
+"    for(int i=0;i<4;i++) {\n" \
+"        if(FrostOrigin[i].w<=0.0) continue;\n" \
+"        vec3 p=position-FrostOrigin[i].xyz;\n" \
+"        vec2 aim=FrostDirection[i].xy;\n" \
+"        float reach=FrostDirection[i].w;\n" \
+"        float along=dot(p.xy,aim);\n" \
+"        float side=abs(p.x*aim.y-p.y*aim.x);\n" \
+"        float edge=max(0.5,reach*0.00625);\n" \
+"        float mask=smoothstep(-edge,edge,along)*(1.0-smoothstep(reach-edge,reach,along));\n" \
+"        mask*=1.0-smoothstep(max(0.0,along*0.25-edge),max(edge,along*0.25),side);\n" \
+"        mask*=smoothstep(-2.0,0.0,p.z)*(1.0-smoothstep(reach*0.5-edge,reach*0.5,p.z));\n" \
+"        coverage=max(coverage,mask*FrostOrigin[i].w);\n" \
+"    }\n" \
+"    return mix(color,color*vec3(0.25,0.65,1.0)+vec3(0.04,0.45,1.1),coverage*0.35);\n" \
+"}\n"
+
 // detail, parallax, specular anti-aliasing, the baked light's bumps, the decals
 #define QVR_WORLD_FS_FUNCTIONS \
+QVR_FROST_SURFACE \
 DETAIL_FUNCTIONS \
 PARALLAX_FUNCTIONS \
 SPECULAR_AA_FUNCTIONS \
@@ -1866,6 +1890,7 @@ SPECULAR_AA_FUNCTIONS
 
 // per-pixel lights, normal maps, ambient, wounds, morphs
 #define QVR_ALIAS_FS_FUNCTIONS \
+QVR_FROST_SURFACE \
 "// QVR: dynamic lights per pixel (vr/vr_lighting.cpp), shaded by the angle (the normal bent by the normal map) and\n" \
 "// shadowed, as a multiplier of the texture (Quake adds radius - distance to the model's light, which is divided by\n" \
 "// 200, doubled for overbright models; by 128 on a par with the world); `spec` gets their sheen. n: the smooth normal.\n" \

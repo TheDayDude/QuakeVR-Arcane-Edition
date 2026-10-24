@@ -156,6 +156,7 @@ void(entity targ, entity inflictor, entity attacker, float damage, float checkar
 
 	// If target cannot take damage, no point doing damage
 	if (targ.takedamage == DAMAGE_NO) return;
+    if(targ.advr_grenade){if(damage>0)ADVR_GrenadeDamage(targ,attacker);return;}
 	
 	// Check for breakable/pushables being immune to monster damage
 	// This check is present in all projectiles functions instead

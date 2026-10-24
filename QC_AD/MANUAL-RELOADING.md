@@ -19,9 +19,11 @@ The console equivalent is `vr_reload_mode 3`; `vr_reload_mode 2` restores hip re
 5. B/Y on the weapon hand, or physically pressing the gun's red button, ejects
    its magazine or remaining ammunition. Partially used magazines keep their remaining rounds.
 
-Dropped ammunition can be picked up or force-grabbed. Held rounds are returned
-before changing maps or switching to simple reload mode. Abandoned rounds expire
-after three minutes; at most 48 loose reload props are retained.
+Dropped ammunition can be picked up or force-grabbed. Ordinary held reload rounds
+are returned before changing maps or switching to simple reload mode. Abandoned
+rounds expire after three minutes; at most 48 unarmed loose reload props are retained.
+Grenade traps do not use that expiry timer. Armed grenades always keep their fuse
+and cannot be refunded; held grenades remain usable in simple reload mode.
 
 | Weapon | Ammunition and insertion point |
 |---|---|
@@ -101,3 +103,27 @@ Ammo pouch attachment: the pouch and its grab point follow the avatar pelvis dir
 
 ## Super Shotgun breech controls
 Press the weapon-hand secondary button (B on the right controller) to open the breech. Flicking cannot open it. An ordinary flick closes an already-open breech, using the original sensitivity; pressing the button again leaves it open.
+
+## Hand grenades
+
+Grenades are 22% smaller and centered on the hand. Reserve grenades are visible in
+the rear grenade pouch and in the ammo pouch while holding the grenade launcher.
+
+- Grip the rear pouch with an empty hand to take a grenade, even without a launcher.
+  With the launcher in the other hand, the ammo pouch supplies the same grenade.
+- Press that hand's trigger to pull the pin. It starts the configured hand-grenade
+  fuse (2.5 seconds by default), with ticking, sparks and controller feedback.
+  Trigger does not launch it. Release grip to throw or drop it; with sticky grip,
+  press grip again. An armed grenade can explode while held.
+- An unarmed grenade can still load the launcher or be returned to a pouch. Leave
+  it elsewhere to make a trap: bullets, melee damage or an explosion set it off.
+  Armed grenades cannot be loaded or refunded.
+- Ogre grenades can be selected with an empty hand's trigger and force-pulled with
+  a flick, then caught with grip and thrown back. Their fuse continues during the
+  pull. The first catch grants at least the configured held-fuse time; repeated
+  catches do not reset it. Returning one uses player grenade damage and attribution.
+
+This is a selective adaptation of QuakeVR's grenade system at commit
+`699ce4757086acc4fbed949a5fd938879a99304d`, retaining AD's projectile effects,
+poison variants, damage rules and shared rocket-ammo accounting.
+

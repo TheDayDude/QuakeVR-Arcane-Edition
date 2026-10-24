@@ -844,6 +844,7 @@ QVR_WORLD_FS_LIGHT_SHADOW // QVR: a light's shadow and spot cone
 "	result.rgb += specular_light * specular_map * decal_mod; // QVR: (under the decals)\n"
 "	result.rgb += fullbright;\n"
 QVR_WORLD_FS_GLOW_LIQUID // QVR: force grab's glow; the liquid's look
+"\tresult.rgb = FrostSurface(result.rgb, in_pos);\n"
 "	result = clamp(result, vec4(0.0), vec4(vec3(SceneTone.x), 1.0)); // QVR: above 1 in the eyes' float scene (vr_tonemap)\n"
 "	result.rgb = ApplyFog(result.rgb, in_pos - EyePos);\n"
 "\n"
@@ -1406,7 +1407,7 @@ QVR_ALIAS_FS_LIGHT // QVR: wounds, normal maps, occlusion, the model's light
 "#else\n"
 "	result.rgb = mix(result.rgb, result.rgb * light, result.a);\n" // QVR: light: the model's own (QVR_ALIAS_FS_LIGHT)
 "#endif\n"
-"	result.rgb += spec; // QVR\n"
+"	result.rgb += instances[in_instance].Surface.w < 0. ? vec3(0.) : spec; // QVR: matte weapons omit artificial highlights\n"
 "	result.rgb += WoundSheen(wounds, bumped); // QVR: wet blood and water shine\n"
 "	result.rgb += ModelRimReflect(n, bumped, skin, result.a); // QVR: rim light and reflections (vr/vr_envmap.cpp)\n"
 "#if POSEVERTTYPE == 2 \n"
@@ -1424,6 +1425,7 @@ QVR_ALIAS_FS_LIGHT // QVR: wounds, normal maps, occlusion, the model's light
 "	vec3 fullbright = Retro > 0 ? RetroSample(FullbrightTex, uv, duvdx, duvdy, false).rgb : textureGrad(FullbrightTex, uv, duvdx, duvdy).rgb; // QVR: uv moved by parallax mapping; retro textures\n"
 "#endif\n"
 QVR_ALIAS_FS_GLOW // QVR: fullbrights, wounds' glow, force grab's glow, morphs
+"\tresult.rgb = FrostSurface(result.rgb, in_pos + EyePos);\n"
 "	result.rgb = clamp(result.rgb, 0.0, SceneTone.x); // QVR: above 1 in the eyes' float scene (vr_tonemap)\n"
 "	float fog = exp2(abs(Fog.w) * -dot(in_pos, in_pos));\n"\
 "	fog = clamp(fog, 0.0, 1.0);\n"

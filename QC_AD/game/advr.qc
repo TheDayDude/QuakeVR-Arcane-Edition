@@ -310,7 +310,7 @@ void(float h) ADVR_Touch = {
         nearest_z=bound(p.absmin_z,pos_z,p.absmax_z);
         traceline(pos,nearest,TRUE,self);
         if (trace_fraction == 1 && vlen(nearest-pos)<12) {
-            if(p.classname=="advr_reload_round" && !p.advr_round_holder && time>=p.advr_cooldown){ADVR_ManualCatch(p,h);return;}
+            if(p.classname=="advr_reload_round" && !p.fg_state && !p.advr_round_holder && time>=p.advr_cooldown){ADVR_ManualCatch(p,h);return;}
             if (p.classname == "advr_dropped_weapon" && !(p.owner==self && time<p.advr_cooldown)) { ADVR_Catch(p,h); return; }
             if ((p.flags & FL_ITEM) && p.touch && p.solid == SOLID_TRIGGER) {
                 previous=self.weapon;

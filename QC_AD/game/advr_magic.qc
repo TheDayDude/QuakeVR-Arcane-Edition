@@ -281,33 +281,36 @@ void(vector at,vector direction) ADVR_FrostLaunch = {
 // Brief light emitters placed only along the unobstructed cast volume.
 void() ADVR_FrostLightThink = {
     if(time>=self.advr_enchant_until){remove(self);return;}
-    self.alpha=max(0.01,(self.advr_enchant_until-time)/1.25);self.nextthink=time+0.05;
+    self.alpha=bound(0.01,(self.advr_enchant_until-time)/1.0,1);self.nextthink=time+0.05;
 };
 void(vector at,vector aim,float reach) ADVR_FrostLight = {
     local entity glow;
     glow=spawn();glow.classname="advr_frost_cone_light";glow.owner=self;
     glow.movetype=MOVETYPE_NONE;glow.solid=SOLID_NOT;
-    // An invisible network anchor for one shadowed, per-pixel cone light.
+    // An invisible network anchor for the per-pixel Frost volume overlay.
     setmodel(glow,"progs/advr_frostbolt.mdl");glow.alpha=1;
     setorigin(glow,at);glow.angles=vectoangles(aim);glow.angles_x=-glow.angles_x;
-    glow.advr_enchant_until=time+1.25;glow.think=ADVR_FrostLightThink;glow.nextthink=time+0.05;
+    glow.advr_enchant_until=time+3;glow.think=ADVR_FrostLightThink;glow.nextthink=time+0.05;
 };
-// 30-degree total cone, thirty physical feet at the configured world scale.
+// Ground fan: 40 feet long, 20 feet wide at its end, floor to 20 feet high.
 void(vector at,vector direction) ADVR_FrostCone = {
-    local entity e,fx;local vector delta,aim,tip;local float reach,d,i;
-    aim=normalize(direction);reach=240*max(0.1,cvar("vr_world_scale"));
+    local entity e,fx;local vector delta,aim,tip;local float reach,d,i,side;
+    direction_z=0;aim=normalize(direction);reach=320*max(0.1,cvar("vr_world_scale"));
+    traceline(self.origin,self.origin-'0 0 128',TRUE,self);
+    if(trace_fraction<1)at=trace_endpos;else at=self.origin+'0 0 -24';
+    at_z=at_z+0.1;
     ADVR_FrostLight(at,aim,reach);
     fx=spawn();fx.owner=self;fx.advr_frostbolt=1;setorigin(fx,at);
     e=world;
     while((e=nextent(e))){
         if(e==self || !(e.flags & FL_MONSTER) || e.health<=0 || !e.takedamage)continue;
-        delta=modelcentre(e)-at;d=vlen(delta);
-        if(d>reach || (d>0 && normalize(delta)*aim<0.9659258))continue;
-        traceline(at,modelcentre(e),TRUE,self);if(trace_fraction<1)continue;
+        delta=modelcentre(e)-at;d=delta*aim;side=fabs(delta_x*aim_y-delta_y*aim_x);
+        if(d<0 || d>reach || side>d*0.25 || delta_z< -2 || delta_z>reach*0.5)continue;
+        traceline(ADVR_Head(self),modelcentre(e),TRUE,self);if(trace_fraction<1)continue;
         ADVR_FrostHit(e);
         T_Damage(e,fx,self,16*ADVR_MagicMultiplier()*ADVR_FireResistance(e),DAMARMOR);
     }
-    sound(self,CHAN_WEAPON,"weapons/lhit.wav",0.6,ATTN_NORM);remove(fx);
+    sound(self,CHAN_WEAPON,"ambience/windgust1.wav",0.7,ATTN_NORM);remove(fx);
 };
 
 // Pending infusion belongs to a particular book, weapon and controller.
@@ -548,7 +551,7 @@ void() ADVR_MagicFrame = {
                 at=trace_endpos;newmis=world;
                 if(self.advr_spell==4){makevectors(ADVR_Angles(h));ADVR_VoidLaunch(at,dir,v_forward);}
                 else if(self.advr_spell==3)ADVR_AcidLaunch(at,dir);
-                else if(self.advr_spell==2){ADVR_FrostCone(at,dir);ADVR_SpendMana(1);haptic(h,0,0.12,85,0.6);ADVR_MagicClear();return;}
+                else if(self.advr_spell==2){dir=self.v_viewangle;dir_x=dir_z=0;makevectors(dir);ADVR_FrostCone(at,v_forward);ADVR_SpendMana(1);haptic(h,0,0.12,85,0.6);ADVR_MagicClear();return;}
                 else Launch_Missile(at,dir,'0 0 0',CT_PROJ_FIRETOP,550);
                 if(newmis) {
                     setsize(newmis,'-4 -4 -4','4 4 4');

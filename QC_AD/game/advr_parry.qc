@@ -152,10 +152,10 @@ entity(entity e) ADVR_Thrower = {
 };
 float(entity e) ADVR_CanDeflect = {
     if(e.advr_deflected || e.touchedvoid || e.solid==SOLID_NOT || e.solid==SOLID_TRIGGER ||
-       e.takedamage || !(ADVR_Thrower(e).flags & FL_MONSTER) || e.classtype==CT_PROJ_MEGG)return 0;
+       (e.takedamage && !e.advr_grenade) || !(ADVR_Thrower(e).flags & FL_MONSTER) || e.classtype==CT_PROJ_MEGG)return 0;
     if(e.movetype!=MOVETYPE_FLYMISSILE && e.movetype!=MOVETYPE_FLY && e.movetype!=MOVETYPE_BOUNCE)return 0;
     return e.touch==Touch_Bullet || e.touch==Touch_Projectile || e.touch==Touch_PlasmaProjectile ||
-           e.touch==Touch_Missile || e.touch==Touch_HomingMissile || e.touch==Touch_Grenade;
+           e.touch==Touch_Missile || e.touch==Touch_HomingMissile || e.touch==Touch_Grenade || e.advr_grenade;
 };
 
 // Save swept weapon segments at 40 Hz for the original short batting window.
@@ -221,6 +221,7 @@ float(entity e,float h) ADVR_BatProjectile = {
     e.velocity=normalize(vel)*speed;e.angles=vectoangles(e.velocity);
     e.advr_projectile_payload=thrower.pos2;e.advr_thrower_class=thrower.classtype;
     e.owner=self;e.enemy=thrower;e.advr_deflected=1;e.flags=e.flags-(e.flags & FL_ONGROUND);
+    if(e.advr_grenade)e.advr_grenade_attacker=self;
     if(e.touch==Touch_HomingMissile)e.oldenemy=self;
     e.attack_speed=speed;e.attack_track=normalize(e.velocity);e.attack_origin=thrower.origin;
     e.finalangle=normalize(e.velocity);e.mangle=e.velocity;

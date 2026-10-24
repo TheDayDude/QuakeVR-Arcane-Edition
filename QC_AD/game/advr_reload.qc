@@ -17,6 +17,8 @@ void() ADVR_ManualPrecache = {
     precache_model("progs/vr_mag_light.mdl");precache_model("progs/vr_round_rocket.mdl");
     precache_model("progs/vrpouch_ammo.mdl");precache_model("progs/grenade.mdl");
     precache_model("progs/advr_reload_bolt.mdl");
+    precache_model("progs/advr_handgrenade.mdl");
+    precache_sound("vr/grenade_pin.wav");precache_sound("vr/grenade_fuse.wav");precache_sound("vr/grenade_tick.wav");precache_sound("vr/grenade_pouch.wav");
     precache_sound("vr/reload_shell_in.wav");precache_sound("vr/reload_pouch.wav");
     precache_sound("vr/reload_mag_out.wav");precache_sound("vr/reload_mag_in.wav");
     precache_sound("gunclick.wav");precache_sound("vr/reload_full.wav");precache_sound("vr/reload_empty.wav");
@@ -32,11 +34,11 @@ void(entity p) ADVR_ManualModel = {
     }else if(p.advr_round_type==4)setmodel(p,"progs/vr_mag_light.mdl");
     else if(p.advr_round_type==5)setmodel(p,"progs/advr_reload_bolt.mdl");
     else if(p.advr_round_weapon==IT_ROCKET_LAUNCHER)setmodel(p,"progs/vr_round_rocket.mdl");
-    else setmodel(p,"progs/grenade.mdl");
+    else setmodel(p,"progs/advr_handgrenade.mdl");
     setsize(p,'-2 -2 -2','2 2 2');
 };
 void() ADVR_ManualThink = {
-    if(self.advr_round_holder)return;
+    if(self.advr_round_holder || self.advr_grenade)return;
     if(time>=self.advr_round_expire){remove(self);return;}
     self.nextthink=time+1;
 };
@@ -44,22 +46,26 @@ entity(entity r,float n) ADVR_ManualProp = {
     local entity p,e,old;local float count;
     // Bound abandoned props without ever deleting something held or force-pulled.
     e=find(world,classname,"advr_reload_round");
-    while(e){if(!e.advr_round_holder && !e.fg_state){count=count+1;if(!old || e.advr_round_expire<old.advr_round_expire)old=e;}e=find(e,classname,"advr_reload_round");}
+    while(e){if(!e.advr_round_holder && !e.fg_state && !e.advr_grenade_fuse){count=count+1;if(!old || e.advr_round_expire<old.advr_round_expire)old=e;}e=find(e,classname,"advr_reload_round");}
     if(count>=48 && old)remove(old);
     p=spawn();p.classname="advr_reload_round";p.advr_round_count=n;
     p.advr_round_kind=r.advr_kind;
     p.advr_round_type=ADVR_ManualType(r);p.advr_round_weapon=r.advr_weapon;
     p.advr_round_expire=time+180;p.think=ADVR_ManualThink;p.nextthink=time+1;
     p.movetype=MOVETYPE_BOUNCE;p.solid=SOLID_BBOX;p.vr_rigid=1;p.gravity=1;
-    ADVR_ManualModel(p);return p;
+    ADVR_ManualModel(p);
+    if(p.advr_round_type==3 && p.advr_round_weapon==IT_GRENADE_LAUNCHER)ADVR_GrenadeSetup(p,0);
+    return p;
 };
 void(entity p,float h) ADVR_ManualCatch = {
-    if(!p || p.classname!="advr_reload_round")return;
+    if(!p || !p.modelindex || p.state==STATE_DISABLED || p.classname!="advr_reload_round")return;
+    if(self.health<=0 || self.advr_elder_until>time || (self.advr_magic_book && self.advr_magic_hand==h))return;
     if(ADVR_Hand(h) || ADVR_HandBusy(h) || p.advr_round_holder)return;
     self.advr_round[h]=p;self.advr_round_grip[h]=ADVR_Grip(h);p.advr_round_holder=self;p.owner=self;
     p.movetype=MOVETYPE_NONE;p.solid=SOLID_NOT;p.vr_rigid=0;
     p.velocity=p.avelocity=p.vr_spin='0 0 0';p.nextthink=0;
     setorigin(p,ADVR_Pos(h));p.angles=ADVR_Angles(h);p.angles_x=-p.angles_x;
+    if(p.advr_grenade)ADVR_GrenadeCaught(p,h);
     haptic(h,0,0.05,70,0.35);
 };
 void(float h,float refund) ADVR_ManualRelease = {
@@ -67,6 +73,7 @@ void(float h,float refund) ADVR_ManualRelease = {
     p=self.advr_round[h];if(!p)return;
     self.advr_round[h]=world;self.advr_round_guard[h]=time+0.2;
     p.advr_round_holder=world;
+    if(p.advr_grenade_fuse>0)refund=0;
     if(refund){
         if(p.advr_round_type==5)self.advr_bolts=self.advr_bolts+p.advr_round_count;
         else ADVR_SetAmmo(p.advr_round_weapon,ADVR_Ammo(p.advr_round_weapon)+p.advr_round_count);
@@ -77,6 +84,7 @@ void(float h,float refund) ADVR_ManualRelease = {
     if(h){vel=self.handthrowvel;p.vr_spin=self.handavel;}else{vel=self.offhandthrowvel;p.vr_spin=self.offhandavel;}
     p.velocity=vel*26.246719*max(0.01,cvar("vr_world_scale"));p.avelocity=p.vr_spin*57.29578;
     p.think=ADVR_ManualThink;p.nextthink=time+1;setorigin(p,p.origin);
+    if(p.advr_grenade)ADVR_GrenadeReleased(p);
 };
 void() ADVR_ManualRefund = {ADVR_ManualRelease(0,1);ADVR_ManualRelease(1,1);};
 void(float h) ADVR_ManualTake = {
@@ -139,7 +147,7 @@ void(float h) ADVR_SsgToggle = {
 float(float h) ADVR_ManualInsert = {
     local entity r,p;local float n,t;
     p=self.advr_round[h];r=ADVR_Hand(1-h);t=ADVR_ManualType(r);
-    if(!p || !t || p.advr_round_type!=t || time<r.advr_reload_until)return 0;
+    if(!p || p.advr_grenade_fuse>0 || !t || p.advr_round_type!=t || time<r.advr_reload_until)return 0;
     if(ADVR_ManualSsg(r) && !r.advr_ssg_open)return 0;
     if(t==1 && ((r.advr_kind==ADVR_WIDOWMAKER)!=(p.advr_round_kind==ADVR_WIDOWMAKER)))return 0;
     // Magazines and launcher rounds have different shapes and are not interchangeable.
@@ -162,25 +170,30 @@ float(float h) ADVR_ManualInsert = {
 };
 void() ADVR_ManualFrame = {
     local float h,near,grip,old,release,secondary,flick,reach;local entity p;local vector pos;
-    if(cvar("vr_reload_mode")!=3){ADVR_ManualRefund();return;}
+    // Hand grenades remain available with either reload mode.
+    if(cvar("vr_reload_mode")!=3){for(h=0;h<2;h=h+1)if(self.advr_round[h] && !self.advr_round[h].advr_grenade)ADVR_ManualRelease(h,1);}
     for(h=0;h<2;h=h+1){
         if(h)secondary=(self.vrbits0 & 1048576)!=0;else secondary=(self.vrbits0 & 524288)!=0;
         if(h)flick=(self.vrbits0 & 4096) && !(self.vrbits0 & 8192);
         else flick=(self.vrbits0 & 1024) && !(self.vrbits0 & 2048);
-        if(ADVR_ManualSsg(ADVR_Hand(h))){
-            if((ADVR_Hand(h).advr_ssg_open && flick) || (!ADVR_Hand(h).advr_ssg_open && secondary && !self.advr_round_secondary[h]))ADVR_SsgToggle(h);
-        }else if(secondary && !self.advr_round_secondary[h])ADVR_ManualEject(h);
+        if(cvar("vr_reload_mode")==3){
+            if(ADVR_ManualSsg(ADVR_Hand(h))){
+                if((ADVR_Hand(h).advr_ssg_open && flick) || (!ADVR_Hand(h).advr_ssg_open && secondary && !self.advr_round_secondary[h]))ADVR_SsgToggle(h);
+            }else if(secondary && !self.advr_round_secondary[h])ADVR_ManualEject(h);
+        }
         self.advr_round_secondary[h]=secondary;
         pos=ADVR_Pos(h);grip=ADVR_Grip(h);old=self.advr_round_grip[h];self.advr_round_grip[h]=grip;
-        near=vlen(pos-self.ammopouchpos)<max(2,cvar("vr_ad_reload_pouch_reach"));
+        near=(cvar("vr_reload_mode")==3 && vlen(pos-self.ammopouchpos)<max(2,cvar("vr_ad_reload_pouch_reach")));
+        if((h && self.mainhand_hotspot==11) || (!h && self.offhand_hotspot==11))near=2;
         if(grip && !old){dprint("RELOAD GRIP h=");dprint(ftos(h));dprint(" distance=");dprint(ftos(vlen(pos-self.ammopouchpos)));dprint(" busy=");dprint(ftos(ADVR_HandBusy(h)));dprint(" gun=");dprint(ftos(ADVR_ManualType(ADVR_Hand(1-h))));dprint("\n");}
         p=self.advr_round[h];
         if(p){
             makevectors(ADVR_Angles(h));setorigin(p,pos);p.angles=ADVR_Angles(h);p.angles_x=-p.angles_x;
+            if(p.advr_grenade)ADVR_GrenadeHeld(p,h);
             release=0;
             if(cvar("vr_weapon_grip_mode")==1){if(grip && !old)release=1;}
             else if(!grip && old)release=1;
-            if(release && near){ADVR_ManualRelease(h,1);sound(self,CHAN_AUTO,"vr/reload_pouch.wav",0.4,ATTN_NORM);}
+            if(release && near && !p.advr_grenade_fuse){ADVR_ManualRelease(h,1);sound(self,CHAN_AUTO,"vr/reload_pouch.wav",0.4,ATTN_NORM);}
             else {
                 traceline(pos,ADVR_ManualPort(1-h),TRUE,self);
                 reach=max(2,cvar("vr_ad_reload_port_reach"));
@@ -190,8 +203,8 @@ void() ADVR_ManualFrame = {
                 if(self.advr_round[h] && release)ADVR_ManualRelease(h,0);
             }
         }else if(near && !ADVR_Hand(h) && !ADVR_HandBusy(h) && !self.advr_magic_book && !ADVR_FGPulled(h) && ragdollheld(self,h)<=0){
-            if(!self.advr_round_hover[h] && ADVR_ManualType(ADVR_Hand(1-h)))haptic(h,0,0.04,65,0.25);
-            if(grip && !old)ADVR_ManualTake(h);
+            if(!self.advr_round_hover[h] && (near==2 || ADVR_ManualType(ADVR_Hand(1-h))))haptic(h,0,0.04,65,0.25);
+            if(grip && !old){if(near==2)ADVR_GrenadeTake(h);else ADVR_ManualTake(h);}
         }
         self.advr_round_hover[h]=near;
     }

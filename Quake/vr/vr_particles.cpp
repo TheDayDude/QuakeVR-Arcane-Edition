@@ -1810,6 +1810,22 @@ void netherFlames(const glm::vec3& from, const glm::vec3& to, float scale, float
     },false);
 }
 
+// Faint drifting ice mist, independent of the blue surface mask and damage.
+void frostWind(const glm::vec3& at,const glm::vec3& aim,float reach,float alpha)
+{
+    if(!vr_particles.value || !r_particles.value || !ensureAtlas())return;
+    const float dt=static_cast<float>(CLAMP(0.0,cl.time-cl.oldtime,0.05));
+    const glm::vec3 side{-aim.y,aim.x,0.f};
+    make(55.f*dt*alpha+rnd(0.f,1.f),[&](Particle& p,int){
+        const float along=rnd(0.05f,0.8f)*reach;
+        p.cell=CellSmoke;p.type=Custom;p.additive=false;
+        p.org=at+aim*along+side*rnd(-along*.22f,along*.22f)+glm::vec3{0,0,rnd(3.f,reach*.25f)};
+        p.vel=aim*(reach*.3f)+side*rnd(-4.f,4.f);
+        p.scale=rnd(4.f,8.f);p.color=glm::vec4{.65f,.8f,1.f,.13f*alpha};
+        p.die=cl.time+.45;p.fade=-.3f;p.grow=5.f;p.angle=rnd(0.f,6.28f);p.spin=.15f;
+    },false);
+}
+
 // Incandescent physical chunks leave short flame tongues and slower, lingering smoke.
 void explosionDebrisTrail(const glm::vec3& from, const glm::vec3& to, float size, float heat)
 {

@@ -29,13 +29,14 @@ void(float h) ADVR_NetherCast = {
     sprint(self,"Hell Sword: 70 seconds. Grip with both hands and swing firmly to slash with fire!\n");ADVR_Sync();
 };
 void() ADVR_NetherArcThink = {
-    local vector from,to,a,b,at;local entity victim;local float i;
+    local vector from,to,a,b,at,rot,right,up;local entity victim;local float i,j;
     if(time>=self.attack_finished || !self.owner || self.owner.health<=0){remove(self);return;}
     from=self.origin;to=from+self.velocity*0.025;
-    // Five parallel sweeps cover the visible blade. Validate each start from the
-    // previous centre so neither the width nor a thin wall can bypass occlusion.
-    for(i=-2;i<=2;i=i+1){
-        a=from+self.movedir*(i*10);b=to+self.movedir*(i*10);
+    // Cover the upright rune's width and height, checking the path to each sample
+    // so a broad projectile cannot bypass a wall beside its centre.
+    rot=self.angles;rot_x=-rot_x;makevectors(rot);right=v_right;up=v_up;
+    for(i=-1;i<=1;i=i+1)for(j=-2;j<=2;j=j+1){
+        a=from+right*(i*13)+up*(j*10);b=to+right*(i*13)+up*(j*10);
         traceline(from,a,FALSE,self.owner);
         if(trace_fraction==1)traceline(a,b,FALSE,self.owner);
         if(trace_fraction<1){
@@ -58,7 +59,7 @@ entity(vector at,vector dir,vector swing) ADVR_NetherArc = {
     basis_x=side*v_right;basis_y=side*v_up;basis_z=0;basis=vectoangles(basis);rot_z=basis_y;
     p=spawn();p.classname="advr_nether_arc";p.owner=self;p.solid=SOLID_NOT;p.movetype=MOVETYPE_NONE;
     setmodel(p,"progs/advr_nether_arc.mdl");setsize(p,'0 0 0','0 0 0');setorigin(p,at);
-    p.angles=rot;p.movedir=side;p.velocity=dir*480;p.advr_magic_damage=ADVR_MagicMultiplier();
+    rot_x=-rot_x;p.angles=rot;p.movedir=side;p.velocity=dir*480;p.advr_magic_damage=ADVR_MagicMultiplier();
     p.advr_enchant_type=1;p.advr_enchant_until=time+2;p.attack_finished=time+1.5;
     p.alpha=0.85;p.think=ADVR_NetherArcThink;p.nextthink=time+0.025;
     sound(self,CHAN_WEAPON,"hknight/attack1.wav",0.8,ATTN_NORM);return p;
@@ -76,19 +77,19 @@ void(float h,vector tip,vector velocity,float speed,float dt,float hit) ADVR_Net
     // Reject a wind-up before it contributes time or distance. Require motion
     // away from the torso, so a fast return stroke cannot fire an arc.
     head=ADVR_Head(self)-'0 0 12';
-    if(velocity*normalize(ADVR_Pos(h)-head)<0.65){
+    if(velocity*normalize(ADVR_Pos(h)-head)<0.05){
         r.advr_nether_ready=1;r.advr_nether_travel=0;r.advr_nether_swingtime=0;r.advr_nether_plane='0 0 0';r.advr_nether_swing=swing;return;
     }
     if(speed<1 || swing*r.advr_nether_swing < -0.3){r.advr_nether_ready=1;r.advr_nether_travel=0;r.advr_nether_swingtime=0;r.advr_nether_plane='0 0 0';}
     if(hit){r.advr_nether_ready=0;r.advr_nether_travel=0;r.advr_nether_swingtime=0;r.advr_nether_plane='0 0 0';r.advr_nether_swing=swing;return;}
     if(!r.advr_nether_ready || dt<=0 || dt>=0.1 || time<r.advr_nether_next)return;
-    if(speed<3 || speed>20 || (h && vlen(self.handvel)<0.8) || (!h && vlen(self.offhandvel)<0.8)){
+    if(speed<2.2 || speed>20 || (h && vlen(self.handvel)<0.55) || (!h && vlen(self.offhandvel)<0.55)){
         r.advr_nether_travel=0;r.advr_nether_swingtime=0;r.advr_nether_plane='0 0 0';return;
     }
     r.advr_nether_swing=swing;r.advr_nether_swingtime=r.advr_nether_swingtime+dt;
     r.advr_nether_plane=r.advr_nether_plane+velocity*dt;
     r.advr_nether_travel=r.advr_nether_travel+speed*dt*26.246719*max(0.01,cvar("vr_world_scale"));
-    if(speed<4.5 || r.advr_nether_swingtime<0.1 || r.advr_nether_travel<12*max(0.01,cvar("vr_world_scale")))return;
+    if(speed<2.8 || r.advr_nether_swingtime<0.1 || r.advr_nether_travel<8*max(0.01,cvar("vr_world_scale")))return;
     head=ADVR_Head(self);if(vlen(ADVR_Pos(h)-head)>100)return;
     makevectors(self.v_viewangle);dir=v_forward;
     traceline(head,head+dir*2048,FALSE,self);target=trace_endpos;
@@ -177,7 +178,7 @@ void() ADVR_TestNetherAim = {
     for(i=0;i<8;i=i+1)ADVR_NetherSwing(1,self.handpos,'5 3 0',6,.025,0);
     ADVR_Assert(!find(world,classname,"advr_nether_arc"),"one-handed swings never launch arcs");
     ADVR_SetHand(0,world);self.vrbits0=self.vrbits0 | 32;
-    for(i=0;i<8;i=i+1)ADVR_NetherSwing(1,self.handpos,'0 3.2 0',3.2,.025,0);
+    for(i=0;i<8;i=i+1)ADVR_NetherSwing(1,self.handpos,'0 2 0',2,.025,0);
     ADVR_Assert(!find(world,classname,"advr_nether_arc"),"gentle two-handed sweeps do not launch");
     for(i=0;i<8;i=i+1)ADVR_NetherSwing(1,self.handpos,'-6 0 0',6,.025,0);
     ADVR_Assert(!find(world,classname,"advr_nether_arc"),"fast inward windup never fires");
@@ -190,6 +191,13 @@ void() ADVR_TestNetherAim = {
     ADVR_Assert(fabs(p.movedir*normalize(p.velocity))<.01,"slash plane remains perpendicular to flight");remove(p);
     for(i=0;i<8;i=i+1)ADVR_NetherSwing(1,self.handpos,'0 4 0',4,.025,0);
     ADVR_Assert(!find(world,classname,"advr_nether_arc"),"one arc per swing and cooldown");
+    // Lower-speed horizontal and diagonal cuts retain the outward safeguard.
+    r.advr_nether_next=0;ADVR_NetherSwing(1,self.handpos,'0 0 0',0,.025,0);
+    for(i=0;i<6;i=i+1)ADVR_NetherSwing(1,self.handpos,'0.2 3 0',3.01,.025,0);
+    p=find(world,classname,"advr_nether_arc");ADVR_Assert(p!=world,"moderate horizontal cut launches rune");remove(p);
+    r.advr_nether_next=0;ADVR_NetherSwing(1,self.handpos,'0 0 0',0,.025,0);
+    for(i=0;i<6;i=i+1)ADVR_NetherSwing(1,self.handpos,'0.3 2.2 2.2',3.13,.025,0);
+    p=find(world,classname,"advr_nether_arc");ADVR_Assert(p!=world,"moderate diagonal cut launches rune");remove(p);
     player=self;job=find(world,classname,"advr_nether_timer");r.advr_nether_until=time;self=job;ADVR_NetherExpire();self=player;
     self.v_viewangle=oldview;self.v_angle=oldaim;ADVR_TestMagicView();
     bprint("ADVR NETHER AIM PASS: headset aim, stable launch, two-hand gate, firm sweep, plane, cooldown\n");

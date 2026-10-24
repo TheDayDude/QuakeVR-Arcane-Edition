@@ -591,6 +591,10 @@ void() ADVR_TestSightMagic = {
     ADVR_FrostCone(at,'1 0 0');ADVR_Assert(v.health<1000 && v.advr_frost_until>time,"cone damages and slows in front");
     before=v.health;setorigin(v,at+'0 50 0');ADVR_FrostCone(at,'1 0 0');ADVR_Assert(v.health==before,"cone excludes side targets");
     setorigin(v,at+'-50 0 0');ADVR_FrostCone(at,'1 0 0');ADVR_Assert(v.health==before,"cone excludes rear targets");
+    setorigin(v,self.origin+'120 20 0');before=v.health;ADVR_FrostCone(at,'1 0 0');ADVR_Assert(v.health<before,"ground fan includes its widening interior");
+    before=v.health;setorigin(v,self.origin+'240 40 0');ADVR_FrostCone(at,'1 0 0');ADVR_Assert(v.health<before,"expanded cone reaches beyond old twenty-foot limit");
+    before=v.health;setorigin(v,self.origin+'120 40 0');ADVR_FrostCone(at,'1 0 0');ADVR_Assert(v.health==before,"ground fan excludes outside its width");
+    setorigin(v,self.origin+'80 0 200');ADVR_FrostCone(at,'1 0 0');ADVR_Assert(v.health==before,"ground fan excludes above twenty feet");
     setorigin(v,at+'2000 0 0');ADVR_FrostCone(at,'1 0 0');ADVR_Assert(v.health==before,"cone excludes distant targets");remove(v);
     frametime=oldframe;ADVR_Sync();bprint("ADVR SIGHT MAGIC PASS\n");
 };
@@ -617,9 +621,17 @@ void() ADVR_TestFrostSsg = {
     at=ADVR_Head(self);ADVR_FrostLight(at,normalize('1 0 -1'),240);e=find(world,classname,"advr_frost_cone_light");
     ADVR_Assert(e && !find(e,classname,"advr_frost_cone_light"),"Frost uses one cone anchor rather than three balls");
     makevectors(e.angles);ADVR_Assert(v_forward*normalize('1 0 -1')>0.99,"cone illumination follows cast direction including pitch");
-    ADVR_Assert(e.origin==at && e.advr_enchant_until==time+1.25,"cone origin and readable fade duration");
+    ADVR_Assert(e.origin==at && e.advr_enchant_until==time+3,"cone origin and readable fade duration");
     remove(e);cvar_set("vr_reload_mode",ftos(oldmode));ADVR_TestMagicView();
     bprint("ADVR FROST SSG PASS: button-only open, flick-only close, single directional cone\n");
 };
 
 
+
+void() ADVR_TestFrostVolumeView = {
+    local vector ang;local entity e;
+    ADVR_TestMagicView();ang=self.v_viewangle;ang_x=ang_z=0;makevectors(ang);
+    ADVR_FrostCone(self.origin,v_forward);
+    e=find(world,classname,"advr_frost_cone_light");e.advr_enchant_until=time+15;
+    bprint("ADVR FROST VOLUME VIEW\n");
+};

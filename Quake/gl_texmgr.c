@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "quakedef.h"
 #include "glquake.h"
+#include "texture_mip.h"
 
 typedef struct {
 	GLenum		id;
@@ -1106,6 +1107,8 @@ static unsigned *TexMgr_MipMapW (unsigned *data, int width, int height, int dept
 
 	if (!data)
 		return NULL;
+	if (width & 1)
+		return TexMip_OddAxis(data, width, height, depth, 0);
 
 	out = in = (byte *)data;
 	size = ((width*height)>>1)*depth;
@@ -1153,6 +1156,8 @@ static unsigned *TexMgr_MipMapH (unsigned *data, int width, int height, int dept
 
 	if (!data)
 		return NULL;
+	if (height & 1)
+		return TexMip_OddAxis(data, width, height, depth, 1);
 
 	out = in = (byte *)data;
 	height>>=1;

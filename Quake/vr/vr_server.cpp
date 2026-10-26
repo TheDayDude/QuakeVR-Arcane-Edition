@@ -525,6 +525,8 @@ extern "C" void VR_ReadMoveExtras(client_t* client)
     setFieldVec(ent, f.muzzlepos, move.muzzlePos[1]);
     setFieldVec(ent, f.loadportpos, move.loadPort[1]);
     setFieldVec(ent, f.offloadportpos, move.loadPort[0]);
+    setFieldVec(ent,f.chargehome,move.chargeHome[1]);setFieldVec(ent,f.chargeback,move.chargeBack[1]);
+    setFieldVec(ent,f.offchargehome,move.chargeHome[0]);setFieldVec(ent,f.offchargeback,move.chargeBack[0]);
     setFieldVec(ent, f.ammopouchpos, move.ammoPouch);
     setFieldVec(ent,f.advr_holsterpos0,move.holsterPos[0]);
     setFieldVec(ent,f.advr_holsterpos1,move.holsterPos[1]);
@@ -891,6 +893,7 @@ void dumpPlayer_f()
     vec("handvel", f.handvel);
     vec("headpos", f.headpos);
     vec("muzzlepos", f.muzzlepos);
+    vec("chargehome",f.chargehome);vec("chargeback",f.chargeback);vec("offchargehome",f.offchargehome);vec("offchargeback",f.offchargeback);
     vec("loadportpos", f.loadportpos);vec("offloadportpos", f.offloadportpos);vec("ammopouchpos", f.ammopouchpos);
     vec("offhandpos", f.offhandpos);
     vec("offmuzzlepos", f.offmuzzlepos);
@@ -927,7 +930,7 @@ void rebaseHands(edict_t* player)
 
     VrMove& move = m->move;
     const FieldOffsets& f = fields();
-    for(const int ofs : {f.handpos, f.offhandpos, f.muzzlepos, f.offmuzzlepos, f.handthrowpos, f.offhandthrowpos, f.headpos, f.loadportpos, f.offloadportpos, f.ammopouchpos})
+    for(const int ofs : {f.handpos, f.offhandpos, f.muzzlepos, f.offmuzzlepos, f.handthrowpos, f.offhandthrowpos, f.headpos, f.loadportpos, f.offloadportpos, f.ammopouchpos, f.chargehome, f.chargeback, f.offchargehome, f.offchargeback})
     {
         setFieldVec(player, ofs, fieldVec(player, ofs) + delta);
     }
@@ -939,6 +942,7 @@ void rebaseHands(edict_t* player)
     }
     move.muzzlePos[0] += delta;
     move.muzzlePos[1] += delta;
+    for(int h=0;h<2;++h){move.chargeHome[h]+=delta;move.chargeBack[h]+=delta;}
     move.loadPort[0] += delta;move.loadPort[1] += delta;move.ammoPouch += delta;
     for(auto& p:move.holsterPos)p+=delta;
     move.headPos += delta;
@@ -1157,7 +1161,14 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "slipview")) fixture = "ADVR_TestSlipView";
         else if(!strcmp(Cmd_Argv(1), "earth")) fixture = "ADVR_TestEarth";
         else if(!strcmp(Cmd_Argv(1), "grenades")) fixture = "ADVR_TestGrenades";
+        else if(!strcmp(Cmd_Argv(1), "classicview")) fixture = "ADVR_TestClassicView";
+        else if(!strcmp(Cmd_Argv(1), "gripview")) fixture = "ADVR_TestGripView";
+        else if(!strcmp(Cmd_Argv(1), "chargeinput")) fixture = "ADVR_TestChargeInput";
+        else if(!strcmp(Cmd_Argv(1), "chargecheck")) fixture = "ADVR_TestChargeInputCheck";
+        else if(!strcmp(Cmd_Argv(1), "charging")) fixture = "ADVR_TestCharging";
         else if(!strcmp(Cmd_Argv(1), "manualreload")) fixture = "ADVR_TestManualReload";
+        else if(!strcmp(Cmd_Argv(1), "shotinput")) fixture = "ADVR_TestShotInput";
+        else if(!strcmp(Cmd_Argv(1), "shotcheck")) fixture = "ADVR_TestShotCheck";
         else if(!strcmp(Cmd_Argv(1), "ssginput")) fixture = "ADVR_TestSsgInput";
         else if(!strcmp(Cmd_Argv(1), "ssgopencheck")) fixture = "ADVR_TestSsgOpenCheck";
         else if(!strcmp(Cmd_Argv(1), "ssgloadcheck")) fixture = "ADVR_TestSsgLoadedCheck";
@@ -1496,6 +1507,17 @@ void adGrabDefaults()
 cvar_t adBurnChance{"advr_burn_explosion_chance", "0.3", CVAR_ARCHIVE};
 cvar_t adFlashlightVersion{"advr_flashlight_version", "0", CVAR_ARCHIVE};
 cvar_t adBalanceVersion{"advr_balance_version", "0", CVAR_ARCHIVE};
+cvar_t adBaseVersion{"advr_base_models_version","0",CVAR_ARCHIVE};
+void adBaseDefaults(){
+    if(adBaseVersion.value>=8.f)return;
+    using weapons::Key;
+#define AD_BASE_ID(slot, name) weapons::stopInheriting(slot); Cvar_SetQuick(weapons::cvar(slot,Key::ID),name);
+#define AD_BASE_SETTING(slot,key,value) Cvar_SetValueQuick(weapons::cvar(slot,Key::key),value);
+#include "vr_ad_base.inc"
+#undef AD_BASE_ID
+#undef AD_BASE_SETTING
+    Cvar_SetValueQuick(&adBaseVersion,8.f);weapons::resetCaches();
+}
 void adDefaults_f()
 {
     if(cmd_source == src_command && vr_ad_manual_version.value < 2.f && vr_ad_manual_version.value >= 1.f){
@@ -1522,6 +1544,7 @@ void adDefaults_f()
         Cvar_SetValueQuick(&vr_parry_stamina_max, 125.f);
         Cvar_SetValueQuick(&adBalanceVersion, 1.f);
     }
+    adBaseDefaults();
     if(adSettingsVersion.value >= 2.f) { adPlasmaDefaults(); adWidowDefaults(); adShadowDefaults(); return; }
     if(adSettingsVersion.value >= 1.f)
     {
@@ -1571,6 +1594,7 @@ void init()
     Cvar_RegisterVariable(&adBalanceVersion);
     Cvar_RegisterVariable(&adSettingsVersion);
     Cvar_RegisterVariable(&adPlasmaModelVersion);
+    Cvar_RegisterVariable(&adBaseVersion);
     Cvar_RegisterVariable(&adWidowModelVersion);
     Cvar_RegisterVariable(&adGrabVersion);
     Cvar_RegisterVariable(&adCrossbowVersion);

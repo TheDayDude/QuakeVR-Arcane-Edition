@@ -923,20 +923,35 @@ glm::vec3 shotAngles(const glm::vec3& aimRot, int slot, bool mirrored)
     {
         return aimRot;
     }
-    float pitch = value(slot, Key::ShotPitch);
+    // Complete AD meshes use their visible barrel axis. The renderer adds the
+    // global gun-model pitch, which the old controller-only shot path omitted.
+    // Match its Euler convention first, then apply rail slope and user trim.
+    const char* modelName = cvar(slot, Key::ID)->string;
+    const bool crossbow = !strcmp(modelName, "progs/advr_crossbow.mdl");
+    const bool barrelAligned = !strncmp(modelName, "progs/advr_base_", 16) || crossbow;
+    glm::vec3 barrelRot = aimRot;
+    if(barrelAligned)
+    {
+        const float mirror = mirrored ? -1.f : 1.f;
+        barrelRot.x -= value(slot, Key::Pitch) + vr_gunmodelpitch.value;
+        barrelRot.y += value(slot, Key::Yaw) * mirror;
+        barrelRot.z += value(slot, Key::Roll) * mirror;
+    }
+    // make_crossbow_model.py: bolt z decreases by .193 per model-space x.
+    float pitch = value(slot, Key::ShotPitch) + (crossbow ? -10.923767f : 0.f);
     float yaw = value(slot, Key::ShotYaw) * (mirrored ? -1.f : 1.f);
     pitch = ZA_ISFINITE(pitch) ? pitch : 0.f;
     yaw = ZA_ISFINITE(yaw) ? yaw : 0.f;
     if(pitch == 0.f && yaw == 0.f)
     {
-        return aimRot;
+        return barrelRot;
     }
     // In the aim's frame (x forward, y left, z up): pitched up by `pitch`, then turned left by `yaw` about the aim's up.
     const float p = glm::radians(pitch), y = glm::radians(yaw);
     const glm::vec3 localFwd{za::cos(p) * za::cos(y), za::cos(p) * za::sin(y), za::sin(p)};
     const glm::vec3 localUp{-za::sin(p) * za::cos(y), -za::sin(p) * za::sin(y), za::cos(p)};
     glm::vec3 f, r, u;
-    hands::angleVectors(aimRot, f, r, u);
+    hands::angleVectors(barrelRot, f, r, u);
     const auto toWorld = [&](const glm::vec3& l) { return f * l.x - r * l.y + u * l.z; };
     return hands::anglesFromVectors(glm::normalize(toWorld(localFwd)), glm::normalize(toWorld(localUp)));
 }
@@ -1174,7 +1189,7 @@ void onChanged(cvar_t* var)
 
     const char* name = model->name;
     // The loose bolt is extracted from the loaded crossbow in the same units.
-    if(!strcmp(name,"progs/advr_reload_bolt.mdl")){t.active=true;return t;}
+    if(!strncmp(name,"progs/advr_base_mag_",20) || !strcmp(name,"progs/advr_charge_handle.mdl") || !strcmp(name,"progs/advr_reload_bolt.mdl")){t.active=true;return t;}
     if(!strcmp(name, "progs/legholster.mdl"))
     {
         t.active = true;

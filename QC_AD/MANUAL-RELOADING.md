@@ -16,7 +16,7 @@ The console equivalent is `vr_reload_mode 3`; `vr_reload_mode 2` restores hip re
 3. Bring the ammunition to the gun's loading point. The standard shotgun requires the shell within two Quake units of its receiver loading point. Loading gives a sound and a short rumble.
 4. Grip works with either normal hold-to-grab or sticky grip. Release/toggle a
    round at the pouch to return it to your inventory, or elsewhere to drop it.
-5. B/Y on the weapon hand, or physically pressing the gun's red button, ejects
+5. B/Y on the weapon hand ejects
    its magazine or remaining ammunition. Partially used magazines keep their remaining rounds.
 
 Dropped ammunition can be picked up or force-grabbed. Ordinary held reload rounds
@@ -30,8 +30,8 @@ and cannot be refunded; held grenades remain usable in simple reload mode.
 | Shotgun | Single shells, under the receiver |
 | Super shotgun | Shell pairs, at the exposed breech after breaking open |
 | Widowmaker | Dedicated 24-shell box magazine under the receiver (eight shots) |
-| Nailgun | Box magazine, angled under the receiver |
-| Super nailgun | Box magazine, left side of the receiver |
+| Nailgun | Native magazine under the receiver |
+| Super nailgun | Native box magazine under the receiver |
 | Thunderbolt / Plasma gun | Energy cell, underside; capacities remain 36 / 24 |
 | Grenade / Rocket launcher | Individual rounds, at the muzzle |
 | Crossbow | One bolt, on the rail |
@@ -40,15 +40,28 @@ Magazines remain installed when empty and must be manually ejected before replac
 in the held prop. Launcher rounds and nailgun magazines must match their weapon.
 Chainsaws and melee weapons retain their existing behavior.
 
+## Charging magazine-fed weapons
+
+After inserting a fresh magazine into either nailgun, Thunderbolt, Plasma Gun,
+or Widowmaker, hold the empty hand's trigger near the small handle on the side
+of the receiver. Pull it fully back, then release the trigger. This gesture is
+the same with normal and sticky grip. Partial pulls do not chamber a round. An uncocked
+weapon clicks instead of firing, and retains this state when dropped, holstered,
+or carried to another map. Holster reload modes keep their existing behavior.
+
+The redesigned nailguns and Thunderbolt use detachable versions of their native
+AD decorative magazines, including the under-receiver Super Nailgun magazine.
+The launchers retain their vertical foregrips. The standard shotgun has its full
+stock and longer barrel; the break-open Super Shotgun is unchanged.
+
 ## Super Shotgun: break open, load, close
 
-In manual mode, flick the Super Shotgun or press B/Y on its controller to break
+In manual mode, press B/Y on the Super Shotgun controller to break
 it open. The barrels hinge downward and eject spent shells; any unfired shells
 are ejected as recoverable ammunition. Take a shell pair from the belt pouch and
-insert it at the blue marker on the exposed chambers. Flick again or press B/Y
+insert it at the exposed chambers. Flick or press B/Y
 to close it. Loading does not automatically close the gun, and it cannot fire
-while open. The physical red button can also open/close the breech when the
-other hand is not carrying ammunition. Opening/closing gives sound and haptics.
+while open. The physical red button no longer operates the breech. Opening/closing gives sound and haptics.
 
 The Widowmaker uses a distinct shotgun-shell magazine. A partially used magazine
 keeps its remaining shells when ejected or returned to the pouch. It cannot be
@@ -58,7 +71,7 @@ the Widowmaker. Its capacity remains 24 shells, firing three per shot.
 The hinged Super Shotgun uses upstream's split-mesh generator applied to this
 build's model, with the existing HD skin retained on the original surfaces.
 Magazine pull/bump, two-hand pry/slap gestures, and loose-round contact loading
-are not part of this selective port. Opening/closing uses flicks or buttons.
+are not part of this selective port. Opening uses B/Y; closing accepts B/Y or a flick.
 The existing hip-reload modes retain their previous behavior.
 
 ## Calibration
@@ -97,7 +110,7 @@ Magazine fitting: magazines and cells use a centered six-unit-high mesh, with th
 
 Held reload props are excluded from hand collision response so shells remain attached without pushing the hand away. Crossbow reload bolts retain the loaded model's plain appearance and size; up to three reserve bolts are visible in the pouch. The nailgun magazine tilts eight degrees, and the Super Nailgun magazine projects from the left side. Widowmaker and Plasma support grips move forward onto their foregrip and under rail, including migration of existing settings.
 
-Attempting to fire an empty ranged weapon plays a dry click, limited to twice per second per weapon. Empty magazines remain visible until ejected with B/Y or the physical red button.
+Attempting to fire an empty ranged weapon plays a dry click, limited to twice per second per weapon. Empty magazines remain visible until ejected with B/Y.
 
 Ammo pouch attachment: the pouch and its grab point follow the avatar pelvis directly, including locomotion, crouching and leaning. Forward adjustment is measured from the front of the pelvis; the default up setting of 8 places it at pelvis height. Pouch bolts share this frame.
 
@@ -127,3 +140,6 @@ This is a selective adaptation of QuakeVR's grenade system at commit
 `699ce4757086acc4fbed949a5fd938879a99304d`, retaining AD's projectile effects,
 poison variants, damage rules and shared rocket-ammo accounting.
 
+
+### Charging-handle controls (updated)
+With the opposite hand empty, hold its trigger near the charging handle, pull the handle fully back, then release the trigger. This also applies with sticky grip enabled. Grip is reserved for supporting the gun. In manual reload mode, only B/Y ejects magazines or opens the Super Shotgun; touching the red button has no effect.

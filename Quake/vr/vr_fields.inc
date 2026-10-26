@@ -190,3 +190,8 @@ QVR_FIELD(advr_dark_until)
 QVR_FIELD(advr_nether_until)
 
 QVR_FIELD(advr_hell_until)
+
+QVR_FIELD(chargehome)
+QVR_FIELD(chargeback)
+QVR_FIELD(offchargehome)
+QVR_FIELD(offchargeback)

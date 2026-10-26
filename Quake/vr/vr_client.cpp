@@ -282,6 +282,7 @@ VrMove unposed;
         // where it is drawn (handMuzzle).
         move.muzzlePos[h] = handMuzzle(hs, h);
         move.loadPort[h] = hs.loadPortValid[h] ? hs.loadPort[h] : hs.pos[h];
+        move.chargeHome[h]=hs.chargeHome[h];move.chargeBack[h]=hs.chargeBack[h];
 
         // Where its shots go: the aim turned by the weapon's Shot Pitch and Yaw (the drawn weapon doesn't move).
         move.shotRot[h] = weapons::shotAngles(hs.rot[h], weapons::heldSlot(h), h == HAND_OFF) + weaponfx::aimOffset(h);
@@ -374,6 +375,7 @@ VrMove unposed;
             move.hotspots[h] = unposed.hotspots[h];
             move.muzzlePos[h] = unposed.muzzlePos[h] + walked;
             move.loadPort[h] = unposed.loadPort[h] + walked;
+            move.chargeHome[h]=unposed.chargeHome[h]+walked;move.chargeBack[h]=unposed.chargeBack[h]+walked;
             move.ammoPouch = unposed.ammoPouch + walked;
             for(int i=0;i<6;i++)move.holsterPos[i]=unposed.holsterPos[i]+walked;
             move.shotRot[h] = unposed.shotRot[h];
@@ -1046,7 +1048,7 @@ extern "C" int VR_BeamGone(int ent)
         return 0;
     }
     const qmodel_t* const held = weapons::heldModel(id);
-    if(held && !strcmp(held->name, "progs/v_light.mdl"))
+    if(held && !strcmp(held->name, "progs/advr_base_light.mdl"))
     {
         return 0;
     }

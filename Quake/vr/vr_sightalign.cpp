@@ -80,6 +80,7 @@ struct Table
 };
 constexpr Table table[] = {
 #include "vr_sightalign_table.inc"
+#include "vr_ad_base_sights.inc"
 };
 
 // No sights: melee weapons and the hand. (The monsters' guns' lights and screens are not sights: their modelled sights,

@@ -549,6 +549,9 @@ void mockHandTo_f()
         else Con_Printf("manual reload: no loading port in the other hand\n");
         return;
     }
+    if(hand>=0 && Cmd_Argc()==3 && (!q_strcasecmp(Cmd_Argv(2),"chargehome") || !q_strcasecmp(Cmd_Argv(2),"chargeback"))){
+        const auto& st=hands::current();moveHandTo(hand,!q_strcasecmp(Cmd_Argv(2),"chargehome") ? st.chargeHome[1-hand] : st.chargeBack[1-hand]);return;
+    }
     const bool weapon = Cmd_Argc() >= 4 && !q_strcasecmp(Cmd_Argv(2), "weapon");
     const bool spot = Cmd_Argc() >= 4 && !q_strcasecmp(Cmd_Argv(2), "spot");
     const bool carried = Cmd_Argc() == 3 && !q_strcasecmp(Cmd_Argv(2), "carried");

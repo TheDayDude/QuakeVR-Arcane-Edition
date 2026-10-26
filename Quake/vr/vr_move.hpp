@@ -33,6 +33,7 @@ struct VrMove
     VrHandMove hands[2];       // [0] off hand, [1] main hand
     glm::vec3 headVel{0.f};
     glm::vec3 muzzlePos[2]{glm::vec3{0.f}, glm::vec3{0.f}}; // [0] off hand, [1] main hand
+    glm::vec3 chargeHome[2]{}, chargeBack[2]{};
     glm::vec3 loadPort[2]{glm::vec3{0.f}, glm::vec3{0.f}};
     glm::vec3 ammoPouch{0.f};
     glm::vec3 holsterPos[6]{};

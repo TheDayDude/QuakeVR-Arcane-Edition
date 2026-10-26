@@ -889,7 +889,7 @@ void PF_propvalue()
     G_FLOAT(OFS_RETURN) = out;
 }
 
-// float(string model, string key) weaponvalue: a setting of the weapon drawn with `model` ("progs/v_rock2.mdl"; Weapon
+// float(string model, string key) weaponvalue: a setting of the weapon drawn with `model` ("progs/advr_base_rock2.mdl"; Weapon
 // Offsets and Weapon Weights, vr_weapons.inc, as its cvars name it: "w_mass" kg, "w_meleedmg", "w_throwdmg"...), what
 // it inherits followed (0: no such weapon or key).
 void PF_weaponvalue()

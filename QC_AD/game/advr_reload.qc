@@ -10,6 +10,8 @@ float(entity r) ADVR_ManualSsg = {return r && r.advr_weapon==IT_SUPER_SHOTGUN &&
 float(entity r) ADVR_ManualMagazine = {return r.advr_kind==ADVR_WIDOWMAKER || ADVR_ManualType(r)==2 || ADVR_ManualType(r)==4;};
 vector(float h) ADVR_ManualPort = {if(h)return self.loadportpos;return self.offloadportpos;};
 void() ADVR_ManualPrecache = {
+    precache_model("progs/advr_charge_handle.mdl");
+    precache_model("progs/advr_base_mag_nail.mdl");precache_model("progs/advr_base_mag_nail2.mdl");precache_model("progs/advr_base_mag_light.mdl");
     precache_model("progs/advr_mag_shell.mdl");precache_model("progs/vr_shell.mdl");
     precache_sound("vr/reload_ssg_open.wav");precache_sound("vr/reload_ssg_close.wav");precache_sound("vr/reload_ssg_eject.wav");
     precache_model("progs/vr_shell_live.mdl");precache_model("progs/vr_shell_pair.mdl");
@@ -29,9 +31,9 @@ void(entity p) ADVR_ManualModel = {
         if(p.advr_round_count>1)setmodel(p,"progs/vr_shell_pair.mdl");
         else setmodel(p,"progs/vr_shell_live.mdl");
     }else if(p.advr_round_type==2){
-        if(p.advr_round_weapon==IT_SUPER_NAILGUN)setmodel(p,"progs/vr_mag_snail.mdl");
-        else setmodel(p,"progs/vr_mag_nail.mdl");
-    }else if(p.advr_round_type==4)setmodel(p,"progs/vr_mag_light.mdl");
+        if(p.advr_round_weapon==IT_SUPER_NAILGUN)setmodel(p,"progs/advr_base_mag_nail2.mdl");
+        else setmodel(p,"progs/advr_base_mag_nail.mdl");
+    }else if(p.advr_round_type==4){if(p.advr_round_kind==ADVR_PLASMA)setmodel(p,"progs/vr_mag_light.mdl");else setmodel(p,"progs/advr_base_mag_light.mdl");}
     else if(p.advr_round_type==5)setmodel(p,"progs/advr_reload_bolt.mdl");
     else if(p.advr_round_weapon==IT_ROCKET_LAUNCHER)setmodel(p,"progs/vr_round_rocket.mdl");
     else setmodel(p,"progs/advr_handgrenade.mdl");
@@ -156,6 +158,7 @@ float(float h) ADVR_ManualInsert = {
     if(ADVR_ManualMagazine(r) && !r.advr_mag_absent)return 0;
     n=min(p.advr_round_count,ADVR_RecordCapacity(r)-r.wi_clip);if(n<=0)return 0;
     r.wi_clip=r.wi_clip+n;r.advr_mag_absent=0;
+    if(ADVR_ManualMagazine(r))r.advr_needs_charge=1;
     if(t!=5)ADVR_SetAmmo(r.advr_weapon,ADVR_Ammo(r.advr_weapon)+n);
     p.advr_round_count=p.advr_round_count-n;
     r.advr_reload_until=time+0.22;r.advr_cooldown=max(r.advr_cooldown,r.advr_reload_until);
@@ -168,8 +171,49 @@ float(float h) ADVR_ManualInsert = {
     else ADVR_ManualModel(p);
     return n;
 };
+// The charging grip is independent of the supporting grip and of ammunition.
+// Measure against the moving gun's rail: walking or moving both hands together
+// cannot cock it. A full rearward pull followed by release closes the action.
+void(float h,float grip,float old) ADVR_ChargeFrame = {
+    local entity r;local vector home,back,axis,delta;local float length,along,lateral,release,started;
+    r=ADVR_Hand(1-h);
+    if(h){home=self.offchargehome;back=self.offchargeback;}
+    else{home=self.chargehome;back=self.chargeback;}
+    axis=back-home;length=vlen(axis);
+    if(self.advr_charge_guard[h] && (self.advr_charge_guard[h]!=r || vlen(ADVR_Pos(h)-(home+back)*.5)>6*max(.5,cvar("vr_world_scale"))))self.advr_charge_guard[h]=world;
+    if(cvar("vr_reload_mode")!=3 || !r || !ADVR_ManualMagazine(r) || ADVR_Hand(h) || self.health<=0 || self.advr_elder_until>time || length<1 || r.advr_mag_absent){
+        if(self.advr_charge_record[h])self.advr_charge_record[h].advr_charge_pull=0;
+        self.advr_charge_record[h]=world;return;
+    }
+    axis=axis/length;delta=ADVR_Pos(h)-home;along=delta*axis;
+    if(self.advr_charge_record[h] && self.advr_charge_record[h]!=r){self.advr_charge_record[h].advr_charge_pull=0;self.advr_charge_record[h]=world;}
+    if(!self.advr_charge_record[h]){
+        if(!r.advr_needs_charge || !grip || old || ADVR_HandBusy(h) || self.advr_magic_book || ADVR_FGPulled(h) || ragdollheld(self,h)>0)return;
+        if(vlen(delta)>3*max(.5,cvar("vr_world_scale")))return;
+        self.advr_charge_record[h]=r;self.advr_charge_start[h]=along;self.advr_charge_full[h]=0;started=1;
+        haptic(h,0,.035,70,.25);
+    }
+    lateral=vlen(delta-axis*along);
+    r.advr_charge_pull=bound(0,(along-self.advr_charge_start[h])/length,1);
+    if(r.advr_charge_pull>=.85 && lateral<3*max(.5,cvar("vr_world_scale")) && !self.advr_charge_full[h]){
+        self.advr_charge_full[h]=1;haptic(h,0,.06,90,.45);
+    }
+    release=(!grip && old);
+    // Charging handles always follow trigger hold/release, independent of sticky grip.
+    // Do not interpret the initial sticky-grip press as the release.
+    if(started)release=0;
+    if(lateral>7*max(.5,cvar("vr_world_scale")))release=1;
+    if(release){
+        if(self.advr_charge_full[h] && lateral<7*max(.5,cvar("vr_world_scale"))){
+            r.advr_needs_charge=0;self.advr_fg_rearm[1-h]=1;
+            sound(self,CHAN_AUTO,"vr/reload_full.wav",.5,ATTN_NORM);haptic(1-h,0,.045,80,.3);
+        }
+        r.advr_charge_pull=0;self.advr_charge_record[h]=world;self.advr_charge_guard[h]=r;self.advr_round_guard[h]=time+.15;
+    }
+};
+
 void() ADVR_ManualFrame = {
-    local float h,near,grip,old,release,secondary,flick,reach;local entity p;local vector pos;
+    local float h,near,grip,old,release,secondary,flick,reach,trigger;local entity p;local vector pos;
     // Hand grenades remain available with either reload mode.
     if(cvar("vr_reload_mode")!=3){for(h=0;h<2;h=h+1)if(self.advr_round[h] && !self.advr_round[h].advr_grenade)ADVR_ManualRelease(h,1);}
     for(h=0;h<2;h=h+1){
@@ -183,6 +227,10 @@ void() ADVR_ManualFrame = {
         }
         self.advr_round_secondary[h]=secondary;
         pos=ADVR_Pos(h);grip=ADVR_Grip(h);old=self.advr_round_grip[h];self.advr_round_grip[h]=grip;
+        trigger=(h ? self.button0 : self.button3);
+        ADVR_ChargeFrame(h,trigger,self.advr_charge_trigger[h]);
+        self.advr_charge_trigger[h]=trigger;
+        if(self.advr_charge_record[h])continue;
         near=(cvar("vr_reload_mode")==3 && vlen(pos-self.ammopouchpos)<max(2,cvar("vr_ad_reload_pouch_reach")));
         if((h && self.mainhand_hotspot==11) || (!h && self.offhand_hotspot==11))near=2;
         if(grip && !old){dprint("RELOAD GRIP h=");dprint(ftos(h));dprint(" distance=");dprint(ftos(vlen(pos-self.ammopouchpos)));dprint(" busy=");dprint(ftos(ADVR_HandBusy(h)));dprint(" gun=");dprint(ftos(ADVR_ManualType(ADVR_Hand(1-h))));dprint("\n");}
@@ -208,6 +256,47 @@ void() ADVR_ManualFrame = {
         }
         self.advr_round_hover[h]=near;
     }
+};
+
+void() ADVR_TestCharging = {
+    local entity r,p;local float h,i,w,k,before,mode,sticky;
+    mode=cvar("vr_reload_mode");sticky=cvar("vr_weapon_grip_mode");
+    cvar_set("vr_reload_mode","3");self.health=100;self.advr_main=self.advr_off=world;
+    self.advr_magic_book=world;self.advr_elder_until=0;self.vrbits0=16384;
+    for(h=0;h<2;h=h+1)for(i=0;i<5;i=i+1){
+        cvar_set("vr_weapon_grip_mode","0");self.advr_round_guard[h]=0;
+        w=IT_NAILGUN;k=0;if(i==1)w=IT_SUPER_NAILGUN;
+        if(i==2 || i==3)w=IT_LIGHTNING;if(i==3)k=ADVR_PLASMA;
+        if(i==4){w=IT_SUPER_SHOTGUN;k=ADVR_WIDOWMAKER;}
+        r=ADVR_Record(w);r.advr_kind=k;r.wi_clip=0;r.advr_mag_absent=1;
+        ADVR_SetHand(1-h,r);ADVR_SetAmmo(w,100);
+        p=ADVR_ManualProp(r,ADVR_RecordCapacity(r));self.advr_round[h]=p;
+        ADVR_Assert(ADVR_ManualInsert(h)>0 && r.advr_needs_charge,"new magazine requires cocking");
+        r.advr_reload_until=r.advr_cooldown=0;self.advr_fg_rearm[1-h]=0;
+        self.button0=self.button3=1;before=r.wi_clip;ADVR_Fire(1-h);
+        ADVR_Assert(r.wi_clip==before && r.advr_dry_next>time,"uncocked gun clicks without firing");self.button0=self.button3=0;
+        self.chargehome=self.offchargehome='100 100 100';self.chargeback=self.offchargeback='97 100 100';
+        self.handpos=self.offhandpos='100 100 100';self.advr_round_guard[h]=0;
+        ADVR_ChargeFrame(h,1,0);ADVR_Assert(self.advr_charge_record[h]==r,"free hand grips charging handle");
+        self.handpos=self.offhandpos='99 100 100';ADVR_ChargeFrame(h,1,1);ADVR_ChargeFrame(h,0,1);
+        ADVR_Assert(r.advr_needs_charge && !self.advr_charge_record[h],"short pull does not cock gun");
+        self.advr_round_guard[h]=0;self.handpos=self.offhandpos='100 100 100';ADVR_ChargeFrame(h,1,0);
+        // Move the gun and free hand together: no relative rail travel.
+        self.chargehome=self.offchargehome='110 100 100';self.chargeback=self.offchargeback='107 100 100';self.handpos=self.offhandpos='110 100 100';
+        ADVR_ChargeFrame(h,1,1);ADVR_Assert(!self.advr_charge_full[h],"body motion cannot cock weapon");
+        self.handpos=self.offhandpos='107 100 100';ADVR_ChargeFrame(h,1,1);
+        ADVR_Assert(self.advr_charge_full[h] && r.advr_needs_charge,"full pull waits for release");ADVR_ChargeFrame(h,0,1);
+        ADVR_Assert(!r.advr_needs_charge && !self.advr_charge_record[h] && r.wi_clip==before,"release chambers without creating ammo");
+        self.advr_charge_guard[h]=world;ADVR_Unload(1-h);
+        ADVR_Assert(!r.advr_mag_absent && r.wi_clip==before,"red button cannot eject magazine");
+        // Sticky grip must not change the trigger-based charging gesture.
+        cvar_set("vr_weapon_grip_mode","1");r.advr_needs_charge=1;self.advr_round_guard[h]=0;self.handpos=self.offhandpos='110 100 100';
+        ADVR_ChargeFrame(h,1,0);self.handpos=self.offhandpos='107 100 100';ADVR_ChargeFrame(h,1,1);ADVR_ChargeFrame(h,0,1);
+        ADVR_Assert(!r.advr_needs_charge && !self.advr_charge_record[h],"trigger release chambers even with sticky grip");
+        ADVR_SetHand(1-h,world);remove(r);
+    }
+    cvar_set("vr_reload_mode",ftos(mode));cvar_set("vr_weapon_grip_mode",ftos(sticky));
+    self.advr_round_guard[0]=self.advr_round_guard[1]=0;ADVR_Sync();dprint("ADVR CHARGING PASS\n");
 };
 
 void() ADVR_TestManualReload = {
@@ -392,4 +481,48 @@ void() ADVR_TestReloadShells = {
 };
 void() ADVR_TestReloadSnail = {
     ADVR_TestManualInput();self.advr_main.advr_weapon=IT_SUPER_NAILGUN;self.advr_main.wi_clip=36;ADVR_Sync();
+};
+
+void() ADVR_TestClassicView = {
+    local float i,w;local entity p;local vector org,forward,right,up;
+    makevectors(self.v_viewangle);forward=v_forward;right=v_right;up=v_up;org=self.headpos;
+    for(i=0;i<6;i=i+1){
+        w=IT_SHOTGUN;if(i==1)w=IT_NAILGUN;if(i==2)w=IT_SUPER_NAILGUN;if(i==3)w=IT_GRENADE_LAUNCHER;if(i==4)w=IT_ROCKET_LAUNCHER;if(i==5)w=IT_LIGHTNING;
+        p=spawn();p.classname="advr_model_preview";setmodel(p,ADVR_Model(w,0));
+        setorigin(p,org+forward*100+right*((i-3*floor(i/3)-1)*44)+up*(12-floor(i/3)*24));
+        p.angles='0 0 0';p.angles_y=self.v_viewangle_y+90;p.solid=SOLID_NOT;
+    }
+    dprint("ADVR CLASSIC VIEW READY\n");
+};
+
+void() ADVR_TestChargeInput = {
+    ADVR_TestManualInput();self.advr_main.wi_clip=24;self.advr_main.advr_mag_absent=0;self.advr_main.advr_needs_charge=1;
+    self.advr_round_guard[0]=0;ADVR_Sync();
+};
+// Developer-only grip preview: temp1 is the weapon item bit (1..64).
+void() ADVR_TestGripView = {
+    local float w;
+    w=cvar("temp1");
+    if(w!=1 && w!=2 && w!=4 && w!=8 && w!=16 && w!=32 && w!=64)return;
+    ADVR_TestManualInput();self.advr_main.advr_weapon=w;
+    self.advr_main.wi_clip=24;self.advr_main.advr_mag_absent=0;
+    self.advr_main.advr_needs_charge=0;ADVR_Sync();
+};
+void() ADVR_TestChargeInputCheck = {
+    dprint("CHARGE DETAIL main=");dprint(ftos(self.advr_main.advr_weapon));dprint(" clip=");dprint(ftos(self.advr_main.wi_clip));dprint(" held=");dprint(ftos(self.advr_charge_record[0]!=world));dprint("\n");
+    dprint("CHARGE INPUT pending=");dprint(ftos(self.advr_main.advr_needs_charge));dprint(" rail=");dprint(vtos(self.chargehome));dprint(" to ");dprint(vtos(self.chargeback));dprint("\n");
+    ADVR_Assert(!self.advr_main.advr_needs_charge && self.advr_main.wi_clip==24 && !self.advr_charge_record[0],"rendered rail and controller input cock actual gun");
+    dprint("ADVR CHARGE INPUT PASS\n");
+};
+
+// Real controller fixture for the restored shotgun's generated receiver port.
+void() ADVR_TestShotInput = {
+    ADVR_TestSsgInput();self.items=IT_SHOTGUN;
+    self.advr_main.advr_weapon=IT_SHOTGUN;self.advr_main.advr_ssg_spent=0;
+    ADVR_Sync();
+};
+void() ADVR_TestShotCheck = {
+    dprint(sprintf("SHOT INPUT clip=%g ammo=%g held=%g port=%v hand=%v\n",self.advr_main.wi_clip,self.ammo_shells,self.advr_round[0]!=world,self.loadportpos,self.offhandpos));
+    ADVR_Assert(self.advr_main.wi_clip==1 && self.ammo_shells==30 && !self.advr_round[0],"shotgun pouch-to-rendered-receiver shell insertion");
+    bprint("ADVR SHOT INPUT PASS\n");
 };

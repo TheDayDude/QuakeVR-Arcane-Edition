@@ -78,6 +78,7 @@ struct State
     // Weapon muzzles, from the weapon models' anchor vertices: set by the view when it renders,
     // and kept until the next render (moves are sent before rendering).
     bool loadPortValid[2]{false, false};
+    glm::vec3 chargeHome[2]{}, chargeBack[2]{};
     glm::vec3 loadPort[2]{glm::vec3{0.f}, glm::vec3{0.f}};
     bool muzzleValid[2]{false, false};
     glm::vec3 muzzle[2]{glm::vec3{0.f}, glm::vec3{0.f}};

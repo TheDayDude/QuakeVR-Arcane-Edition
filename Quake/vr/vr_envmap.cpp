@@ -974,9 +974,9 @@ using namespace qvr;
         float lod; // the cube's mip level read: blurrier (rougher) the higher
     };
     static constexpr Entry table[] = {
-        {"progs/v_shot.mdl", 1.f, 2.5f},    {"progs/v_shot2.mdl", 1.f, 2.5f}, {"progs/v_nail.mdl", 1.f, 2.5f},
-        {"progs/v_nail2.mdl", 1.f, 2.5f},   {"progs/v_rock.mdl", 0.8f, 3.f},  {"progs/v_rock2.mdl", 0.8f, 3.f},
-        {"progs/v_light.mdl", 0.9f, 2.5f},  {"progs/v_axe.mdl", 0.9f, 2.f},   {"progs/v_ksword.mdl", 1.f, 1.5f},
+        {"progs/advr_base_shot.mdl", 1.f, 2.5f},    {"progs/v_shot2.mdl", 1.f, 2.5f}, {"progs/advr_base_nail.mdl", 1.f, 2.5f},
+        {"progs/advr_base_nail2.mdl", 1.f, 2.5f},   {"progs/advr_base_rock.mdl", 0.8f, 3.f},  {"progs/advr_base_rock2.mdl", 0.8f, 3.f},
+        {"progs/advr_base_light.mdl", 0.9f, 2.5f},  {"progs/v_axe.mdl", 0.9f, 2.f},   {"progs/v_ksword.mdl", 1.f, 1.5f},
         {"progs/v_hksword.mdl", 1.f, 1.5f}, {"progs/v_hammer.mdl", 0.8f, 2.5f},
         {"progs/v_crowbar.mdl", 0.5f, 3.f}, // (painted: its worn steel shows at the edges and the ends)
     };

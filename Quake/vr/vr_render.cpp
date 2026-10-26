@@ -296,7 +296,7 @@ extern "C" void VR_AliasInstance(const entity_t* e, const float matrix[16], cons
     // Use the same matte material on held, holstered, dropped, and break-open weapons.
     const int weaponSlot=weapons::slotForModel(e->model);
     const bool matteWeapon=(weaponSlot>=0 && weaponSlot!=weapons::fistSlot()) ||
-        !strncmp(earthModel,"progs/vr_ssg_",13) || !strncmp(earthModel,"progs/g_",8);
+        !strncmp(earthModel,"progs/advr_base_",16) || !strcmp(earthModel,"progs/advr_charge_handle.mdl") || !strncmp(earthModel,"progs/vr_ssg_",13) || !strncmp(earthModel,"progs/g_",8);
     if(matteWeapon) {
         out->surface[0]=out->surface[1]=out->surface[2]=0.f;out->surface[3]=-1.f;
         out->ao[2]=0.f;out->glow[3]=0.f;

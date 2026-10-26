@@ -71,7 +71,7 @@ struct Weapon
 };
 
 constexpr Weapon weaponTable[] = {
-    {"progs/v_shot.mdl", 1, {{14.5f, -2.75f, 4.65f}}, {{-0.3f, -1.f, 0.65f}}, 1.6f, {0.f, 0.f, 1.f}, -16.f, 1.f, 3, 70},
+    {"progs/advr_base_shot.mdl", 1, {{4.f, -1.5f, 2.8f}}, {{-0.3f, -1.f, 0.65f}}, 1.6f, {0.f, 0.f, 1.f}, -16.f, 1.f, 3, 70},
     {"progs/v_shot2.mdl", 2, {{11.6f, 1.2f, 6.9f}, {11.6f, -1.2f, 6.9f}}, {{-1.f, 0.15f, 0.5f}, {-1.f, -0.15f, 0.5f}},
         1.6f, {0.f, 1.f, 0.f}, 9.f, 1.5f, 1, 17},
 };

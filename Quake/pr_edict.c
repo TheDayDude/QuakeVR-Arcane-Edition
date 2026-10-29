@@ -1218,8 +1218,11 @@ static void ED_RezoneString (string_t *ref, const char *str)
 	//make sure its flagged as zoned so we can clean up properly after.
 	if (id >= qcvm->knownzonesize)
 	{
+		size_t oldbytes = (qcvm->knownzonesize+7)>>3;
 		qcvm->knownzonesize = (id+32)&~7;
 		qcvm->knownzone = Z_Realloc(qcvm->knownzone, (qcvm->knownzonesize+7)>>3);
+		/* Z_Realloc retains allocation padding; clear new logical bitmap bytes. */
+		memset(qcvm->knownzone + oldbytes, 0, ((qcvm->knownzonesize+7)>>3)-oldbytes);
 	}
 	qcvm->knownzone[id>>3] |= 1u<<(id&7);
 }
@@ -1247,7 +1250,9 @@ static qboolean ED_ParseEpair (void *base, ddef_t *key, const char *s, qboolean 
 	switch (key->type & ~DEF_SAVEGLOBAL)
 	{
 	case ev_string:
-		if (zoned)	//zoned version allows us to change the strings more freely
+		if (zoned || !strncmp(PR_GetString(key->s_name), "advr_ammo", 9) ||
+		    !strncmp(PR_GetString(key->s_name), "advr_pouch", 10))
+		    // Mutable ammo queues loaded from saves must retain strunzone ownership.
 			ED_RezoneString((string_t *)d, s);
 		else
 			*(string_t *)d = ED_NewString(s);

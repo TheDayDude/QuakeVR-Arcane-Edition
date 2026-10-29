@@ -29,6 +29,8 @@ var float QVR_AD_API = 1;
 .vector offchargeback;
 .float advr_needs_charge;
 .float advr_charge_pull;
+.float advr_bolt_sound; // pull sound has played for this manual stroke
+.float advr_pump_until; // transient automatic pump animation
 .entity advr_charge_record[2];
 .entity advr_charge_guard[2];
 .float advr_charge_start[2];
@@ -196,6 +198,7 @@ void() ADVR_Frame;
 float() ADVR_Tracked;
 void() ADVR_Reset;
 void() ADVR_SaveParms;
+void() ADVR_Sync;
 void() ADVR_LoadParms;
 void() ADVR_Test;
 
@@ -525,3 +528,42 @@ void(entity g,float h) ADVR_GrenadeCaught;
 void(entity g,float h) ADVR_GrenadeHeld;
 void(entity g) ADVR_GrenadeReleased;
 void(float h) ADVR_GrenadeTake;
+
+// Ammo records use four printable hex digits: count (2), element, rune strength.
+// Pouch stacks are separate from AD's total-including-clips ammo counters.
+.string advr_ammo,advr_pouch[10];
+string advr_ammo_parm[18];
+float advr_ammo_shot;
+float advr_ammo_round_offset;
+float(entity r) ADVR_AmmoKey;
+float(string s) ADVR_AmmoCount;
+string(float count,float element,float strength) ADVR_AmmoEntry;
+void(entity r) ADVR_AmmoNormalize;
+void(entity r,float n) ADVR_AmmoConsume;
+void(entity r,entity p,float n) ADVR_AmmoInsert;
+float(entity p) ADVR_AmmoStore;
+void(entity r,entity p,float available) ADVR_AmmoTake;
+entity(entity r) ADVR_AmmoPayload;
+void() ADVR_AmmoSave;
+void() ADVR_AmmoRestore;
+void() ADVR_TestAmmoEnchant;
+void(float condition,string message) ADVR_Assert;
+void(entity book,float h,float down,float old) ADVR_EnchantFrame;
+entity(float w) ADVR_Record;
+void() ADVR_SaveParms;
+void(entity r,string value) ADVR_AmmoSet;
+void(float key,string value) ADVR_PouchSet;
+float(string s,float offset) ADVR_AmmoDigit;
+float(string s) ADVR_AmmoTotal;
+float(entity r) ADVR_AmmoReserved;
+float(float w) ADVR_Ammo;
+float(float w) ADVR_Loaded;
+float(entity r,float n) ADVR_AmmoReload;
+void(entity r) ADVR_AmmoUnload;
+
+.float advr_pouch_selection;
+void() ADVR_PouchCycle;
+void() ADVR_TestPouchSelection;
+
+.float advr_pouch_preview_key,advr_pouch_preview0,advr_pouch_preview1,advr_pouch_preview2;
+void() ADVR_PouchPreview;

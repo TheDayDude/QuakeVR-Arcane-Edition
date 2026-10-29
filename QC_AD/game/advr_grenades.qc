@@ -119,7 +119,8 @@ void(float h) ADVR_GrenadeTake = {
     local entity r,g;
     if(!cvar("vr_handgrenade") || ADVR_Hand(h) || ADVR_HandBusy(h))return;
     if(self.ammo_rockets-ADVR_Loaded(IT_GRENADE_LAUNCHER)<=0)return;
-    r=spawn();r.advr_weapon=IT_GRENADE_LAUNCHER;g=ADVR_ManualProp(r,1);remove(r);
+    r=spawn();r.advr_weapon=IT_GRENADE_LAUNCHER;g=ADVR_ManualProp(r,1);ADVR_AmmoTake(r,g,self.ammo_rockets-ADVR_Loaded(IT_GRENADE_LAUNCHER));remove(r);
+    if(g.advr_round_count<=0){if(g.advr_grenade_control)remove(g.advr_grenade_control);remove(g);return;}
     self.ammo_rockets=self.ammo_rockets-1;g.advr_grenade_attacker=self;
     ADVR_ManualCatch(g,h);sound(self,CHAN_AUTO,"vr/grenade_pouch.wav",0.5,ATTN_NORM);
 };

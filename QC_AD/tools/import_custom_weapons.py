@@ -46,6 +46,39 @@ def apply_custom():
             nonlocal settings
             settings=re.sub(rf'AD_BASE_SETTING\({slot}, {key}, [\d.e+\-]+f\)',
                             f'AD_BASE_SETTING({slot}, {key}, {value:.6f}f)',settings)
+        if name=='shot':
+            from make_classic_vr_models import components, poses as make_poses
+            # This artist export shares vertices between the wooden fore-end
+            # and barrel. Split their boundary before animating the wood.
+            assert len(new.st)==1618 and len(new.tris)==1200
+            faces=set(range(8,32))-{16,17,21,22}
+            faces.update([33,35,36,40]);faces.update(range(226,234))
+            # The ribbed outer shell is exported as disconnected UV islands.
+            outer=set()
+            for group in components(new):
+                lo=[min(after[i][a] for i in group) for a in range(3)]
+                hi=[max(after[i][a] for i in group) for a in range(3)]
+                if lo[0]>6.3 and hi[0]<14 and hi[2]<-.95:
+                    outer.update(group)
+            assert len(outer)==416, len(outer)
+            faces.update(j for j,t in enumerate(new.tris) if all(i in outer for i in t[1:]))
+            moving={i for j,t in enumerate(new.tris) if j in faces for i in t[1:]}
+            fixed={i for j,t in enumerate(new.tris) if j not in faces for i in t[1:]}
+            boundary=sorted(moving & fixed);remap={i:len(new.st)+j for j,i in enumerate(boundary)}
+            packed=new.frames[0][2]
+            for i in boundary:
+                new.st.append(list(new.st[i]));after.append(after[i])
+                new.frames[0][2]+=packed[i*4:i*4+4]
+            new.h[15]=len(new.st)
+            new.tris=[(t[0],*(remap.get(i,i) for i in t[1:])) if j in faces else t for j,t in enumerate(new.tris)]
+            pump={remap.get(i,i) for i in moving}
+            order=mdl.strip_order(new.tris)
+            variants=[]
+            for frame in range(16):
+                p=list(after)
+                for i in pump:p[i]=(after[i][0]-3*frame/15,after[i][1],after[i][2])
+                variants.append(p)
+            make_poses(new,after,variants)
         stable=[]
         poses=new.pose_bytes()
         for i,v in enumerate(order):

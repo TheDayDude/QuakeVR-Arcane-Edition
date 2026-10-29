@@ -25,7 +25,7 @@ SPECS['nail']['support']=(5.8,0,30.5)
 SPECS['nail2']['support']=(4.3,0,28.7)
 # Small headset-tested corrections in final model units; +X is toward the muzzle.
 GRIP_TRIM={'shot':(-.45,0,0),'nail':(0,0,.45),'nail2':(0,0,.45),
- 'rock':(-.5,0,.4),'rock2':(-.5,0,.4)}
+ 'rock':(-.5,0,.4),'rock2':(-.5,0,.4),'light':(-.7,0,0)}
 
 def add_box(m,p,lo,hi,uv):
  base=len(p)
@@ -128,6 +128,7 @@ def main(folder):
   grip=tuple(grip[i]+GRIP_TRIM.get(name,(0,0,0))[i] for i in range(3))
   support=list(point(s['support']))
   # Vertical foregrips use their shaft centers and the hand's grip channel.
+  if name=='shot':support=[9.,0.,-2.1]
   if name=='rock':support=[8.77,0.,-4.5]
   if name=='rock2':support=[13.09,0.,-4.21]
   mag=set(i for c in s.get('mag',[]) for i in groups[c])
@@ -166,7 +167,7 @@ def main(folder):
   stable=[i for i,v in enumerate(order) if v not in mag and v not in rotating]
   st=dict(Scale=1,OffsetX=0,OffsetY=0,OffsetZ=0,Pitch=0,Yaw=0,Roll=0,ShotPitch=0,ShotYaw=0,HandOnlyPitch=0,HandOnlyYaw=0,HandOnlyRoll=0,ZeroBlend=0,TwoHZeroBlend=0,HandOnlyX=0,HandOnlyY=0,HandOnlyZ=0,
    TwoHOffsetX=0,TwoHOffsetY=0,TwoHOffsetZ=0,TwoHFixedOffsetX=0,TwoHFixedOffsetY=0,TwoHFixedOffsetZ=0,TwoHFixedMainHandOffsetX=0,TwoHFixedMainHandOffsetY=0,TwoHFixedMainHandOffsetZ=0,
-   TwoHFixedHandPitch=-8.5,TwoHFixedHandYaw=0,TwoHFixedHandRoll=0 if name in ('rock','rock2') else -90,
+   TwoHFixedHandPitch=-8.5,TwoHFixedHandYaw=-45 if name=='shot' else 0,TwoHFixedHandRoll=0 if name in ('rock','rock2') else -90,
    Hotspot1VisualX=0,Hotspot1VisualY=0,Hotspot1VisualZ=0,Hotspot1VisualPitch=0,Hotspot1VisualYaw=0,Hotspot1VisualRoll=0,
    Hotspot2Type=0,Hotspot1Type=1,Hotspot1X=support[0],Hotspot1Y=support[1],Hotspot1Z=support[2],Hotspot1Pitch=0,Hotspot1Yaw=0,Hotspot1Roll=0,
    WpnButtonMode=1,WpnTextMode=1,WpnTextScale=.22)

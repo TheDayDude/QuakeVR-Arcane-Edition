@@ -182,12 +182,14 @@ void(float h,float pressed) ADVR_CrossbowFire = {
         else r.advr_frame=3;
     }
     if(!pressed || was || r.wi_clip<=0 || time<r.advr_cooldown)return;
+    ADVR_AmmoNormalize(r);advr_ammo_shot=1;
     r.wi_clip=r.wi_clip-1;r.advr_cooldown=time+0.8/ADVR_HasteRate(r);
     r.advr_animtime=time+0.18;r.advr_frame=1;
     if(h){at=self.muzzlepos;ang=self.shotrot;channel=CHAN_WEAPON;}
     else{at=self.offmuzzlepos;ang=self.offshotrot;channel=CHAN_BODY;}
     traceline(self.origin+self.view_ofs,at,TRUE,self);at=trace_endpos;
     makevectors(ang);launch_projectile(at,v_forward,CT_PROJ_BOLT1,900);
+    advr_ammo_shot=0;ADVR_AmmoConsume(r,1);
     newmis.advr_crossbolt=1;newmis.poisonous=0;newmis.bodyfadeaway=TRUE;
     newmis.movetype=MOVETYPE_FLY;setmodel(newmis,MODEL_PROJ_BOLT1);
     sound(self,channel,"weapons/crossbow_fire.wav",1,ATTN_NORM);

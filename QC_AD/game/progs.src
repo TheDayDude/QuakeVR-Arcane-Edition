@@ -167,6 +167,7 @@ mon_bossicegolem.qc
 mon_bossjudicator.qc
 mon_bossnour.qc
 
+advr_ammo.qc
 advr.qc
 advr_forcegrab.qc
 advr_reload.qc

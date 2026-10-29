@@ -1,0 +1,1550 @@
+[
+  {
+    "model": "advr_base_light.mdl",
+    "model_source": "advr\\progs\\advr_base_light.mdl",
+    "skins": [
+      {
+        "texture": "advr_base_light.mdl_0.png",
+        "size": [
+          1774,
+          887
+        ],
+        "source": "Style-preserving image_gen HD restoration; original archived in work/weapon-hd-pass/backup",
+        "sha256": "f4dcb220b61cfbaec07f7dbcdf52acbfbc59323553866318d3944b8efac7cfcb",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_base_mag_light.mdl",
+    "model_source": "advr\\progs\\advr_base_mag_light.mdl",
+    "skins": [
+      {
+        "texture": "advr_base_mag_light.mdl_0.png",
+        "size": [
+          1774,
+          887
+        ],
+        "source": "Style-preserving image_gen HD restoration; original archived in work/weapon-hd-pass/backup",
+        "sha256": "f4dcb220b61cfbaec07f7dbcdf52acbfbc59323553866318d3944b8efac7cfcb",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_base_mag_nail.mdl",
+    "model_source": "advr\\progs\\advr_base_mag_nail.mdl",
+    "skins": [
+      {
+        "texture": "advr_base_mag_nail.mdl_0.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "source": "Style-preserving image_gen HD restoration; original archived in work/weapon-hd-pass/backup",
+        "sha256": "050f50bd75d3fd30285920171e8e2f1cf5da1e7c5e0dfdc4229b18e90efb21fb",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_base_mag_nail2.mdl",
+    "model_source": "advr\\progs\\advr_base_mag_nail2.mdl",
+    "skins": [
+      {
+        "texture": "advr_base_mag_nail2.mdl_0.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "source": "Style-preserving image_gen HD restoration; original archived in work/weapon-hd-pass/backup",
+        "sha256": "75207633995db0a3e7fe6aa82cfb593296a08b6246811c08fefa89c800d2e09f",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_base_nail.mdl",
+    "model_source": "advr\\progs\\advr_base_nail.mdl",
+    "skins": [
+      {
+        "texture": "advr_base_nail.mdl_0.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "source": "Style-preserving image_gen HD restoration; original archived in work/weapon-hd-pass/backup",
+        "sha256": "050f50bd75d3fd30285920171e8e2f1cf5da1e7c5e0dfdc4229b18e90efb21fb",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_base_nail2.mdl",
+    "model_source": "advr\\progs\\advr_base_nail2.mdl",
+    "skins": [
+      {
+        "texture": "advr_base_nail2.mdl_0.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "source": "Style-preserving image_gen HD restoration; original archived in work/weapon-hd-pass/backup",
+        "sha256": "75207633995db0a3e7fe6aa82cfb593296a08b6246811c08fefa89c800d2e09f",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_base_rock.mdl",
+    "model_source": "advr\\progs\\advr_base_rock.mdl",
+    "skins": [
+      {
+        "texture": "advr_base_rock.mdl_0.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "source": "Style-preserving image_gen HD restoration; original archived in work/weapon-hd-pass/backup",
+        "sha256": "29d4c80c0ea35786e6b861dbe680c59947fd820d772e23240b9501cfa66e9f40",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_base_rock2.mdl",
+    "model_source": "advr\\progs\\advr_base_rock2.mdl",
+    "skins": [
+      {
+        "texture": "advr_base_rock2.mdl_0.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "source": "Style-preserving image_gen HD restoration; original archived in work/weapon-hd-pass/backup",
+        "sha256": "89a9b0fb0e983b26984c15301f4cf1a82082060491e7ff48b8b19757aebb84f9",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_base_shot.mdl",
+    "model_source": "advr\\progs\\advr_base_shot.mdl",
+    "skins": [
+      {
+        "texture": "advr_base_shot.mdl_0.png",
+        "size": [
+          1019,
+          1544
+        ],
+        "source": "advr\\progs\\advr_base_shot.mdl_0.png",
+        "sha256": "d5b5162efd7be1f5671d19d11a175c2164e9df523588d0a6ee0703dbeaead13c",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_base_shot.mdl_1.png",
+        "size": [
+          116,
+          192
+        ],
+        "source": "advr\\progs\\advr_base_shot.mdl embedded skin 1",
+        "sha256": "1cf1541a03cb35a625550c15c41e70b9274675eedb462af85e3f8351e6ed4df3",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_charge_handle.mdl",
+    "model_source": "advr\\progs\\advr_charge_handle.mdl",
+    "skins": [
+      {
+        "texture": "advr_charge_handle.mdl_0.png",
+        "size": [
+          128,
+          128
+        ],
+        "source": "advr\\progs\\advr_charge_handle.mdl embedded skin 0",
+        "sha256": "23dab6c370a6545b25a67f164d6a61797c4ed30f4a2a72187229826af87fa210",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_crossbow.mdl",
+    "model_source": "advr\\progs\\advr_crossbow.mdl",
+    "skins": [
+      {
+        "texture": "advr_crossbow.mdl_0.png",
+        "size": [
+          1196,
+          1315
+        ],
+        "source": "advr\\progs\\advr_crossbow.mdl_0.png",
+        "sha256": "feb99c8f7117911b6fdd2edaf5864e388c9c29d7462bce10d2f73d6789c694b6",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_fury1.mdl",
+    "model_source": "advr\\progs\\advr_fury1.mdl",
+    "skins": [
+      {
+        "texture": "advr_fury1.mdl_0.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "source": "advr\\progs\\advr_fury1.mdl_0.png",
+        "sha256": "70c4e29408979e2b604646ecb7da6da0aeaaeab6f3d040b2a015963483ab7947",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_fury1.mdl_1.png",
+        "size": [
+          80,
+          80
+        ],
+        "source": "advr\\progs\\advr_fury1.mdl embedded skin 1",
+        "sha256": "3f4b10c3de4785406f8dece9ec2d18d3939ce6ff5bac48bdb4f5aef79a413c01",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_fury1.mdl_2.png",
+        "size": [
+          80,
+          80
+        ],
+        "source": "advr\\progs\\advr_fury1.mdl embedded skin 2",
+        "sha256": "dd150ec91c30980e37ce4dddeb1b3022fedb8ea066fbf6b74b5f37f55b1bd082",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_fury1.mdl_3.png",
+        "size": [
+          80,
+          80
+        ],
+        "source": "advr\\progs\\advr_fury1.mdl embedded skin 3",
+        "sha256": "230d76ed9bd4e54402a37a8cab8d7a19acfa04609796ad69bfc3f170e3c7485a",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_fury1.mdl_4.png",
+        "size": [
+          80,
+          80
+        ],
+        "source": "advr\\progs\\advr_fury1.mdl embedded skin 4",
+        "sha256": "5eee6332a792b606f3618d94bb6c6be934a11330e9bcbe1776ac7080d7a91aba",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_fury2.mdl",
+    "model_source": "advr\\progs\\advr_fury2.mdl",
+    "skins": [
+      {
+        "texture": "advr_fury2.mdl_0.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "source": "advr\\progs\\advr_fury2.mdl_0.png",
+        "sha256": "7c113534e0e233ed7bceacae1cad02793b535acfa279bb41c618e178bddc1eab",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_fury2.mdl_1.png",
+        "size": [
+          80,
+          80
+        ],
+        "source": "advr\\progs\\advr_fury2.mdl embedded skin 1",
+        "sha256": "db52c17e8877d80d48dd7f554e3e3b05055a1288c6aea6dcb1783119caf5b649",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_fury2.mdl_2.png",
+        "size": [
+          80,
+          80
+        ],
+        "source": "advr\\progs\\advr_fury2.mdl embedded skin 2",
+        "sha256": "10ba3af3ffa6657b6243142633c5b20f3faf7f0d0ad152ac712e0a8ae5018dbe",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_fury2.mdl_3.png",
+        "size": [
+          80,
+          80
+        ],
+        "source": "advr\\progs\\advr_fury2.mdl embedded skin 3",
+        "sha256": "554eb99c2d4477e7d4991cd3a7551797ef553fdc8bcdb34d183930bfc4d86b6c",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_fury2.mdl_4.png",
+        "size": [
+          80,
+          80
+        ],
+        "source": "advr\\progs\\advr_fury2.mdl embedded skin 4",
+        "sha256": "fd3e152bf6a76826a939536aa577ee5454528a0ac17e288176b6097bcb7032ed",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_hammer.mdl",
+    "model_source": "advr\\progs\\advr_hammer.mdl",
+    "skins": [
+      {
+        "texture": "advr_hammer.mdl_0.png",
+        "size": [
+          1774,
+          887
+        ],
+        "source": "advr\\progs\\advr_hammer.mdl_0.png",
+        "sha256": "85dfb6e7a00fad1037ddf8080868f76dfde8cc42490fbaf0d153eaad528f43d8",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_hammer.mdl_1.png",
+        "size": [
+          128,
+          64
+        ],
+        "source": "advr\\progs\\advr_hammer.mdl embedded skin 1",
+        "sha256": "49e2af28eeda2fbd6e4a73df0ddf0464160b9225808f07cf07b096285cbf4a56",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_hammer.mdl_2.png",
+        "size": [
+          128,
+          64
+        ],
+        "source": "advr\\progs\\advr_hammer.mdl embedded skin 2",
+        "sha256": "d7884d96c781df28dbeff97ed92077b29ee4f069063e6d7b1d20cff2f34278d5",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_handgrenade.mdl",
+    "model_source": "advr\\progs\\advr_handgrenade.mdl",
+    "skins": [
+      {
+        "texture": "advr_handgrenade.mdl_0.png",
+        "size": [
+          480,
+          480
+        ],
+        "source": "advr\\progs\\advr_handgrenade.mdl embedded skin 0",
+        "sha256": "fd5004084154f34954a9061a3d213f60501203f442b44881a8d25b62d81b4182",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_handgrenade.mdl_1.png",
+        "size": [
+          480,
+          480
+        ],
+        "source": "advr\\progs\\advr_handgrenade.mdl embedded skin 1",
+        "sha256": "3097bc1d4e0b17cef763c12cf9408e51ec47ecd8e37278f61b9168fea6038d50",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_mag_shell.mdl",
+    "model_source": "advr\\progs\\advr_mag_shell.mdl",
+    "skins": [
+      {
+        "texture": "advr_mag_shell.mdl_0.png",
+        "size": [
+          64,
+          64
+        ],
+        "source": "advr\\progs\\advr_mag_shell.mdl embedded skin 0",
+        "sha256": "fabbd7392fecc496898bf8b4cdc3d98dbeeb1138ac73a19d169afd76d6a76ac5",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_mag_shell.mdl_1.png",
+        "size": [
+          64,
+          64
+        ],
+        "source": "advr\\progs\\advr_mag_shell.mdl embedded skin 1",
+        "sha256": "15dd056e585fe985389379e74a1266574183da6f9ee5b1ae36eb5d519c83130b",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_plasma.mdl",
+    "model_source": "advr\\progs\\advr_plasma.mdl",
+    "skins": [
+      {
+        "texture": "advr_plasma.mdl_0.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "source": "advr\\progs\\advr_plasma.mdl_0.png",
+        "sha256": "aa4b06403ad1e4d9912137cf6c3d8d56159e877b05fcc752985b2c9543e402ca",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_reload_bolt.mdl",
+    "model_source": "advr\\progs\\advr_reload_bolt.mdl",
+    "skins": [
+      {
+        "texture": "advr_reload_bolt.mdl_0.png",
+        "size": [
+          80,
+          88
+        ],
+        "source": "advr\\progs\\advr_reload_bolt.mdl embedded skin 0",
+        "sha256": "5089b25a270d437296676a889d11e4abefc1dd323f94e1f3171942edb737c92a",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_shadowaxe.mdl",
+    "model_source": "advr\\progs\\advr_shadowaxe.mdl",
+    "skins": [
+      {
+        "texture": "advr_shadowaxe.mdl_0.png",
+        "size": [
+          2172,
+          724
+        ],
+        "source": "advr\\progs\\advr_shadowaxe.mdl_0.png",
+        "sha256": "6babdf384404c85a0b0215993699ba2eaedd540c15912cc571e27b5efb7b877f",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_tome.mdl",
+    "model_source": "advr\\progs\\advr_tome.mdl",
+    "skins": [
+      {
+        "texture": "advr_tome.mdl_0.png",
+        "size": [
+          1568,
+          1003
+        ],
+        "source": "advr\\progs\\advr_tome.mdl_0.png",
+        "sha256": "fed4ac439b7185b7d731d913440ace91c1b80f1703175f1758efedebabfee209",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_tome.mdl_1.png",
+        "size": [
+          100,
+          64
+        ],
+        "source": "advr\\progs\\advr_tome.mdl embedded skin 1",
+        "sha256": "e017fff70f21efedb18a5d5e4f34926894e11c6bc898374a5ce45df3d7afc451",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_tome.mdl_2.png",
+        "size": [
+          100,
+          64
+        ],
+        "source": "advr\\progs\\advr_tome.mdl embedded skin 2",
+        "sha256": "2c22e1211c6df31d72e7fa1d7bd4b316e5bd582de5227e6abf2f7373e82e0239",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_tome.mdl_3.png",
+        "size": [
+          100,
+          64
+        ],
+        "source": "advr\\progs\\advr_tome.mdl embedded skin 3",
+        "sha256": "b9a4de3bdf582ab4f4e09b2709ee9e66e312e27564b66198205a141b12301387",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_tome.mdl_4.png",
+        "size": [
+          100,
+          64
+        ],
+        "source": "advr\\progs\\advr_tome.mdl embedded skin 4",
+        "sha256": "2c22e1211c6df31d72e7fa1d7bd4b316e5bd582de5227e6abf2f7373e82e0239",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "advr_widowmaker.mdl",
+    "model_source": "advr\\progs\\advr_widowmaker.mdl",
+    "skins": [
+      {
+        "texture": "advr_widowmaker.mdl_0.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "source": "advr\\progs\\advr_widowmaker.mdl_0.png",
+        "sha256": "2cd87f3e945d43ca920967895e917fb906914b4a292b6067cf1b36bd3ff8dfa6",
+        "support_maps": []
+      },
+      {
+        "texture": "advr_widowmaker.mdl_1.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "source": "advr\\progs\\advr_widowmaker.mdl_1.png",
+        "sha256": "48bdd7eaae5a2584aa89a74db9480fb0169ed4d43dfa6c4cada1b6103c8a127c",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_axe.mdl",
+    "model_source": "ad\\pak0.pak:progs/g_axe.mdl",
+    "skins": [
+      {
+        "texture": "g_axe.mdl_0.png",
+        "size": [
+          512,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/g_axe.mdl embedded skin 0",
+        "sha256": "ff40a3ce46f3add79d26dac0772ebf99dbddf96007a4d3ebc5a42cef3128d0bc",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_ghook.mdl",
+    "model_source": "ad\\pak0.pak:progs/g_ghook.mdl",
+    "skins": [
+      {
+        "texture": "g_ghook.mdl_0.png",
+        "size": [
+          296,
+          195
+        ],
+        "source": "ad\\pak0.pak:progs/g_ghook.mdl embedded skin 0",
+        "sha256": "bc9a7d8bd22e3f3607d61e4920c86b899002be5c92fd3d3a39decd5829e6dad2",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_light.mdl",
+    "model_source": "ad\\pak0.pak:progs/g_light.mdl",
+    "skins": [
+      {
+        "texture": "g_light.mdl_0.png",
+        "size": [
+          256,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/g_light.mdl embedded skin 0",
+        "sha256": "20dda312bacba85a5ac0e7d09cd624693ff1fe974e2dcade3b8a175c7f63e662",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_nail.mdl",
+    "model_source": "ad\\pak0.pak:progs/g_nail.mdl",
+    "skins": [
+      {
+        "texture": "g_nail.mdl_0.png",
+        "size": [
+          128,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/g_nail.mdl embedded skin 0",
+        "sha256": "23dab6c370a6545b25a67f164d6a61797c4ed30f4a2a72187229826af87fa210",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_nail2.mdl",
+    "model_source": "ad\\pak0.pak:progs/g_nail2.mdl",
+    "skins": [
+      {
+        "texture": "g_nail2.mdl_0.png",
+        "size": [
+          128,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/g_nail2.mdl embedded skin 0",
+        "sha256": "4a070f35253f0a76f13f5ab04b908b8888ba2d23f5bbfb563772f33a0f6f94b6",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_plasma.mdl",
+    "model_source": "ad\\pak0.pak:progs/g_plasma.mdl",
+    "skins": [
+      {
+        "texture": "g_plasma.mdl_0.png",
+        "size": [
+          128,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/g_plasma.mdl embedded skin 0",
+        "sha256": "ebe4ad409f04a76b8979debc3243563e3c0c0fbb69eecca12a474716946cdfa8",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_prox.mdl",
+    "model_source": "quakevr\\progs\\g_prox.mdl",
+    "skins": [
+      {
+        "texture": "g_prox.mdl_0.png",
+        "size": [
+          224,
+          195
+        ],
+        "source": "quakevr\\progs\\g_prox.mdl embedded skin 0",
+        "sha256": "f11b2f4b8e523cdaeeb43701e54efcd6b46f61ffbc6181c186dcdd150540c6d7",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_rock.mdl",
+    "model_source": "ad\\pak0.pak:progs/g_rock.mdl",
+    "skins": [
+      {
+        "texture": "g_rock.mdl_0.png",
+        "size": [
+          128,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/g_rock.mdl embedded skin 0",
+        "sha256": "9b818115385ad584b73f6e50e520096638240b6d98cdaffae931312d96fa9d95",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_rock2.mdl",
+    "model_source": "ad\\pak0.pak:progs/g_rock2.mdl",
+    "skins": [
+      {
+        "texture": "g_rock2.mdl_0.png",
+        "size": [
+          128,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/g_rock2.mdl embedded skin 0",
+        "sha256": "eea0ddae9091f14a7a1931c0d1ea945442ae7ce153891318175be808844b7998",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_shadaxe.mdl",
+    "model_source": "ad\\pak0.pak:progs/g_shadaxe.mdl",
+    "skins": [
+      {
+        "texture": "g_shadaxe.mdl_0.png",
+        "size": [
+          512,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/g_shadaxe.mdl embedded skin 0",
+        "sha256": "308aa46cdb406c8899654a61b22f1c19a90241e850e69aaac7c9fbdd03180117",
+        "support_maps": []
+      },
+      {
+        "texture": "g_shadaxe.mdl_1.png",
+        "size": [
+          512,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/g_shadaxe.mdl embedded skin 1",
+        "sha256": "80d85fec10c382300afaac14b45206267ee98147f9628ad03016435b961b379d",
+        "support_maps": []
+      },
+      {
+        "texture": "g_shadaxe.mdl_2.png",
+        "size": [
+          512,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/g_shadaxe.mdl embedded skin 2",
+        "sha256": "6f13b8ae1c8cfd11b8c9ea0c32fac824feca13ffdd0417718a3af281a3d57213",
+        "support_maps": []
+      },
+      {
+        "texture": "g_shadaxe.mdl_3.png",
+        "size": [
+          512,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/g_shadaxe.mdl embedded skin 3",
+        "sha256": "9a2c406682cb107bf0dce2297edafceb501fe29ff4322a75763e5487ef6be467",
+        "support_maps": []
+      },
+      {
+        "texture": "g_shadaxe.mdl_4.png",
+        "size": [
+          512,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/g_shadaxe.mdl embedded skin 4",
+        "sha256": "064fc317981ec7720fe6b93d53092ffb6db86113e327090727c223183d2dae5f",
+        "support_maps": []
+      },
+      {
+        "texture": "g_shadaxe.mdl_5.png",
+        "size": [
+          512,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/g_shadaxe.mdl embedded skin 5",
+        "sha256": "df167fb289504d2515865283388995da4d5b1b585c321a5c4e708b299d0e85d8",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_shot.mdl",
+    "model_source": "quakevr\\progs\\g_shot.mdl",
+    "skins": [
+      {
+        "texture": "g_shot.mdl_0.png",
+        "size": [
+          128,
+          128
+        ],
+        "source": "quakevr\\progs\\g_shot.mdl embedded skin 0",
+        "sha256": "d79bf74db7ed340c96ed51227929e64119251b2ac13695f91132d0aae4921188",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_shot0.mdl",
+    "model_source": "quakevr\\progs\\g_shot0.mdl",
+    "skins": [
+      {
+        "texture": "g_shot0.mdl_0.png",
+        "size": [
+          128,
+          128
+        ],
+        "source": "quakevr\\progs\\g_shot0.mdl embedded skin 0",
+        "sha256": "df92cd7efa27e5b75cdaa31d9382856f66c7be2b285bc904f153e502264c69b5",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_shot1.mdl",
+    "model_source": "ad\\pak0.pak:progs/g_shot1.mdl",
+    "skins": [
+      {
+        "texture": "g_shot1.mdl_0.png",
+        "size": [
+          116,
+          192
+        ],
+        "source": "ad\\pak0.pak:progs/g_shot1.mdl embedded skin 0",
+        "sha256": "1cf1541a03cb35a625550c15c41e70b9274675eedb462af85e3f8351e6ed4df3",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_shot2.mdl",
+    "model_source": "ad\\pak0.pak:progs/g_shot2.mdl",
+    "skins": [
+      {
+        "texture": "g_shot2.mdl_0.png",
+        "size": [
+          128,
+          64
+        ],
+        "source": "ad\\pak0.pak:progs/g_shot2.mdl embedded skin 0",
+        "sha256": "79e9848da2f8c081daa8ca209ddf8d5e78a1ec4cb7609dccf93ee5e69245113e",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_shot3.mdl",
+    "model_source": "ad\\pak0.pak:progs/g_shot3.mdl",
+    "skins": [
+      {
+        "texture": "g_shot3.mdl_0.png",
+        "size": [
+          256,
+          256
+        ],
+        "source": "ad\\pak0.pak:progs/g_shot3.mdl embedded skin 0",
+        "sha256": "77fbfa90a236bb7046a3cefa2f72906c4efcc4c4f0691bb6a1106b1d108197ee",
+        "support_maps": []
+      },
+      {
+        "texture": "g_shot3.mdl_1.png",
+        "size": [
+          256,
+          256
+        ],
+        "source": "ad\\pak0.pak:progs/g_shot3.mdl embedded skin 1",
+        "sha256": "738dee1240618bf6abe59502912c854bc33f722127f4879cbd1aa00771db5604",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "g_zershot.mdl",
+    "model_source": "ad\\pak0.pak:progs/g_zershot.mdl",
+    "skins": [
+      {
+        "texture": "g_zershot.mdl_0.png",
+        "size": [
+          320,
+          200
+        ],
+        "source": "ad\\pak0.pak:progs/g_zershot.mdl embedded skin 0",
+        "sha256": "04fa928f6dc2747af14922032605b5e6468ba365c82be36b583bf660f0cd30bc",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "hand.mdl",
+    "model_source": "advr\\progs\\hand.mdl",
+    "skins": [
+      {
+        "texture": "hand.mdl_0.png",
+        "size": [
+          512,
+          128
+        ],
+        "source": "advr\\progs\\hand.mdl embedded skin 0",
+        "sha256": "b5b227e62b13ecde5b26c4ff429409ca0907d69ad1dea998701dbb5d053b9f0b",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "v_axe.mdl",
+    "model_source": "advr\\progs\\v_axe.mdl",
+    "skins": [
+      {
+        "texture": "v_axe.mdl_0.png",
+        "size": [
+          2170,
+          725
+        ],
+        "source": "advr\\progs\\v_axe.mdl_0.png",
+        "sha256": "57f3a824e6219856b51cf231bc15d5c3d741e6c68a930cdf401112845a91937e",
+        "support_maps": [
+          "v_axe.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_chainsaw.mdl",
+    "model_source": "quakevr\\progs\\v_chainsaw.mdl",
+    "skins": [
+      {
+        "texture": "v_chainsaw.mdl_0.png",
+        "size": [
+          1767,
+          890
+        ],
+        "source": "advr\\progs\\v_chainsaw.mdl_0.png",
+        "sha256": "8c419bf58eaa0fdf0f5e7f6caf782b704c372f848cc5fe88cb2f314914db23b7",
+        "support_maps": [
+          "v_chainsaw.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_crowbar.mdl",
+    "model_source": "quakevr\\progs\\v_crowbar.mdl",
+    "skins": [
+      {
+        "texture": "v_crowbar.mdl_0.png",
+        "size": [
+          2048,
+          256
+        ],
+        "source": "quakevr\\progs\\v_crowbar.mdl_0.png",
+        "sha256": "7442cd95c6b39285bf0de28d29c3134712b944fd4e42fdb4d40e0d9450c3169d",
+        "support_maps": [
+          "v_crowbar.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_enfrifle.mdl",
+    "model_source": "quakevr\\progs\\v_enfrifle.mdl",
+    "skins": [
+      {
+        "texture": "v_enfrifle.mdl_0.png",
+        "size": [
+          576,
+          386
+        ],
+        "source": "quakevr\\progs\\v_enfrifle.mdl embedded skin 0",
+        "sha256": "26908f1f8cd600e30a0a2e133db8565126fd831b02344a502c721ab55c0d531f",
+        "support_maps": [
+          "v_enfrifle.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_ghook.mdl",
+    "model_source": "ad\\pak0.pak:progs/v_ghook.mdl",
+    "skins": [
+      {
+        "texture": "v_ghook.mdl_0.png",
+        "size": [
+          296,
+          195
+        ],
+        "source": "ad\\pak0.pak:progs/v_ghook.mdl embedded skin 0",
+        "sha256": "bc9a7d8bd22e3f3607d61e4920c86b899002be5c92fd3d3a39decd5829e6dad2",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "v_grpple.mdl",
+    "model_source": "advr\\progs\\v_grpple.mdl",
+    "skins": [
+      {
+        "texture": "v_grpple.mdl_0.png",
+        "size": [
+          512,
+          235
+        ],
+        "source": "advr\\progs\\v_grpple.mdl embedded skin 0",
+        "sha256": "bc68b5d0cc36810e8b151f4a450f9577ca93e4655a73b39aad18a4d9868a855c",
+        "support_maps": [
+          "v_grpple.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_gruntgun.mdl",
+    "model_source": "quakevr\\progs\\v_gruntgun.mdl",
+    "skins": [
+      {
+        "texture": "v_gruntgun.mdl_0.png",
+        "size": [
+          256,
+          260
+        ],
+        "source": "quakevr\\progs\\v_gruntgun.mdl embedded skin 0",
+        "sha256": "6538670b1435d196864f0a01364f3b8b7e4ae9798fa71fd01b81f8113cce8a23",
+        "support_maps": [
+          "v_gruntgun.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_hammer.mdl",
+    "model_source": "quakevr\\progs\\v_hammer.mdl",
+    "skins": [
+      {
+        "texture": "v_hammer.mdl_0.png",
+        "size": [
+          512,
+          128
+        ],
+        "source": "quakevr\\progs\\v_hammer.mdl embedded skin 0",
+        "sha256": "ded326606896e1364a3441f6602de88e713a18445a68e1a8477d9761ef51c4cc",
+        "support_maps": [
+          "v_hammer.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_hksword.mdl",
+    "model_source": "quakevr\\progs\\v_hksword.mdl",
+    "skins": [
+      {
+        "texture": "v_hksword.mdl_0.png",
+        "size": [
+          2027,
+          776
+        ],
+        "source": "advr\\progs\\v_hksword.mdl_0.png",
+        "sha256": "3252834dcaf1b6d9b8aba975eddcb602e0103d8a77614de1bd62fb0463fe7a12",
+        "support_maps": [
+          "v_hksword.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_ksword.mdl",
+    "model_source": "quakevr\\progs\\v_ksword.mdl",
+    "skins": [
+      {
+        "texture": "v_ksword.mdl_0.png",
+        "size": [
+          1254,
+          1254
+        ],
+        "source": "advr\\progs\\v_ksword.mdl_0.png",
+        "sha256": "fff3d1517c684cbe6283b2e2ef493ab4754442133f04c8973daa9056251e8d7f",
+        "support_maps": [
+          "v_ksword.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_laserg.mdl",
+    "model_source": "quakevr\\progs\\v_laserg.mdl",
+    "skins": [
+      {
+        "texture": "v_laserg.mdl_0.png",
+        "size": [
+          800,
+          277
+        ],
+        "source": "quakevr\\progs\\v_laserg.mdl embedded skin 0",
+        "sha256": "1d45b0ff53ff8b340e96cb2a576b505bf0f6620d251ed31b0b4bd7bccb535797",
+        "support_maps": [
+          "v_laserg.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_lava.mdl",
+    "model_source": "quakevr\\progs\\v_lava.mdl",
+    "skins": [
+      {
+        "texture": "v_lava.mdl_0.png",
+        "size": [
+          512,
+          178
+        ],
+        "source": "quakevr\\progs\\v_lava.mdl embedded skin 0",
+        "sha256": "d88190f20eef4e07e827330c8b3eaa6fc6da22f3bc73cfbfb006d13a3f464cfb",
+        "support_maps": [
+          "v_lava.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_lava2.mdl",
+    "model_source": "quakevr\\progs\\v_lava2.mdl",
+    "skins": [
+      {
+        "texture": "v_lava2.mdl_0.png",
+        "size": [
+          512,
+          146
+        ],
+        "source": "quakevr\\progs\\v_lava2.mdl embedded skin 0",
+        "sha256": "977810c366b302e4e6bc571a33b5c54a087c75ec0f8fd15f46248896f6027394",
+        "support_maps": [
+          "v_lava2.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_light.mdl",
+    "model_source": "advr\\progs\\v_light.mdl",
+    "skins": [
+      {
+        "texture": "v_light.mdl_0.png",
+        "size": [
+          2126,
+          740
+        ],
+        "source": "advr\\progs\\v_light.mdl_0.png",
+        "sha256": "756f035dc931d38ac31518587202180ed2e217825165f72f3b1471ea32088361",
+        "support_maps": [
+          "v_light.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_multi.mdl",
+    "model_source": "quakevr\\progs\\v_multi.mdl",
+    "skins": [
+      {
+        "texture": "v_multi.mdl_0.png",
+        "size": [
+          512,
+          194
+        ],
+        "source": "quakevr\\progs\\v_multi.mdl embedded skin 0",
+        "sha256": "c7508a592547e669b56625a0cd5c15887ad435d6084f6163af7d0d41047a540d",
+        "support_maps": [
+          "v_multi.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_multi2.mdl",
+    "model_source": "quakevr\\progs\\v_multi2.mdl",
+    "skins": [
+      {
+        "texture": "v_multi2.mdl_0.png",
+        "size": [
+          512,
+          146
+        ],
+        "source": "quakevr\\progs\\v_multi2.mdl embedded skin 0",
+        "sha256": "1e0a8418f3e69d2fd666cfc0f80efe529be8283b8dac4f0ddfe1567f5064215a",
+        "support_maps": [
+          "v_multi2.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_nail.mdl",
+    "model_source": "advr\\progs\\v_nail.mdl",
+    "skins": [
+      {
+        "texture": "v_nail.mdl_0.png",
+        "size": [
+          2126,
+          740
+        ],
+        "source": "advr\\progs\\v_nail.mdl_0.png",
+        "sha256": "f8ccfd78585161d952abf0ba05992c7b6496266785179c1bc3d614f4011d88e7",
+        "support_maps": [
+          "v_nail.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_nail2.mdl",
+    "model_source": "advr\\progs\\v_nail2.mdl",
+    "skins": [
+      {
+        "texture": "v_nail2.mdl_0.png",
+        "size": [
+          2170,
+          725
+        ],
+        "source": "advr\\progs\\v_nail2.mdl_0.png",
+        "sha256": "00c7aad51ce16601d6602d0aee8dc57dfd991e3cda53b7f8b4b69a8a2b851809",
+        "support_maps": [
+          "v_nail2.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_plasma.mdl",
+    "model_source": "advr\\progs\\v_plasma.mdl",
+    "skins": [
+      {
+        "texture": "v_plasma.mdl_0.png",
+        "size": [
+          512,
+          178
+        ],
+        "source": "advr\\progs\\v_plasma.mdl embedded skin 0",
+        "sha256": "9fb0604d8f7293c54010e9202b2c5341d1c4a61a1b61728d07e4118c385ea0c0",
+        "support_maps": [
+          "v_plasma.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_prox.mdl",
+    "model_source": "quakevr\\progs\\v_prox.mdl",
+    "skins": [
+      {
+        "texture": "v_prox.mdl_0.png",
+        "size": [
+          512,
+          194
+        ],
+        "source": "quakevr\\progs\\v_prox.mdl embedded skin 0",
+        "sha256": "f8014f176cb82877a3eb8052c208f604b369840f860f81d644a367ebfbd57ed6",
+        "support_maps": [
+          "v_prox.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_rock.mdl",
+    "model_source": "advr\\progs\\v_rock.mdl",
+    "skins": [
+      {
+        "texture": "v_rock.mdl_0.png",
+        "size": [
+          2037,
+          772
+        ],
+        "source": "advr\\progs\\v_rock.mdl_0.png",
+        "sha256": "b0bf4c84e22f13dc6833d2ecd53af9be339ec23fea5c81765178d215bea351c8",
+        "support_maps": [
+          "v_rock.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_rock2.mdl",
+    "model_source": "advr\\progs\\v_rock2.mdl",
+    "skins": [
+      {
+        "texture": "v_rock2.mdl_0.png",
+        "size": [
+          2170,
+          725
+        ],
+        "source": "advr\\progs\\v_rock2.mdl_0.png",
+        "sha256": "acacd6119425d5d547e068ce85031906cabf0d2cac3fd13f80287dce5f542cf6",
+        "support_maps": [
+          "v_rock2.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_shadaxe0.mdl",
+    "model_source": "ad\\pak0.pak:progs/v_shadaxe0.mdl",
+    "skins": [
+      {
+        "texture": "v_shadaxe0.mdl_0.png",
+        "size": [
+          512,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/v_shadaxe0.mdl embedded skin 0",
+        "sha256": "9f66f0db474eeea67be71510d48240a63301e18dbe1c56b86cc0f3cf7438697a",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "v_shadaxe3.mdl",
+    "model_source": "ad\\pak0.pak:progs/v_shadaxe3.mdl",
+    "skins": [
+      {
+        "texture": "v_shadaxe3.mdl_0.png",
+        "size": [
+          512,
+          128
+        ],
+        "source": "ad\\pak0.pak:progs/v_shadaxe3.mdl embedded skin 0",
+        "sha256": "9a2c406682cb107bf0dce2297edafceb501fe29ff4322a75763e5487ef6be467",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "v_shot.mdl",
+    "model_source": "advr\\progs\\v_shot.mdl",
+    "skins": [
+      {
+        "texture": "v_shot.mdl_0.png",
+        "size": [
+          1019,
+          1544
+        ],
+        "source": "advr\\progs\\v_shot.mdl_0.png",
+        "sha256": "671b6353945bccb5a1ccb0de4506e4e60702902515554486cf9b5e91b7a3b564",
+        "support_maps": [
+          "v_shot.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_shot2.mdl",
+    "model_source": "advr\\progs\\v_shot2.mdl",
+    "skins": [
+      {
+        "texture": "v_shot2.mdl_0.png",
+        "size": [
+          2172,
+          724
+        ],
+        "source": "advr\\progs\\v_shot2.mdl_0.png",
+        "sha256": "6467374a999d5074acdb9f6c242bcfe707f812a483dc55775b8fbcdca9bda73f",
+        "support_maps": [
+          "v_shot2.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "v_shot3.mdl",
+    "model_source": "ad\\pak0.pak:progs/v_shot3.mdl",
+    "skins": [
+      {
+        "texture": "v_shot3.mdl_0.png",
+        "size": [
+          256,
+          256
+        ],
+        "source": "ad\\pak0.pak:progs/v_shot3.mdl embedded skin 0",
+        "sha256": "90cdfa9ae083df4cc3986d3daec3daef260a0716599a4bc642330c8699ee031d",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "v_zershot.mdl",
+    "model_source": "ad\\pak0.pak:progs/v_zershot.mdl",
+    "skins": [
+      {
+        "texture": "v_zershot.mdl_0.png",
+        "size": [
+          280,
+          200
+        ],
+        "source": "ad\\pak0.pak:progs/v_zershot.mdl embedded skin 0",
+        "sha256": "54f84b3c58a2e17c0ad2b781d8520e971db95a6dae9ed7ed166f90ea6f0ecb65",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "vr_mag_light.mdl",
+    "model_source": "advr\\progs\\vr_mag_light.mdl",
+    "skins": [
+      {
+        "texture": "vr_mag_light.mdl_0.png",
+        "size": [
+          64,
+          64
+        ],
+        "source": "advr\\progs\\vr_mag_light.mdl embedded skin 0",
+        "sha256": "787614edc80509e97965172f06fdcc7f944d1f1658dd470b2fa26f0eb90005b1",
+        "support_maps": []
+      },
+      {
+        "texture": "vr_mag_light.mdl_1.png",
+        "size": [
+          64,
+          64
+        ],
+        "source": "advr\\progs\\vr_mag_light.mdl embedded skin 1",
+        "sha256": "a3b1d6a571b92ab3a7f31dad34ac43c3c73cafd1a166940e710c2b01999d486f",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "vr_mag_nail.mdl",
+    "model_source": "advr\\progs\\vr_mag_nail.mdl",
+    "skins": [
+      {
+        "texture": "vr_mag_nail.mdl_0.png",
+        "size": [
+          64,
+          64
+        ],
+        "source": "advr\\progs\\vr_mag_nail.mdl embedded skin 0",
+        "sha256": "fabbd7392fecc496898bf8b4cdc3d98dbeeb1138ac73a19d169afd76d6a76ac5",
+        "support_maps": []
+      },
+      {
+        "texture": "vr_mag_nail.mdl_1.png",
+        "size": [
+          64,
+          64
+        ],
+        "source": "advr\\progs\\vr_mag_nail.mdl embedded skin 1",
+        "sha256": "15dd056e585fe985389379e74a1266574183da6f9ee5b1ae36eb5d519c83130b",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "vr_mag_snail.mdl",
+    "model_source": "advr\\progs\\vr_mag_snail.mdl",
+    "skins": [
+      {
+        "texture": "vr_mag_snail.mdl_0.png",
+        "size": [
+          64,
+          64
+        ],
+        "source": "advr\\progs\\vr_mag_snail.mdl embedded skin 0",
+        "sha256": "fabbd7392fecc496898bf8b4cdc3d98dbeeb1138ac73a19d169afd76d6a76ac5",
+        "support_maps": []
+      },
+      {
+        "texture": "vr_mag_snail.mdl_1.png",
+        "size": [
+          64,
+          64
+        ],
+        "source": "advr\\progs\\vr_mag_snail.mdl embedded skin 1",
+        "sha256": "15dd056e585fe985389379e74a1266574183da6f9ee5b1ae36eb5d519c83130b",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "vr_round_rocket.mdl",
+    "model_source": "advr\\progs\\vr_round_rocket.mdl",
+    "skins": [
+      {
+        "texture": "vr_round_rocket.mdl_0.png",
+        "size": [
+          64,
+          32
+        ],
+        "source": "advr\\progs\\vr_round_rocket.mdl embedded skin 0",
+        "sha256": "5f9a2720a0b061876656544dea4efaf658292b2c5c86e68847be0c3e0990dd25",
+        "support_maps": []
+      },
+      {
+        "texture": "vr_round_rocket.mdl_1.png",
+        "size": [
+          64,
+          32
+        ],
+        "source": "advr\\progs\\vr_round_rocket.mdl embedded skin 1",
+        "sha256": "a2e2854a42251d6f6d784a5404f70a6601a59e783336e5e7b193bcf16307480b",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "vr_shell.mdl",
+    "model_source": "advr\\progs\\vr_shell.mdl",
+    "skins": [
+      {
+        "texture": "vr_shell.mdl_0.png",
+        "size": [
+          32,
+          32
+        ],
+        "source": "advr\\progs\\vr_shell.mdl embedded skin 0",
+        "sha256": "d71356ec451402d29fff9a1784a7d7f6115504f149404cddbfc10f93c8140ad0",
+        "support_maps": [
+          "vr_shell.mdl_0_norm.png"
+        ]
+      }
+    ]
+  },
+  {
+    "model": "vr_shell_live.mdl",
+    "model_source": "advr\\progs\\vr_shell_live.mdl",
+    "skins": [
+      {
+        "texture": "vr_shell_live.mdl_0.png",
+        "size": [
+          64,
+          32
+        ],
+        "source": "advr\\progs\\vr_shell_live.mdl embedded skin 0",
+        "sha256": "e6f5b21f6a90796acc765cba72778142d1f2f9e2b1b4b239b5147ba5deac465c",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "vr_shell_pair.mdl",
+    "model_source": "advr\\progs\\vr_shell_pair.mdl",
+    "skins": [
+      {
+        "texture": "vr_shell_pair.mdl_0.png",
+        "size": [
+          64,
+          32
+        ],
+        "source": "advr\\progs\\vr_shell_pair.mdl embedded skin 0",
+        "sha256": "e6f5b21f6a90796acc765cba72778142d1f2f9e2b1b4b239b5147ba5deac465c",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "vr_ssg_barrels_on_v_shot2.mdl",
+    "model_source": "advr\\progs\\vr_ssg_barrels_on_v_shot2.mdl",
+    "skins": [
+      {
+        "texture": "vr_ssg_barrels_on_v_shot2.mdl_0.png",
+        "size": [
+          2172,
+          772
+        ],
+        "source": "advr\\progs\\vr_ssg_barrels_on_v_shot2.mdl_0.png",
+        "sha256": "3b62d45e740bb2a4dc0648f79b201d65ad5cd0eaf99f9b14aebf5209cbd0d99d",
+        "support_maps": []
+      },
+      {
+        "texture": "vr_ssg_barrels_on_v_shot2.mdl_1.png",
+        "size": [
+          2172,
+          772
+        ],
+        "source": "advr\\progs\\vr_ssg_barrels_on_v_shot2.mdl_1.png",
+        "sha256": "53b92b0803d078908ec9faf3c4d14b07324d2efcf743cdbec82a48c5721fb0c4",
+        "support_maps": []
+      },
+      {
+        "texture": "vr_ssg_barrels_on_v_shot2.mdl_2.png",
+        "size": [
+          2172,
+          772
+        ],
+        "source": "advr\\progs\\vr_ssg_barrels_on_v_shot2.mdl_2.png",
+        "sha256": "8c545e79c1f850bb096ea7926bfd3b6fab027b0b7f7e35e918a39fda275765d0",
+        "support_maps": []
+      }
+    ]
+  },
+  {
+    "model": "vr_ssg_frame_on_v_shot2.mdl",
+    "model_source": "advr\\progs\\vr_ssg_frame_on_v_shot2.mdl",
+    "skins": [
+      {
+        "texture": "vr_ssg_frame_on_v_shot2.mdl_0.png",
+        "size": [
+          2172,
+          772
+        ],
+        "source": "advr\\progs\\vr_ssg_frame_on_v_shot2.mdl_0.png",
+        "sha256": "b2130831b44473815976b1a7777fd076b8953a1a0bbb8003a26d9f037cc722cf",
+        "support_maps": []
+      }
+    ]
+  }
+]

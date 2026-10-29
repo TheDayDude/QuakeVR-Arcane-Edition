@@ -106,23 +106,23 @@ void() ADVR_TestCombat = {
     local float positional,mult,precise,beforehp,count,blood,kills,originaltotal;
     local vector head,org;
     originaltotal=total_monsters;actor=self;positional=cvar("vr_positional_damage");mult=cvar("vr_headshot_mult");precise=cvar("vr_hit_precise");
-    cvar_set("vr_positional_damage","1");cvar_set("vr_headshot_mult","1.5");cvar_set("vr_hit_precise","1");
+    cvar_set("vr_positional_damage","1");cvar_set("vr_headshot_mult","2");cvar_set("vr_hit_precise","1");
     // Run on ad_e1m1, whose soldiers and their assets are already precached.
     e=spawn();e.classname="monster_army";setorigin(e,actor.origin+'0 80 0');actor.flags=actor.flags | FL_GODMODE;
     self=e;monster_army();self=actor;setmodel(e,e.mdl);setsize(e,e.bbmins,e.bbmaxs);e.solid=SOLID_SLIDEBOX;e.nextthink=time+600;e.frame=0;e.angles='0 0 0';
     e.health=1000;e.takedamage=DAMAGE_AIM;e.flags=e.flags | FL_MONSTER;
     head=e.origin+'3 0 22';
-    ADVR_Assert(ADVR_HeadDamage(e,actor,head,'-1 0 0',10)==15,"precise soldier head multiplier");
+    ADVR_Assert(ADVR_HeadDamage(e,actor,head,'-1 0 0',10)==20,"precise soldier head multiplier");
     ADVR_Assert(ADVR_HeadDamage(e,actor,e.origin,'-1 0 0',10)==10,"torso has no multiplier");
     // Vertex 204 of AD soldier painb5 lies far below its standing head.
     e.frame=50;
-    ADVR_Assert(ADVR_HeadDamage(e,actor,e.origin+'8.97 3.63 4.25','-1 0 0',10)==15,"animated crouched head follows mesh");
+    ADVR_Assert(ADVR_HeadDamage(e,actor,e.origin+'8.97 3.63 4.25','-1 0 0',10)==20,"animated crouched head follows mesh");
     e.frame=0;
     e.angles_y=90;head=e.origin+'0 3 22';
-    ADVR_Assert(ADVR_HeadDamage(e,actor,head,'0 -1 0',10)==15,"rotated head multiplier");
+    ADVR_Assert(ADVR_HeadDamage(e,actor,head,'0 -1 0',10)==20,"rotated head multiplier");
     e.angles_y=0;head=e.origin+'3 0 22';
     cvar_set("vr_hit_precise","0");
-    ADVR_Assert(ADVR_HeadDamage(e,actor,e.origin+'30 0 22','-1 0 0',10)==15,"box fallback head ray");
+    ADVR_Assert(ADVR_HeadDamage(e,actor,e.origin+'30 0 22','-1 0 0',10)==20,"box fallback head ray");
     ADVR_Assert(ADVR_HeadDamage(e,actor,e.origin+'30 0 0','-1 0 0',10)==10,"box fallback torso ray");
     cvar_set("vr_hit_precise","1");
     cvar_set("vr_positional_damage","0");
@@ -132,18 +132,18 @@ void() ADVR_TestCombat = {
     projectile.classgroup=CG_PROJNAILS;projectile.velocity='-600 0 0';setorigin(projectile,head);
     e.th_pain=ADVR_TestPain;e.armorvalue=0;e.armortype=0;actor.super_damage_finished=0;
     beforehp=e.health;T_Damage(e,projectile,actor,10,DAMARMOR);
-    ADVR_Assert(beforehp-e.health==15,"direct projectile head damage once");
+    ADVR_Assert(beforehp-e.health==20,"direct projectile head damage once");
     beforehp=e.health;T_Damage(e,projectile,actor,10,DAMSPLASH);
     ADVR_Assert(beforehp-e.health==10,"splash never receives head multiplier");
     // Actual AD pellet touch stops/hides its projectile before applying damage.
     projectile.classname="proj_bullet";projectile.classtype=CT_PROJ_SG;projectile.classgroup=CG_PROJSHELLS;
     beforehp=e.health;self=projectile;other=e;Touch_Bullet();self=actor;other=world;
-    ADVR_Assert(beforehp-e.health==DAMAGE_PSHELL*1.5,"actual stopped pellet headshot");
+    ADVR_Assert(beforehp-e.health==DAMAGE_PSHELL*2,"actual stopped pellet headshot");
     // Native bolt impact stops movement before T_Damage; retain its head hit.
     projectile.advr_crossbolt=1;projectile.classtype=CT_PROJ_BOLT1;projectile.classgroup=CG_PROJNAILS;
     projectile.velocity='-900 0 0';projectile.touch=Touch_Projectile;setorigin(projectile,head);
     beforehp=e.health;self=projectile;other=e;Touch_Projectile();self=actor;other=world;
-    ADVR_Assert(beforehp-e.health==100,"crossbow bolt receives two-times headshot bonus exactly once");
+    ADVR_Assert(beforehp-e.health==150,"crossbow bolt receives three-times headshot bonus exactly once");
     projectile.advr_crossbolt=0;
     projectile.movetype=MOVETYPE_FLYMISSILE;projectile.velocity='-600 0 0';projectile.nextthink=time+600;
     // Multi-damage accumulates each pellet's own result, not a whole-blast head multiplier.
@@ -151,7 +151,7 @@ void() ADVR_TestCombat = {
     AddMultiDamage(e,ADVR_HeadDamage(e,actor,head,'-1 0 0',10));
     AddMultiDamage(e,ADVR_HeadDamage(e,actor,e.origin,'-1 0 0',10));
     beforehp=e.health;ApplyMultiDamage();
-    ADVR_Assert(beforehp-e.health==25,"mixed head/body pellets accumulate individually");
+    ADVR_Assert(beforehp-e.health==30,"mixed head/body pellets accumulate individually");
     e.advr_blood_next=0;blood=advr_blood_events;
     SpawnBlood(e,head,'0 0 60',20);SpawnBlood(e,head,'0 0 60',20);
     ADVR_Assert(advr_blood_events==blood+1,"hit blood routed and rate limited");

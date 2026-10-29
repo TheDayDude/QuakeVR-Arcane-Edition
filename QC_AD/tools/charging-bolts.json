@@ -1,0 +1,263 @@
+{
+  "advr_base_nail": {
+    "design": "round knurled knob",
+    "home": [
+      3.6776,
+      -2.736,
+      0.446
+    ],
+    "travel": 3,
+    "original_frames": 32,
+    "frames": 1024,
+    "body_vertices": 544,
+    "body_triangles": 450,
+    "parts": [
+      {
+        "name": "receiver sleeve",
+        "first_vertex": 544,
+        "vertex_count": 24,
+        "moving": false
+      },
+      {
+        "name": "sliding bolt",
+        "first_vertex": 568,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "handle stem",
+        "first_vertex": 592,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "knob 0",
+        "first_vertex": 616,
+        "vertex_count": 48,
+        "moving": true
+      },
+      {
+        "name": "knob 1",
+        "first_vertex": 664,
+        "vertex_count": 48,
+        "moving": true
+      },
+      {
+        "name": "knob 2",
+        "first_vertex": 712,
+        "vertex_count": 48,
+        "moving": true
+      }
+    ]
+  },
+  "advr_base_nail2": {
+    "design": "wide stepped lever",
+    "home": [
+      5.2328,
+      -3.1104,
+      0.032
+    ],
+    "travel": 3,
+    "original_frames": 32,
+    "frames": 1024,
+    "body_vertices": 294,
+    "body_triangles": 254,
+    "parts": [
+      {
+        "name": "receiver sleeve",
+        "first_vertex": 294,
+        "vertex_count": 24,
+        "moving": false
+      },
+      {
+        "name": "sliding bolt",
+        "first_vertex": 318,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "handle stem",
+        "first_vertex": 342,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "wide lever",
+        "first_vertex": 366,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "raised finger lip",
+        "first_vertex": 390,
+        "vertex_count": 24,
+        "moving": true
+      }
+    ]
+  },
+  "advr_plasma": {
+    "design": "forked energy-cell lever",
+    "home": [
+      2.0,
+      -2.7,
+      1.0
+    ],
+    "travel": 3,
+    "original_frames": 1,
+    "frames": 32,
+    "body_vertices": 784,
+    "body_triangles": 427,
+    "parts": [
+      {
+        "name": "receiver sleeve",
+        "first_vertex": 784,
+        "vertex_count": 24,
+        "moving": false
+      },
+      {
+        "name": "sliding bolt",
+        "first_vertex": 808,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "handle stem",
+        "first_vertex": 832,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "rear fork",
+        "first_vertex": 856,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "front fork",
+        "first_vertex": 880,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "crossbar",
+        "first_vertex": 904,
+        "vertex_count": 24,
+        "moving": true
+      }
+    ]
+  },
+  "advr_base_light": {
+    "design": "ribbed capacitor T-handle",
+    "home": [
+      1.185104,
+      -3.22452,
+      -0.2794
+    ],
+    "travel": 3,
+    "original_frames": 32,
+    "frames": 1024,
+    "body_vertices": 319,
+    "body_triangles": 213,
+    "parts": [
+      {
+        "name": "receiver sleeve",
+        "first_vertex": 319,
+        "vertex_count": 24,
+        "moving": false
+      },
+      {
+        "name": "sliding bolt",
+        "first_vertex": 343,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "handle stem",
+        "first_vertex": 367,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "capacitor T-grip",
+        "first_vertex": 391,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "insulator rib -1",
+        "first_vertex": 415,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "insulator rib 0",
+        "first_vertex": 439,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "insulator rib 1",
+        "first_vertex": 463,
+        "vertex_count": 24,
+        "moving": true
+      }
+    ]
+  },
+  "advr_widowmaker": {
+    "design": "pierced loop charging lever",
+    "home": [
+      3.0,
+      -2.7,
+      1.0
+    ],
+    "travel": 3,
+    "original_frames": 1,
+    "frames": 32,
+    "body_vertices": 1039,
+    "body_triangles": 525,
+    "parts": [
+      {
+        "name": "receiver sleeve",
+        "first_vertex": 1039,
+        "vertex_count": 24,
+        "moving": false
+      },
+      {
+        "name": "sliding bolt",
+        "first_vertex": 1063,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "handle stem",
+        "first_vertex": 1087,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "loop upper rail",
+        "first_vertex": 1111,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "loop lower rail",
+        "first_vertex": 1135,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "loop rear upright",
+        "first_vertex": 1159,
+        "vertex_count": 24,
+        "moving": true
+      },
+      {
+        "name": "loop front upright",
+        "first_vertex": 1183,
+        "vertex_count": 24,
+        "moving": true
+      }
+    ]
+  }
+}

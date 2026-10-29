@@ -166,7 +166,9 @@ int enchantCode(edict_t* record,edict_t* player=nullptr)
         const int strength=CLAMP(1,static_cast<int>(fieldFloatOr(player,f.advr_enchant_charge,0.f)*(31.f/3.f)),31);
         return ((static_cast<int>(fieldFloatOr(player,f.advr_enchant_spell,0.f))+1)&7) | (strength<<3);
     }
-    if(fieldFloatOr(record,f.advr_enchant_until,0.f)<=qcvm->time)return 0;
+    const bool ammo=!strcmp(PR_GetString(record->v.classname),"advr_reload_round") &&
+        fieldFloatOr(record,f.advr_round_count,0.f)>0;
+    if(!ammo && fieldFloatOr(record,f.advr_enchant_until,0.f)<=qcvm->time)return 0;
     const int type=static_cast<int>(fieldFloatOr(record,f.advr_enchant_type,0.f));
     if(type==10)return 1; // unused zero-strength codes preserve the byte protocol
     if(type==11)return 2;
@@ -183,7 +185,7 @@ int entityEnchantCode(edict_t* ent)
     if((static_cast<int>(ent->v.flags)&FL_MONSTER) && ent->v.health>0 &&
        fieldFloatOr(ent,fields().advr_frost_until,0.f)>qcvm->time)return 3 | (7<<3);
     if(edict_t* record=weaponInst(ent,fields().weaponinst))return enchantCode(record);
-    return enchantCode(ent);
+    return enchantCode(ent,weaponInst(ent,fields().advr_round_holder));
 }
 
 void sweepWeaponInsts()
@@ -653,6 +655,10 @@ extern "C" void VR_CalcStats(client_t* client, int* statsi, float* statsf)
     stat(STAT_QVR_WEAPONCLIPSIZE2, f.weaponclipsize2);
     stat(STAT_QVR_MELEE, f.vr_melee_hud);
     stat(STAT_QVR_MAGIC_KNOWN, f.advr_available);
+    stat(STAT_QVR_POUCH_KEY,f.advr_pouch_preview_key);
+    stat(STAT_QVR_POUCH_ITEM0,f.advr_pouch_preview0);
+    stat(STAT_QVR_POUCH_ITEM1,f.advr_pouch_preview1);
+    stat(STAT_QVR_POUCH_ITEM2,f.advr_pouch_preview2);
     statsi[STAT_QVR_RELOAD_HANDS]=static_cast<int>(fieldFloatOr(ent,f.advr_reload_hands,0.f));
     statsi[STAT_QVR_EARTH]=fieldFloatOr(ent,f.advr_earth_until,0.f)>qcvm->time && ent->v.health>0 ?
         1 | (fieldFloatOr(ent,f.advr_earth_main_until,0.f)>qcvm->time ? 2 : 0) |
@@ -1130,6 +1136,19 @@ void adTest_f()
         Con_Printf("ADVR POUCH FOLLOW %s error=%g\n",ok ? "PASS" : "FAIL",glm::length(after-before-delta));return;
     }
     PR_SwitchQCVM(&sv.qcvm);
+    if(Cmd_Argc()>1 && !strcmp(Cmd_Argv(1),"ammoglow")) {
+        int tested=0;bool ok=true;
+        for(int i=svs.maxclients+1;i<qcvm->num_edicts;i++) {
+            edict_t* e=EDICT_NUM(i);
+            if(e->free || strcmp(PR_GetString(e->v.classname),"advr_reload_round") ||
+               fieldFloatOr(e,fields().advr_round_count,0.f)<=0)continue;
+            const int type=static_cast<int>(fieldFloatOr(e,fields().advr_enchant_type,0.f));
+            if(type<1 || type>8)continue;
+            tested++;ok=ok && entityEnchantCode(e)==((type&7)|(31<<3));
+        }
+        Con_Printf("ADVR AMMO GLOW %s tested=%d\n",ok && tested ? "PASS" : "FAIL",tested);
+        PR_SwitchQCVM(nullptr);return;
+    }
     const char* fixture = "ADVR_Test";
     if(Cmd_Argc() > 1)
     {
@@ -1163,6 +1182,9 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "grenades")) fixture = "ADVR_TestGrenades";
         else if(!strcmp(Cmd_Argv(1), "classicview")) fixture = "ADVR_TestClassicView";
         else if(!strcmp(Cmd_Argv(1), "gripview")) fixture = "ADVR_TestGripView";
+        else if(!strcmp(Cmd_Argv(1), "boltinput")) fixture = "ADVR_TestBoltInput";
+        else if(!strcmp(Cmd_Argv(1), "ammoenchant")) fixture = "ADVR_TestAmmoEnchant";
+        else if(!strcmp(Cmd_Argv(1), "boltcheck")) fixture = "ADVR_TestBoltCheck";
         else if(!strcmp(Cmd_Argv(1), "chargeinput")) fixture = "ADVR_TestChargeInput";
         else if(!strcmp(Cmd_Argv(1), "chargecheck")) fixture = "ADVR_TestChargeInputCheck";
         else if(!strcmp(Cmd_Argv(1), "charging")) fixture = "ADVR_TestCharging";
@@ -1220,6 +1242,8 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "fire")) fixture = "ADVR_TestFire";
         else if(!strcmp(Cmd_Argv(1), "flashlight")) fixture = "ADVR_TestFlashlight";
         else if(!strcmp(Cmd_Argv(1), "flashlightview")) fixture = "ADVR_TestFlashlightView";
+        else if(!strcmp(Cmd_Argv(1), "pouchpreview")) fixture = "ADVR_TestPouchPreview";
+        else if(!strcmp(Cmd_Argv(1), "pouchinput")) fixture = "ADVR_TestPouchInput";
         else if(!strcmp(Cmd_Argv(1), "magicview")) fixture = "ADVR_TestMagicView";
         else if(!strcmp(Cmd_Argv(1), "fury")) fixture = "ADVR_TestFury";
         else if(!strcmp(Cmd_Argv(1), "range")) fixture = "ADVR_TestRange";
@@ -1330,18 +1354,23 @@ void adWidowDefaults()
 cvar_t adPlasmaModelVersion{"advr_plasma_model_version", "0", CVAR_ARCHIVE};
 void adPlasmaDefaults()
 {
+    if(adPlasmaModelVersion.value < 5.f) {
+        Cvar_SetValueQuick(weapons::cvar(26,weapons::Key::RecoilStrength),2.75f);
+        Cvar_SetValueQuick(&vr_headshot_mult,2.f);
+    }
+
     if(adPlasmaModelVersion.value >= 3.f){
-        if(adPlasmaModelVersion.value < 4.f){
+        if(adPlasmaModelVersion.value < 5.f){
             Cvar_SetValueQuick(weapons::cvar(26,weapons::Key::Hotspot1X),9.5f);
-            Cvar_SetValueQuick(&adPlasmaModelVersion,4.f);weapons::resetCaches();
+            Cvar_SetValueQuick(&adPlasmaModelVersion,5.f);weapons::resetCaches();
         }return;
     }
     Cvar_SetValueQuick(weapons::cvar(26, weapons::Key::Recoil), 1.f);
-    Cvar_SetValueQuick(weapons::cvar(26, weapons::Key::RecoilStrength), 5.5f);
+    Cvar_SetValueQuick(weapons::cvar(26, weapons::Key::RecoilStrength), 2.75f);
     Cvar_SetValueQuick(weapons::cvar(26, weapons::Key::RecoilTime), 0.8f);
     if(adPlasmaModelVersion.value >= 2.f)
     {
-        Cvar_SetValueQuick(&adPlasmaModelVersion, 3.f);
+        Cvar_SetValueQuick(&adPlasmaModelVersion, 5.f);
         return;
     }
     if(adPlasmaModelVersion.value >= 1.f)
@@ -1349,7 +1378,7 @@ void adPlasmaDefaults()
         // Lower only the support grip on existing installations (about 4 cm).
         Cvar_SetValueQuick(weapons::cvar(26, weapons::Key::Hotspot1Z),
             weapons::value(26, weapons::Key::Hotspot1Z) - 1.2f);
-        Cvar_SetValueQuick(&adPlasmaModelVersion, 3.f);
+        Cvar_SetValueQuick(&adPlasmaModelVersion, 5.f);
         weapons::resetCaches();
         return;
     }
@@ -1360,7 +1389,7 @@ void adPlasmaDefaults()
 #define AD_PLASMA_SETTING(key, value) Cvar_SetValueQuick(weapons::cvar(26, Key::key), value);
 #include "vr_ad_plasma.inc"
 #undef AD_PLASMA_SETTING
-    Cvar_SetValueQuick(&adPlasmaModelVersion, 3.f);
+    Cvar_SetValueQuick(&adPlasmaModelVersion, 5.f);
     weapons::resetCaches();
     Con_Printf("AD VR: AD Plasma Gun model calibration installed\n");
 }
@@ -1509,14 +1538,19 @@ cvar_t adFlashlightVersion{"advr_flashlight_version", "0", CVAR_ARCHIVE};
 cvar_t adBalanceVersion{"advr_balance_version", "0", CVAR_ARCHIVE};
 cvar_t adBaseVersion{"advr_base_models_version","0",CVAR_ARCHIVE};
 void adBaseDefaults(){
-    if(adBaseVersion.value>=8.f)return;
+    if(adBaseVersion.value>=12.f)return;
     using weapons::Key;
+    if(adBaseVersion.value>=11.f){
+        Cvar_SetValueQuick(weapons::cvar(1,Key::TwoHFixedHandYaw),-45.f);
+        Cvar_SetValueQuick(weapons::cvar(1,Key::Hotspot1X),9.f);
+        Cvar_SetValueQuick(&adBaseVersion,12.f);weapons::resetCaches();return;
+    }
 #define AD_BASE_ID(slot, name) weapons::stopInheriting(slot); Cvar_SetQuick(weapons::cvar(slot,Key::ID),name);
 #define AD_BASE_SETTING(slot,key,value) Cvar_SetValueQuick(weapons::cvar(slot,Key::key),value);
 #include "vr_ad_base.inc"
 #undef AD_BASE_ID
 #undef AD_BASE_SETTING
-    Cvar_SetValueQuick(&adBaseVersion,8.f);weapons::resetCaches();
+    Cvar_SetValueQuick(&adBaseVersion,12.f);weapons::resetCaches();
 }
 void adDefaults_f()
 {

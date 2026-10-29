@@ -2540,8 +2540,11 @@ static void PF_strzone(void)
 	id = -1-G_INT(OFS_RETURN);
 	if (id >= qcvm->knownzonesize)
 	{
+		size_t oldbytes = (qcvm->knownzonesize+7)>>3;
 		qcvm->knownzonesize = (id+32)&~7;
 		qcvm->knownzone = Z_Realloc(qcvm->knownzone, (qcvm->knownzonesize+7)>>3);
+		/* Z_Realloc retains allocation padding; clear new logical bitmap bytes. */
+		memset(qcvm->knownzone + oldbytes, 0, ((qcvm->knownzonesize+7)>>3)-oldbytes);
 	}
 	qcvm->knownzone[id>>3] |= 1u<<(id&7);
 

@@ -1339,14 +1339,25 @@ void setupWeapon(hands::State& s, int hand, qmodel_t* model, int frame, bool flo
             }
             const int flags=cl.stats[hand==HAND_MAIN ? STAT_QVR_WEAPONFLAGS : STAT_QVR_WEAPONFLAGS2];
             if(base && base->magazine){ve.ent.frame=(ve.ent.frame%16)+((flags&128)?16:0);ve.zeroBlend=0.f;}
-            const bool chargeable=(base && base->magazine) || !strcmp(n,"progs/advr_plasma.mdl") || !strcmp(n,"progs/advr_widowmaker.mdl");
+            const bool integrated=!strcmp(n,"progs/advr_widowmaker.mdl") || !strcmp(n,"progs/advr_base_light.mdl") || !strcmp(n,"progs/advr_base_nail.mdl") || !strcmp(n,"progs/advr_base_nail2.mdl") || !strcmp(n,"progs/advr_plasma.mdl");
+            // Each bolt pose retains all original firing and magazine frames.
+            // The second bank reflects only the bolt, cancelling hand mirroring.
+            if(integrated){
+                const int original=base ? 32 : 1;
+                ve.ent.frame=(base ? ve.ent.frame : 0)+original*(((flags>>9)&15)+(mirrored?16:0));
+                ve.zeroBlend=0.f;
+            }
+            const bool pump=!strcmp(n,"progs/advr_base_shot.mdl");
+            if(pump){ve.ent.frame=(flags>>9)&15;ve.zeroBlend=0.f;}
+            const bool chargeable=pump || (base && base->magazine) || !strcmp(n,"progs/advr_plasma.mdl") || !strcmp(n,"progs/advr_widowmaker.mdl");
             if(chargeable && vr_reload_mode.value==3.f){
-                const glm::vec3 home=base ? base->charge : (!strcmp(n,"progs/advr_plasma.mdl") ? glm::vec3{2.f,-2.7f,1.f} : glm::vec3{3.f,-2.7f,1.f});
+                glm::vec3 home=pump ? glm::vec3{9.f,0.f,-2.1f} : base ? base->charge : (!strcmp(n,"progs/advr_plasma.mdl") ? glm::vec3{2.f,-2.7f,1.f} : glm::vec3{3.f,-2.7f,1.f});
+                if(integrated && mirrored)home.y=-home.y;
                 s.chargeHome[hand]=view::modelPoint(ve,home);
                 s.chargeBack[hand]=view::modelPoint(ve,home-glm::vec3{3.f,0.f,0.f});
                 const float pull=static_cast<float>((flags>>9)&15)/15.f;
                 auto& handle=entities.chargeHandle[hand];
-                place(handle,viewModel("progs/advr_charge_handle.mdl"),glm::mix(s.chargeHome[hand],s.chargeBack[hand],pull),
+                if(!pump && !integrated)place(handle,viewModel("progs/advr_charge_handle.mdl"),glm::mix(s.chargeHome[hand],s.chargeBack[hand],pull),
                     {ve.ent.angles[0],ve.ent.angles[1],ve.ent.angles[2]},0,mirrored);
             }
             // Loading is guided by the weapon geometry; no glowing reload marker.
@@ -1363,7 +1374,10 @@ void setupWeapon(hands::State& s, int hand, qmodel_t* model, int frame, bool flo
             h.visualAngles, h};
         if(weapons::isGripType(h.type))
         {
-            w.pos = w.end = glm::vec3{hsFrame * glm::vec4{h.pos, 1.f}};
+            glm::vec3 gripPos=h.pos;
+            if(model && !strcmp(model->name,"progs/advr_base_shot.mdl") && i==0)
+                gripPos.x-=3.f*static_cast<float>(ve.ent.frame)/15.f;
+            w.pos = w.end = glm::vec3{hsFrame * glm::vec4{gripPos, 1.f}};
         }
         else if(h.type == weapons::HotspotType::Blade && s.muzzleValid[hand])
         {
@@ -2937,17 +2951,20 @@ void moveDrawnHand(int hand, bool mirrored, const glm::vec3& frameRot, glm::vec3
 }
 
 // Use the same handle-relative hand placement for rendering and finger fitting.
-void adBaseMainGrip(int hand, const entity_t& weapon, bool mirrored, glm::vec3& pos, const glm::vec3& handRot)
+void adBaseMainGrip(int hand, const entity_t& weapon, bool mirrored, glm::vec3& pos, glm::vec3& handRot)
 {
     if(!weapon.model) return;
     const auto* base = adBaseAttachment(weapon.model->name);
-    if(!base) return;
+    const bool widow=!strcmp(weapon.model->name,"progs/advr_widowmaker.mdl");
+    if(!base && !widow) return;
     glm::vec3 channel, direction;
     float radius;
     if(!grasp::gripChannel(rigHands[hand].pose, channel, direction, radius)) return;
     // Place the fingers around the forward face of the grip, with the index
     // beside the trigger, rather than embedding the knuckles in its centre.
-    const glm::vec3 target{hotspotFrame(weapon, mirrored) * glm::vec4{base->grip + glm::vec3{.8f, 0.f, -.25f}, 1.f}};
+    const auto frame=hotspotFrame(weapon, mirrored);
+    const glm::vec3 target{frame * glm::vec4{(widow ? glm::vec3{-3.6f,0.f,-4.6f} : base->grip + glm::vec3{.8f, 0.f, -.25f}), 1.f}};
+    if(widow)alignChannel(hand,mirrored,target,glm::mat3{frame}*glm::vec3{-.7f,0.f,-1.f},pos,handRot);
     const glm::vec3 current{rigPlacement(hand, pos, handRot, mirrored, nullptr) * glm::vec4{channel, 1.f}};
     pos += target - current;
 }
@@ -2973,7 +2990,7 @@ glm::mat4 canonicalOwnGrip(int hand, int slot, qmodel_t* model, bool offset)
 // A vertical shaft belongs in the curled fingers' channel, not on the palm surface.
 glm::vec3 supportGripAt(int hand, const glm::vec3& pos, const glm::vec3& rot, bool mirrored, const qmodel_t* model)
 {
-    if(model && (!strcmp(model->name,"progs/advr_base_rock.mdl") || !strcmp(model->name,"progs/advr_base_rock2.mdl")))
+    if(model && (!strcmp(model->name,"progs/advr_base_shot.mdl") || !strcmp(model->name,"progs/advr_base_rock.mdl") || !strcmp(model->name,"progs/advr_base_rock2.mdl")))
     {
         glm::vec3 channel,direction;float radius;
         if(grasp::gripChannel(rigHands[hand].pose,channel,direction,radius))
@@ -4815,7 +4832,6 @@ bool adSsgReplaced(const view::ViewEntity& ve){
 void setupAmmoPouch(const hands::State& s)
 {
     for(auto& bolt:entities.pouchBolts)bolt.visible=false;
-    int boltCount=0,grenadeCount=0;
     auto& ve = entities.ammoPouch;
     auto* model = vr_reload_mode.value == 3.f && cl.stats[STAT_HEALTH] > 0 ? viewModel("progs/vrpouch_ammo.mdl") : nullptr;
     if(!model){ve.visible=false;return;}
@@ -4824,44 +4840,29 @@ void setupAmmoPouch(const hands::State& s)
     const auto pelvis=avatar::torso(s).pelvis;
     fwd=pelvis.rot[2];up=pelvis.rot[0];
     if(vr_body_debug.value >= 2.f){const auto turn=bodyPreviewTurn();fwd=turn*fwd;up=turn*up;}
-    int pouchFrame=0,magCount=0;const char* pouchMag=nullptr;
-    for(int h : {HAND_MAIN,HAND_OFF}) {
-        const auto* gun=entities.weapon[h].ent.model;
-        if(!gun)continue;
-        const int ammo=cl.stats[h==HAND_MAIN ? STAT_QVR_AMMOCOUNTER : STAT_QVR_AMMOCOUNTER2];
-        if(ammo<=0)continue;
-        const char* n=gun->name;int first=0,most=1,each=1;
-        if(!strcmp(n,"progs/advr_base_shot.mdl") || !strcmp(n,"progs/v_shot2.mdl") || !strcmp(n,"progs/advr_widowmaker.mdl")){first=1;most=5;}
-        else if(!strcmp(n,"progs/advr_base_nail.mdl")){first=6;most=3;each=24;}
-        else if(!strcmp(n,"progs/advr_base_nail2.mdl")){first=9;most=2;each=36;}
-        else if(!strcmp(n,"progs/advr_base_light.mdl") || !strcmp(n,"progs/advr_plasma.mdl")){first=11;most=3;each=!strcmp(n,"progs/advr_plasma.mdl") ? 24 : 36;}
-        else if(!strcmp(n,"progs/advr_base_rock2.mdl")){first=14;most=3;}
-        else if(!strcmp(n,"progs/advr_crossbow.mdl")){first=17;boltCount=za::min(ammo,3);}
-        else if(!strcmp(n,"progs/advr_base_rock.mdl")){first=17;grenadeCount=za::min(ammo,3);}
-        if(!strcmp(n,"progs/advr_base_nail.mdl"))pouchMag="progs/advr_base_mag_nail.mdl";
-        else if(!strcmp(n,"progs/advr_base_nail2.mdl"))pouchMag="progs/advr_base_mag_nail2.mdl";
-        else if(!strcmp(n,"progs/advr_base_light.mdl"))pouchMag="progs/advr_base_mag_light.mdl";
-        else if(!strcmp(n,"progs/advr_widowmaker.mdl")){pouchMag="progs/advr_mag_shell.mdl";each=24;most=3;}
-        if(pouchMag){magCount=za::min(3,(ammo+each-1)/each);pouchFrame=16;break;}
-        if(first){pouchFrame=first+za::min(most,(ammo+each-1)/each)-1;break;}
-    }
-    place(ve,model,at,aliasAngles(fwd,up),pouchFrame,false);
-    for(int i=0;i<magCount;++i){
-        auto& mag=entities.pouchBolts[i];
-        place(mag,viewModel(pouchMag),at+up*1.2f+glm::cross(fwd,up)*((i-1)*2.5f),aliasAngles(fwd,up),0,false);
-        mag.scale=glm::vec3{0.65f};
-    }
-    for(int i=0;i<grenadeCount;++i){
-        auto& grenade=entities.pouchBolts[i];
-        place(grenade,viewModel("progs/advr_handgrenade.mdl"),at+up*1.8f+glm::cross(fwd,up)*((i-1)*2.5f),aliasAngles(up,fwd),0,false);
-        grenade.ent.skinnum=1;
-    }
-    for(int i=0;i<boltCount;++i){
-        // Compact horizontal reserve display; held and loaded bolts retain full size.
-        const auto where=at+up*(0.8f+i*0.65f);
-        auto& bolt=entities.pouchBolts[i];
-        place(bolt,viewModel("progs/advr_reload_bolt.mdl"),where,aliasAngles(glm::cross(fwd,up),up),0,false);
-        bolt.scale=glm::vec3{0.45f};
+    // Frame zero is the empty pouch. All contents are separate, enchantable models.
+    place(ve,model,at,aliasAngles(fwd,up),0,false);
+    const int key=cl.stats[STAT_QVR_POUCH_KEY]-1;
+    static const char* models[]={"progs/vr_shell_live.mdl","progs/vr_shell_pair.mdl",
+        "progs/advr_base_mag_nail.mdl","progs/advr_base_mag_nail2.mdl",
+        "progs/advr_handgrenade.mdl","progs/vr_round_rocket.mdl",
+        "progs/advr_base_mag_light.mdl","progs/vr_mag_light.mdl",
+        "progs/advr_mag_shell.mdl","progs/advr_reload_bolt.mdl"};
+    if(key>=0 && key<10)for(int i=0;i<3;++i){
+        const int packed=cl.stats[STAT_QVR_POUCH_ITEM0+i];
+        const int count=packed&255,element=(packed>>8)&15;
+        if(!count)continue;
+        const char* name=(key==1 && count==1) ? models[0] : models[key];
+        auto& item=entities.pouchBolts[i];
+        // First draw is on the wearer's right; bolts are stacked first draw on top.
+        const auto side=glm::normalize(glm::cross(fwd,up));
+        const bool bolt=key==9,round=key<2 || key==4 || key==5;
+        const auto centre=at+fwd*.8f;
+        const auto where=bolt ? centre+up*(3.7f-i*.9f) : centre+up*2.2f+side*((1-i)*2.7f);
+        place(item,viewModel(name),where,round ? aliasAngles(up,fwd) : aliasAngles(side,up),0,false);
+        item.scale=glm::vec3{bolt ? .45f : .85f};
+        item.ent.skinnum=key==4 ? 1 : 0;
+        item.enchant=element>=1 && element<=8 ? (element&7)|(31<<3) : 0;
     }
     highlight(ve,glm::distance(s.pos[0],at)<vr_ad_reload_pouch_reach.value || glm::distance(s.pos[1],at)<vr_ad_reload_pouch_reach.value);
 }

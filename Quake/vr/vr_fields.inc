@@ -195,3 +195,11 @@ QVR_FIELD(chargehome)
 QVR_FIELD(chargeback)
 QVR_FIELD(offchargehome)
 QVR_FIELD(offchargeback)
+
+QVR_FIELD(advr_round_holder)
+QVR_FIELD(advr_round_count)
+
+QVR_FIELD(advr_pouch_preview_key)
+QVR_FIELD(advr_pouch_preview0)
+QVR_FIELD(advr_pouch_preview1)
+QVR_FIELD(advr_pouch_preview2)

@@ -11,6 +11,17 @@ void() ADVR_TestFlashlightView = {
 void() ADVR_TestMagicMainView = {
     ADVR_TestMagicView();self.advr_main=self.advr_off;self.advr_off=world;ADVR_Sync();
 };
+void() ADVR_TestPouchInput = {
+    local float h;local entity p;
+    ADVR_Assert(self.advr_pouch_selection==cvar("temp1"),"controller click reaches tome pouch selection");
+    if(self.advr_pouch_selection==2){
+        h=1;if(ADVR_IsTome(self.advr_main))h=0;
+        self.ammo_nails=100;self.advr_round_guard[h]=0;ADVR_ManualTake(h);p=self.advr_round[h];
+        ADVR_Assert(p && p.advr_round_weapon==IT_NAILGUN,"controller-selected pouch draws nailgun magazine");
+        ADVR_ManualRelease(h,1);
+    }
+    dprint("ADVR POUCH INPUT PASS\n");
+};
 void() ADVR_TestMagicStandardView = {
     ADVR_TestMagicView();self.advr_off.advr_kind=ADVR_TOME;self.advr_off.advr_tome_read=1;
     self.advr_known=1;ADVR_Sync();

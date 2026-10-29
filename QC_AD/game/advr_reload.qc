@@ -11,6 +11,7 @@ float(entity r) ADVR_ManualMagazine = {return r.advr_kind==ADVR_WIDOWMAKER || AD
 vector(float h) ADVR_ManualPort = {if(h)return self.loadportpos;return self.offloadportpos;};
 void() ADVR_ManualPrecache = {
     precache_model("progs/advr_charge_handle.mdl");
+    precache_sound("vr/bolt_pull.wav");precache_sound("vr/bolt_release.wav");
     precache_model("progs/advr_base_mag_nail.mdl");precache_model("progs/advr_base_mag_nail2.mdl");precache_model("progs/advr_base_mag_light.mdl");
     precache_model("progs/advr_mag_shell.mdl");precache_model("progs/vr_shell.mdl");
     precache_sound("vr/reload_ssg_open.wav");precache_sound("vr/reload_ssg_close.wav");precache_sound("vr/reload_ssg_eject.wav");
@@ -76,6 +77,7 @@ void(float h,float refund) ADVR_ManualRelease = {
     self.advr_round[h]=world;self.advr_round_guard[h]=time+0.2;
     p.advr_round_holder=world;
     if(p.advr_grenade_fuse>0)refund=0;
+    if(refund)refund=ADVR_AmmoStore(p);
     if(refund){
         if(p.advr_round_type==5)self.advr_bolts=self.advr_bolts+p.advr_round_count;
         else ADVR_SetAmmo(p.advr_round_weapon,ADVR_Ammo(p.advr_round_weapon)+p.advr_round_count);
@@ -89,9 +91,35 @@ void(float h,float refund) ADVR_ManualRelease = {
     if(p.advr_grenade)ADVR_GrenadeReleased(p);
 };
 void() ADVR_ManualRefund = {ADVR_ManualRelease(0,1);ADVR_ManualRelease(1,1);};
-void(float h) ADVR_ManualTake = {
-    local entity r,p;local float n,available,t;
-    r=ADVR_Hand(1-h);t=ADVR_ManualType(r);
+// Tome selection describes a package without allocating a loaded weapon record.
+void(entity r) ADVR_PouchDescriptor = {
+    local float k;k=self.advr_pouch_selection;
+    r.advr_kind=0;r.advr_weapon=IT_SHOTGUN;
+    if(k==1)r.advr_weapon=IT_SUPER_SHOTGUN;
+    if(k==2)r.advr_weapon=IT_NAILGUN;
+    if(k==3)r.advr_weapon=IT_SUPER_NAILGUN;
+    if(k==4)r.advr_weapon=IT_GRENADE_LAUNCHER;
+    if(k==5)r.advr_weapon=IT_ROCKET_LAUNCHER;
+    if(k==6 || k==7)r.advr_weapon=IT_LIGHTNING;
+    if(k==7)r.advr_kind=ADVR_PLASMA;
+    if(k==8){r.advr_weapon=IT_SUPER_SHOTGUN;r.advr_kind=ADVR_WIDOWMAKER;}
+    if(k==9)r.advr_kind=ADVR_CROSSBOW;
+};
+void() ADVR_PouchCycle = {
+    local string label;local float k;
+    k=mod(self.advr_pouch_selection+1,10);self.advr_pouch_selection=k;
+    label="Shotgun shells";
+    if(k==1)label="Super shotgun shell pair";
+    if(k==2)label="Nailgun magazine";
+    if(k==3)label="Super nailgun magazine";
+    if(k==4)label="Grenade";if(k==5)label="Rocket";
+    if(k==6)label="Thunderbolt cell";if(k==7)label="Plasma cell";
+    if(k==8)label="Widowmaker magazine";if(k==9)label="Crossbow bolt";
+    centerprint(self,strcat("Ammo pouch: ",label,"\n"));
+};
+void(entity r,float h) ADVR_ManualTakeRecord = {
+    local entity p;local float n,available,t;
+    t=ADVR_ManualType(r);
     if(!t || ADVR_Hand(h) || ADVR_HandBusy(h))return;
     if(t==5)available=self.advr_bolts;
     else available=max(0,ADVR_Ammo(r.advr_weapon)-ADVR_Loaded(r.advr_weapon));
@@ -99,10 +127,78 @@ void(float h) ADVR_ManualTake = {
     if(ADVR_ManualMagazine(r))n=ADVR_RecordCapacity(r);
     n=min(n,available);
     if(n<=0){sound(self,CHAN_AUTO,"vr/reload_empty.wav",0.4,ATTN_NORM);return;}
-    p=ADVR_ManualProp(r,n);
+    p=ADVR_ManualProp(r,n);ADVR_AmmoTake(r,p,available);n=p.advr_round_count;
+    if(n<=0){remove(p);return;}ADVR_ManualModel(p);
     if(t==5)self.advr_bolts=self.advr_bolts-n;
     else ADVR_SetAmmo(r.advr_weapon,ADVR_Ammo(r.advr_weapon)-n);
     ADVR_ManualCatch(p,h);sound(self,CHAN_AUTO,"vr/reload_pouch.wav",0.45,ATTN_NORM);
+};
+void(float h) ADVR_ManualTake = {
+    local entity r;r=ADVR_Hand(1-h);
+    if(ADVR_IsTome(r)){
+        r=spawn();ADVR_PouchDescriptor(r);ADVR_ManualTakeRecord(r,h);remove(r);
+    }else ADVR_ManualTakeRecord(r,h);
+};
+void() ADVR_TestPouchSelection = {
+    local entity book,r,p;local float h,k,before;
+    book=spawn();book.advr_kind=ADVR_TOME;r=spawn();
+    self.health=100;self.vrbits0=16384;self.advr_magic_book=world;
+    for(k=0;k<10;k=k+1)ADVR_PouchSet(k,"");
+    for(h=0;h<2;h=h+1){
+        self.advr_main=self.advr_off=world;
+        if(h)self.advr_off=book;else self.advr_main=book;
+        self.advr_pouch_selection=9;self.advr_magic_oldsticks=0;self.advr_magic_sticks=pow(2,1-h);
+        ADVR_MagicFrame();ADVR_Assert(self.advr_pouch_selection==0,"tome hand click wraps pouch selection");
+        ADVR_MagicFrame();ADVR_Assert(self.advr_pouch_selection==0,"held tome stick cycles only once");
+        self.advr_magic_sticks=0;ADVR_MagicFrame();
+        for(k=0;k<10;k=k+1){
+            self.advr_pouch_selection=k;ADVR_PouchDescriptor(r);
+            self.ammo_shells=self.ammo_nails=self.ammo_rockets=self.ammo_cells=self.advr_bolts=100;
+            ADVR_PouchSet(k,ADVR_AmmoEntry(1,3,1.1));
+            self.advr_round_guard[h]=0;ADVR_ManualTake(h);p=self.advr_round[h];
+            ADVR_Assert(p && ADVR_AmmoKey(p)==k && p.advr_round_count==1 && p.advr_enchant_type==3,"tome draws selected enchanted package in either hand");
+            ADVR_ManualRelease(h,1);
+            ADVR_Assert(self.advr_pouch[k]==ADVR_AmmoEntry(1,3,1.1),"tome returns enchanted package to same stack");
+            ADVR_PouchSet(k,"");
+        }
+    }
+    self.advr_main=self.advr_off=world;self.advr_pouch_selection=0;
+    // Leave a permanent physical shell for the engine visual-code probe.
+    r.advr_weapon=IT_SHOTGUN;r.advr_kind=0;p=ADVR_ManualProp(r,1);
+    p.advr_enchant_type=3;p.advr_enchant_scale=1;p.advr_enchant_until=0;
+    setorigin(p,self.origin+'0 0 24');
+    remove(r);remove(book);dprint("ADVR TOME POUCH PASS\n");
+};
+void() ADVR_TestPouchPreview = {
+    local entity book,r,p;local float k,i,a,b,c,expected;
+    ADVR_Reset();self.advr_initialized=1;self.health=100;self.vrbits0=16384;
+    book=spawn();book.advr_kind=ADVR_DEBUGTOME;book.advr_weapon=IT_AXE;self.advr_main=book;
+    self.advr_known=1791;self.mana=30;
+    r=spawn();
+    for(k=0;k<10;k=k+1){
+        self.advr_pouch_selection=k;ADVR_PouchDescriptor(r);
+        self.ammo_shells=self.ammo_nails=self.ammo_rockets=self.ammo_cells=self.advr_bolts=100;
+        ADVR_PouchSet(k,strcat(ADVR_AmmoEntry(1,1,1),ADVR_AmmoEntry(1,3,1),ADVR_AmmoEntry(1,5,1)));
+        ADVR_PouchPreview();a=self.advr_pouch_preview0;b=self.advr_pouch_preview1;c=self.advr_pouch_preview2;
+        ADVR_Assert(self.advr_pouch_preview_key==k+1 && a==257 && b==769 && c==1281,"preview names selected ammo and preserves element order");
+        self.advr_off=r;self.advr_pouch_selection=mod(k+1,10);ADVR_PouchPreview();
+        ADVR_Assert(self.advr_pouch_preview_key==k+1,"held weapon takes precedence over tome selection");
+        self.advr_off=world;self.advr_pouch_selection=k;
+        for(i=0;i<3;i=i+1){
+            expected=a;if(i==1)expected=b;if(i==2)expected=c;
+            self.advr_round_guard[0]=0;ADVR_ManualTake(0);p=self.advr_round[0];
+            ADVR_Assert(p && ADVR_AmmoKey(p)==k && p.advr_round_count+256*p.advr_enchant_type==expected,"preview matches actual next package");
+            self.advr_round[0]=world;remove(p);
+        }
+        ADVR_PouchSet(k,"");
+    }
+    // Stored super-nail magazines may not appear as ordinary nailgun reserve.
+    self.advr_pouch_selection=2;self.ammo_nails=36;ADVR_PouchSet(3,ADVR_AmmoEntry(36,2,1));
+    ADVR_PouchPreview();ADVR_Assert(!self.advr_pouch_preview0,"preview excludes other weapon's reserved ammo");ADVR_PouchSet(3,"");
+    self.advr_pouch_selection=bound(0,cvar("temp1"),9);k=self.advr_pouch_selection;
+    self.ammo_shells=self.ammo_nails=self.ammo_rockets=self.ammo_cells=self.advr_bolts=100;
+    ADVR_PouchSet(k,strcat(ADVR_AmmoEntry(1,1,1),ADVR_AmmoEntry(1,3,1),ADVR_AmmoEntry(1,5,1)));
+    remove(r);ADVR_Sync();dprint("ADVR POUCH PREVIEW PASS\n");
 };
 // Magazine presence is independent of its remaining ammunition.
 void(float h) ADVR_ManualEject = {
@@ -112,11 +208,14 @@ void(float h) ADVR_ManualEject = {
     if(ADVR_ManualMagazine(r)){if(r.advr_mag_absent)return;r.advr_mag_absent=1;
         if(n<=0){p=ADVR_ManualProp(r,0);setorigin(p,ADVR_ManualPort(h));p.velocity='0 0 -35';p.owner=self;p.advr_cooldown=time+0.15;}
     }else if(n<=0)return;
+    ADVR_AmmoNormalize(r);
     r.wi_clip=0;r.advr_mag_absent=1;
     if(ADVR_ManualType(r)!=5)ADVR_SetAmmo(r.advr_weapon,max(0,ADVR_Ammo(r.advr_weapon)-n));
     while(n>0){
         chunk=n;if(!ADVR_ManualMagazine(r))chunk=min(n,1);
         p=ADVR_ManualProp(r,chunk);n=n-chunk;
+        p.advr_enchant_type=ADVR_AmmoDigit(r.advr_ammo,2);p.advr_enchant_scale=1+.05*ADVR_AmmoDigit(r.advr_ammo,3);
+        ADVR_AmmoConsume(r,chunk);
         setorigin(p,ADVR_ManualPort(h));p.angles=ADVR_Angles(h);
         makevectors(p.angles);p.velocity='0 0 -35'+v_right*(index-1)*4;
         p.owner=self;p.advr_cooldown=time+0.15;index=index+1;
@@ -157,6 +256,9 @@ float(float h) ADVR_ManualInsert = {
     if((t==2 || t==3) && p.advr_round_weapon!=r.advr_weapon)return 0;
     if(ADVR_ManualMagazine(r) && !r.advr_mag_absent)return 0;
     n=min(p.advr_round_count,ADVR_RecordCapacity(r)-r.wi_clip);if(n<=0)return 0;
+    // Only an empty tube reload needs a manual cycle; topping up does not.
+    if(r.advr_weapon==IT_SHOTGUN && r.wi_clip==0)r.advr_needs_charge=1;
+    ADVR_AmmoInsert(r,p,n);
     r.wi_clip=r.wi_clip+n;r.advr_mag_absent=0;
     if(ADVR_ManualMagazine(r))r.advr_needs_charge=1;
     if(t!=5)ADVR_SetAmmo(r.advr_weapon,ADVR_Ammo(r.advr_weapon)+n);
@@ -175,38 +277,44 @@ float(float h) ADVR_ManualInsert = {
 // Measure against the moving gun's rail: walking or moving both hands together
 // cannot cock it. A full rearward pull followed by release closes the action.
 void(float h,float grip,float old) ADVR_ChargeFrame = {
-    local entity r;local vector home,back,axis,delta;local float length,along,lateral,release,started;
+    local entity r;local vector home,back,axis,delta;local float length,along,lateral,release,pump,closed,supporting;
     r=ADVR_Hand(1-h);
     if(h){home=self.offchargehome;back=self.offchargeback;}
     else{home=self.chargehome;back=self.chargeback;}
+    pump=(r.advr_weapon==IT_SHOTGUN);
+    supporting=(ADVR_Grip(h) || weaponanygrip(self,h)>0);
     axis=back-home;length=vlen(axis);
     if(self.advr_charge_guard[h] && (self.advr_charge_guard[h]!=r || vlen(ADVR_Pos(h)-(home+back)*.5)>6*max(.5,cvar("vr_world_scale"))))self.advr_charge_guard[h]=world;
-    if(cvar("vr_reload_mode")!=3 || !r || !ADVR_ManualMagazine(r) || ADVR_Hand(h) || self.health<=0 || self.advr_elder_until>time || length<1 || r.advr_mag_absent){
+    if(cvar("vr_reload_mode")!=3 || !r || (pump && !supporting) || (!ADVR_ManualMagazine(r) && !pump) || ADVR_Hand(h) || self.health<=0 || self.advr_elder_until>time || length<1 || r.advr_mag_absent){
         if(self.advr_charge_record[h])self.advr_charge_record[h].advr_charge_pull=0;
         self.advr_charge_record[h]=world;return;
     }
     axis=axis/length;delta=ADVR_Pos(h)-home;along=delta*axis;
     if(self.advr_charge_record[h] && self.advr_charge_record[h]!=r){self.advr_charge_record[h].advr_charge_pull=0;self.advr_charge_record[h]=world;}
     if(!self.advr_charge_record[h]){
-        if(!r.advr_needs_charge || !grip || old || ADVR_HandBusy(h) || self.advr_magic_book || ADVR_FGPulled(h) || ragdollheld(self,h)>0)return;
+        if(!r.advr_needs_charge || !grip || old || self.advr_round[h] || self.advr_round_guard[h]>time || (ADVR_HandBusy(h) && !(pump && weaponanygrip(self,h)>0)) || self.advr_magic_book || ADVR_FGPulled(h) || ragdollheld(self,h)>0)return;
         if(vlen(delta)>3*max(.5,cvar("vr_world_scale")))return;
-        self.advr_charge_record[h]=r;self.advr_charge_start[h]=along;self.advr_charge_full[h]=0;started=1;
+        self.advr_charge_record[h]=r;self.advr_charge_start[h]=along;self.advr_charge_full[h]=0;r.advr_bolt_sound=0;
         haptic(h,0,.035,70,.25);
     }
     lateral=vlen(delta-axis*along);
     r.advr_charge_pull=bound(0,(along-self.advr_charge_start[h])/length,1);
+    if(ADVR_IntegratedBolt(r) && r.advr_charge_pull>.05 && !r.advr_bolt_sound){
+        r.advr_bolt_sound=1;sound(self,CHAN_AUTO,"vr/bolt_pull.wav",.5,ATTN_NORM);
+    }
     if(r.advr_charge_pull>=.85 && lateral<3*max(.5,cvar("vr_world_scale")) && !self.advr_charge_full[h]){
         self.advr_charge_full[h]=1;haptic(h,0,.06,90,.45);
     }
+    closed=(pump && grip && self.advr_charge_full[h] && r.advr_charge_pull<=.15 && lateral<3*max(.5,cvar("vr_world_scale")));
     release=(!grip && old);
+    if(closed)release=1;
     // Charging handles always follow trigger hold/release, independent of sticky grip.
-    // Do not interpret the initial sticky-grip press as the release.
-    if(started)release=0;
     if(lateral>7*max(.5,cvar("vr_world_scale")))release=1;
     if(release){
-        if(self.advr_charge_full[h] && lateral<7*max(.5,cvar("vr_world_scale"))){
+        if(ADVR_IntegratedBolt(r) && r.advr_bolt_sound)sound(self,CHAN_AUTO,"vr/bolt_release.wav",.5,ATTN_NORM);
+        if(self.advr_charge_full[h] && (!pump || closed) && lateral<7*max(.5,cvar("vr_world_scale"))){
             r.advr_needs_charge=0;self.advr_fg_rearm[1-h]=1;
-            sound(self,CHAN_AUTO,"vr/reload_full.wav",.5,ATTN_NORM);haptic(1-h,0,.045,80,.3);
+            if(!ADVR_IntegratedBolt(r))sound(self,CHAN_AUTO,"vr/reload_full.wav",.5,ATTN_NORM);haptic(1-h,0,.045,80,.3);
         }
         r.advr_charge_pull=0;self.advr_charge_record[h]=world;self.advr_charge_guard[h]=r;self.advr_round_guard[h]=time+.15;
     }
@@ -251,7 +359,7 @@ void() ADVR_ManualFrame = {
                 if(self.advr_round[h] && release)ADVR_ManualRelease(h,0);
             }
         }else if(near && !ADVR_Hand(h) && !ADVR_HandBusy(h) && !self.advr_magic_book && !ADVR_FGPulled(h) && ragdollheld(self,h)<=0){
-            if(!self.advr_round_hover[h] && (near==2 || ADVR_ManualType(ADVR_Hand(1-h))))haptic(h,0,0.04,65,0.25);
+            if(!self.advr_round_hover[h] && (near==2 || ADVR_ManualType(ADVR_Hand(1-h)) || ADVR_IsTome(ADVR_Hand(1-h))))haptic(h,0,0.04,65,0.25);
             if(grip && !old){if(near==2)ADVR_GrenadeTake(h);else ADVR_ManualTake(h);}
         }
         self.advr_round_hover[h]=near;
@@ -287,6 +395,14 @@ void() ADVR_TestCharging = {
         self.handpos=self.offhandpos='107 100 100';ADVR_ChargeFrame(h,1,1);
         ADVR_Assert(self.advr_charge_full[h] && r.advr_needs_charge,"full pull waits for release");ADVR_ChargeFrame(h,0,1);
         ADVR_Assert(!r.advr_needs_charge && !self.advr_charge_record[h] && r.wi_clip==before,"release chambers without creating ammo");
+        if(ADVR_IntegratedBolt(r)){
+            r.advr_reload_until=r.advr_cooldown=0;self.advr_fg_rearm[1-h]=0;
+            self.button0=self.button3=1;ADVR_Fire(1-h);self.button0=self.button3=0;
+            ADVR_Assert(r.wi_clip<before && r.advr_pump_until>time,"shot starts integrated bolt cycle");
+            before=r.wi_clip;
+            r.advr_pump_until=time+.045;ADVR_Assert(ADVR_PumpPull(r)>.99,"automatic bolt reaches rear");
+            r.advr_pump_until=time;ADVR_Assert(ADVR_PumpPull(r)==0,"automatic bolt returns home");
+        }
         self.advr_charge_guard[h]=world;ADVR_Unload(1-h);
         ADVR_Assert(!r.advr_mag_absent && r.wi_clip==before,"red button cannot eject magazine");
         // Sticky grip must not change the trigger-based charging gesture.
@@ -295,6 +411,36 @@ void() ADVR_TestCharging = {
         ADVR_Assert(!r.advr_needs_charge && !self.advr_charge_record[h],"trigger release chambers even with sticky grip");
         ADVR_SetHand(1-h,world);remove(r);
     }
+    // The shotgun action must complete both halves of its stroke, in either hand.
+    for(h=0;h<2;h=h+1){
+        self.vrbits0=16384|8|2;
+        r=ADVR_Record(IT_SHOTGUN);r.wi_clip=0;ADVR_SetHand(1-h,r);ADVR_SetAmmo(IT_SHOTGUN,20);
+        self.advr_round_guard[h]=0;p=ADVR_ManualProp(r,1);self.advr_round[h]=p;
+        ADVR_Assert(ADVR_ManualInsert(h)==1 && r.advr_needs_charge,"empty shotgun reload requires pump");
+        before=r.wi_clip;r.advr_reload_until=r.advr_cooldown=0;self.advr_fg_rearm[1-h]=0;
+        self.button0=self.button3=1;ADVR_Fire(1-h);
+        ADVR_Assert(r.wi_clip==before && r.advr_dry_next>time,"un-pumped shotgun cannot fire");self.button0=self.button3=0;
+        self.chargehome=self.offchargehome='100 100 100';self.chargeback=self.offchargeback='97 100 100';
+        self.handpos=self.offhandpos='100 100 100';self.advr_round_guard[h]=0;
+        if(r.advr_weapon==IT_SHOTGUN){
+            self.vrbits0=16384;ADVR_ChargeFrame(h,1,0);
+            ADVR_Assert(!self.advr_charge_record[h],"trigger alone cannot move shotgun pump");
+            self.vrbits0=16384|8|2;
+        }
+        ADVR_ChargeFrame(h,1,0);self.handpos=self.offhandpos='97 100 100';ADVR_ChargeFrame(h,1,1);ADVR_ChargeFrame(h,0,1);
+        ADVR_Assert(r.advr_needs_charge,"releasing pump at rear does not chamber");
+        self.advr_round_guard[h]=0;self.handpos=self.offhandpos='100 100 100';ADVR_ChargeFrame(h,1,0);
+        self.handpos=self.offhandpos='97 100 100';ADVR_ChargeFrame(h,1,1);
+        ADVR_Assert(r.advr_charge_pull==1 && r.advr_needs_charge,"pump remains open at rear");
+        self.handpos=self.offhandpos='100 100 100';ADVR_ChargeFrame(h,1,1);
+        ADVR_Assert(!r.advr_needs_charge && !self.advr_charge_record[h] && r.wi_clip==before,"forward stroke chambers without changing ammo");
+        r.advr_reload_until=0;self.advr_round_guard[h]=0;p=ADVR_ManualProp(r,1);self.advr_round[h]=p;
+        ADVR_Assert(ADVR_ManualInsert(h)==1 && !r.advr_needs_charge,"partial shotgun top-up does not require pump");
+        r.advr_pump_until=time+.15;ADVR_Assert(ADVR_PumpPull(r)>.99,"automatic cycle reaches rear");
+        r.advr_pump_until=time;ADVR_Assert(ADVR_PumpPull(r)==0,"automatic cycle returns forward");
+        ADVR_SetHand(1-h,world);remove(r);
+    }
+    dprint("ADVR PUMP PASS\n");
     cvar_set("vr_reload_mode",ftos(mode));cvar_set("vr_weapon_grip_mode",ftos(sticky));
     self.advr_round_guard[0]=self.advr_round_guard[1]=0;ADVR_Sync();dprint("ADVR CHARGING PASS\n");
 };
@@ -315,10 +461,13 @@ void() ADVR_TestManualReload = {
     ADVR_Assert(self.ammo_shells==20 && !self.advr_round[0],"caught shell refunds exactly once");
     ADVR_ManualRefund();ADVR_Assert(self.ammo_shells==20,"repeated refund cannot duplicate ammo");
     self.advr_main=world;self.ammo_nails=60;r=ADVR_Record(IT_NAILGUN);self.advr_main=r;r.wi_clip=7;
+    ADVR_AmmoSet(r,ADVR_AmmoEntry(7,1,1.1));
     r.advr_reload_until=0;ADVR_ManualEject(1);p=find(world,classname,"advr_reload_round");
     ADVR_Assert(p.advr_round_count==7 && r.wi_clip==0 && self.ammo_nails==53,"partial magazine eject preserves seven rounds");
+    ADVR_Assert(p.advr_enchant_type==1 && fabs(p.advr_enchant_scale-1.1)<.001,"ejected magazine retains its permanent infusion");
     self.advr_round_guard[0]=0;ADVR_ManualCatch(p,0);r.advr_reload_until=0;ADVR_ManualInsert(0);
     ADVR_Assert(r.wi_clip==7 && self.ammo_nails==60,"partial magazine reinsertion conserves ammo");
+    ADVR_Assert(ADVR_AmmoDigit(r.advr_ammo,2)==1,"reinsertion restores loaded enchantment");
     self.advr_round_guard[0]=0;ADVR_ManualTake(0);p=self.advr_round[0];r.advr_reload_until=0;
     ADVR_Assert(!ADVR_ManualInsert(0) && p.advr_round_count==24,"loaded magazine rejects replacement until ejected");
     ADVR_ManualRefund();self.advr_main=world;self.ammo_shells=30;r=ADVR_Record(IT_SUPER_SHOTGUN);self.advr_main=r;r.wi_clip=1;r.advr_ssg_open=1;
@@ -368,6 +517,9 @@ void() ADVR_TestManualReload = {
     ADVR_Assert(!ADVR_ManualInsert(0),"closed SSG rejects loading");
     ADVR_SsgToggle(1);ADVR_Assert(r.advr_ssg_open && !r.advr_ssg_spent,"breaking open ejects spent shells without creating ammo");
     r.advr_reload_until=0;ADVR_ManualInsert(0);
+    // Earlier in this fixture a single spare shell was returned. LIFO returns it
+    // before drawing a new pair, so fill the remaining barrel on the next draw.
+    if(r.wi_clip==1){self.advr_round_guard[0]=0;r.advr_reload_until=0;ADVR_ManualTake(0);ADVR_ManualInsert(0);}
     ADVR_Assert(r.wi_clip==2 && r.advr_ssg_open,"SSG stays open after loading both barrels");
     r.advr_reload_until=r.advr_cooldown=0;ADVR_SsgToggle(1);ADVR_Assert(!r.advr_ssg_open && r.wi_clip==2,"closing keeps two live shells");
     ADVR_ManualRefund();r=self.advr_main=ADVR_Record(IT_NAILGUN);self.advr_off=world;r.wi_clip=0;r.advr_mag_absent=0;r.advr_reload_until=0;
@@ -452,7 +604,7 @@ void() ADVR_TestManualRelease = {
         if(k){
             ADVR_Assert(self.advr_round[h]==p,"sticky initial release keeps ammo");
             // PREV can already be set by a prior server move; local edges still release.
-            if(h)self.vrbits0=16384|8|16;else self.vrbits0=16384|2|4;
+            if(h)self.vrbits0=16384|8|2;else self.vrbits0=16384|2|4;
             ADVR_ManualFrame();
         }
         dprint(sprintf("RELEASE h=%g mode=%g mag=%g held=%g holder=%g movetype=%g oldgrip=%g\n",h,k,w,self.advr_round[h]!=world,p.advr_round_holder!=world,p.movetype,self.advr_round_grip[h]));
@@ -524,5 +676,31 @@ void() ADVR_TestShotInput = {
 void() ADVR_TestShotCheck = {
     dprint(sprintf("SHOT INPUT clip=%g ammo=%g held=%g port=%v hand=%v\n",self.advr_main.wi_clip,self.ammo_shells,self.advr_round[0]!=world,self.loadportpos,self.offhandpos));
     ADVR_Assert(self.advr_main.wi_clip==1 && self.ammo_shells==30 && !self.advr_round[0],"shotgun pouch-to-rendered-receiver shell insertion");
+    if(cvar("temp1")==123){
+        ADVR_Assert(!self.advr_main.advr_needs_charge && !self.advr_charge_record[0],"rendered shotgun rail completes back-forward trigger cycle");
+        ADVR_Assert(weaponanygrip(self,0)>0,"support hand stays attached after pump cycle");
+        bprint("ADVR PUMP INPUT PASS\n");
+    }
     bprint("ADVR SHOT INPUT PASS\n");
+};
+
+// Developer fixture: temp1 = weapon index (0 nail / 1 supernail / 2 plasma / 3 thunderbolt / 4 Widowmaker) + 5 * holding hand.
+void() ADVR_TestBoltInput = {
+    local entity r;local float h;
+    ADVR_TestManualInput();r=self.advr_main;h=floor(cvar("temp1")/5);
+    if(cvar("temp1")-h*5==1)r.advr_weapon=IT_SUPER_NAILGUN;
+    if(cvar("temp1")-h*5==2){r.advr_weapon=IT_LIGHTNING;r.advr_kind=ADVR_PLASMA;}
+    if(cvar("temp1")-h*5==3){r.advr_weapon=IT_LIGHTNING;r.advr_kind=0;}
+    if(cvar("temp1")-h*5==4){r.advr_weapon=IT_SUPER_SHOTGUN;r.advr_kind=ADVR_WIDOWMAKER;}
+    self.advr_main=self.advr_off=world;ADVR_SetHand(h,r);self.items=r.advr_weapon;ADVR_SetAmmo(r.advr_weapon,100);
+    r.wi_clip=24;r.advr_mag_absent=0;r.advr_needs_charge=1;
+    self.advr_round_guard[0]=self.advr_round_guard[1]=0;ADVR_Sync();
+};
+void() ADVR_TestBoltCheck = {
+    local entity r;local float h;
+    h=floor(cvar("temp1")/5);r=ADVR_Hand(h);
+    dprint(sprintf("BOLT CHECK hand=%g weapon=%g needs=%g clip=%g pull=%g full=%g sound=%g held=%g\n",h,r.advr_weapon,r.advr_needs_charge,r.wi_clip,r.advr_charge_pull,self.advr_charge_full[1-h],r.advr_bolt_sound,self.advr_charge_record[1-h]!=world));
+    ADVR_Assert(!r.advr_needs_charge && r.wi_clip==24 && !self.advr_charge_record[1-h],"integrated bolt rendered rail and controller gesture");
+    ADVR_Assert(r.advr_bolt_sound,"manual pull has its own sound event");
+    dprint("ADVR BOLT INPUT PASS\n");
 };

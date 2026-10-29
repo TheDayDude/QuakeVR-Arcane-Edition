@@ -54,6 +54,20 @@ AD decorative magazines, including the under-receiver Super Nailgun magazine.
 The launchers retain their vertical foregrips. The standard shotgun has its full
 stock and longer barrel; the break-open Super Shotgun is unchanged.
 
+## Shotgun: pump after an empty reload
+
+After the standard shotgun runs empty, insert fresh shells under the receiver.
+Hold the pump with the support hand's grip, then squeeze its trigger to unlock
+the sliding action. Keep grip and trigger held, pull the pump fully rearward,
+then push it forward before releasing the trigger. Keep holding grip to support
+the weapon afterward. The entire wooden pump, including its outer ribs, moves with
+the stroke. Releasing at the rear or making a short stroke leaves the gun
+unchambered; repeat the complete stroke to finish loading.
+
+Only a reload from zero shells requires this action. Topping up a partly loaded
+shotgun does not, and ordinary shots cycle the pump automatically. This works
+with either hand and either grip mode. Non-manual reload modes remain automatic.
+
 ## Super Shotgun: break open, load, close
 
 In manual mode, press B/Y on the Super Shotgun controller to break
@@ -143,3 +157,24 @@ poison variants, damage rules and shared rocket-ammo accounting.
 
 ### Charging-handle controls (updated)
 With the opposite hand empty, hold its trigger near the charging handle, pull the handle fully back, then release the trigger. This also applies with sticky grip enabled. Grip is reserved for supporting the gun. In manual reload mode, only B/Y ejects magazines or opens the Super Shotgun; touching the red button has no effect.
+
+### Integrated Nailgun, Super Nailgun and Plasma actions
+These three weapons have distinct handle/bolt meshes inside their held MDL files.
+Their actions remain on the same physical side when changing holding hands.
+The receiver sleeve stays fixed while the bolt and handle travel together.
+A manual stroke plays `vr/bolt_pull.wav` when movement starts and
+`vr/bolt_release.wav` on release. Every fired shot runs a silent 90 ms bolt cycle;
+this does not change firing rate, magazine capacity or the manual reload gate.
+
+For geometry editing, `tools/charging-bolts.json` identifies the receiver sleeve,
+sliding bolt and handle vertex ranges in each model. Preserve all original skin,
+UV and body vertices. Frame layout is `original_frame + original_frame_count *
+(pull_step + 16 * left_hand_bank)`, with 16 travel steps. The second bank reflects
+only the action to cancel holding-hand mirroring, including winding and normals.
+The Nailgun and Super Nailgun each have 32 original firing/magazine frames;
+Plasma has one. Do not discard magazine or left-hand banks during MDL export.
+
+To regenerate from source, run `make_classic_vr_models.py GAME/ad`, then
+`make_plasma_model.py GAME/ad`, then `make_charging_bolts.py` from `QC_AD/tools`.
+The final command must run once on fresh base models. Its dimensions and shape
+builders can be edited directly for repeatable future changes.

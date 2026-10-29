@@ -76,7 +76,7 @@ float(float w) ADVR_Loaded = {
 void(entity r) ADVR_InitClip = {
     if(!r || r.advr_clip_ready)return;
     r.advr_clip_ready=1;
-    r.wi_clip=min(ADVR_RecordCapacity(r),max(0,ADVR_Ammo(r.advr_weapon)-ADVR_Loaded(r.advr_weapon)));
+    r.wi_clip=min(ADVR_RecordCapacity(r),max(0,ADVR_Ammo(r.advr_weapon)-ADVR_Loaded(r.advr_weapon)-ADVR_AmmoReserved(r)));
 };
 void(entity r) ADVR_ClampClip = {
     if(!r)return;
@@ -97,9 +97,11 @@ void(float h) ADVR_Reload = {
     if(!r || (!cvar("vr_reload_mode") && r.advr_kind!=ADVR_CROSSBOW) || time<r.advr_reload_until)return;
     ADVR_InitClip(r);
     if(r.advr_kind==ADVR_CROSSBOW){
-        ADVR_ClampClip(r);n=min(1-r.wi_clip,max(0,self.advr_bolts));self.advr_bolts=self.advr_bolts-n;
+        ADVR_ClampClip(r);n=min(1-r.wi_clip,max(0,self.advr_bolts));
     }else n=min(ADVR_RecordCapacity(r)-r.wi_clip,max(0,ADVR_Ammo(r.advr_weapon)-ADVR_Loaded(r.advr_weapon)));
     if(n<=0)return;
+    n=ADVR_AmmoReload(r,n);if(n<=0)return;
+    if(r.advr_kind==ADVR_CROSSBOW)self.advr_bolts=self.advr_bolts-n;
     r.wi_clip=r.wi_clip+n;r.advr_reload_until=time+0.35;
     r.advr_cooldown=max(r.advr_cooldown,r.advr_reload_until);
     sound(self,CHAN_BODY,"reload1.wav",1,ATTN_NORM);haptic(h,0,0.12,70,0.5);
@@ -115,9 +117,9 @@ void(float h) ADVR_Unload = {
     r=ADVR_Hand(h);
     if(!r || r.advr_kind==ADVR_SAW || ADVR_RecordCapacity(r)<=0)return;
     ADVR_ClampClip(r);n=r.wi_clip;if(n<=0)return;
-    if(r.advr_kind==ADVR_CROSSBOW)self.advr_bolts=self.advr_bolts+n;
+    ADVR_AmmoUnload(r);
     dprint("ADVR unload hand ");dprint(ftos(h));dprint(" rounds ");dprint(ftos(n));dprint("\n");
-    r.wi_clip=0;r.advr_reload_until=time+0.35;
+    r.advr_reload_until=time+0.35;
     r.advr_cooldown=max(r.advr_cooldown,r.advr_reload_until);
     sound(self,CHAN_BODY,"reload1.wav",0.5,ATTN_NORM);haptic(h,0,0.08,80,0.35);
 };
@@ -151,10 +153,22 @@ float(float h) ADVR_Holster = {
     if (n == 8 || n == 9) return n - 4;
     return -1;
 };
+float(entity r) ADVR_IntegratedBolt = {
+    return r && (r.advr_weapon==IT_NAILGUN || r.advr_weapon==IT_SUPER_NAILGUN || r.advr_weapon==IT_LIGHTNING || r.advr_kind==ADVR_PLASMA || r.advr_kind==ADVR_WIDOWMAKER);
+};
+float(entity r) ADVR_PumpPull = {
+    local float remaining,duration;
+    if(!r)return 0;
+    if((r.advr_weapon!=IT_SHOTGUN && !ADVR_IntegratedBolt(r)) || r.advr_needs_charge)return r.advr_charge_pull;
+    duration=.30;if(ADVR_IntegratedBolt(r))duration=.09;
+    remaining=bound(0,(r.advr_pump_until-time)/duration,1);
+    return 1-fabs(2*remaining-1);
+};
 void() ADVR_Sync = {
     local float i;
-    self.weaponflags=32*self.advr_main.advr_ssg_open+128*self.advr_main.advr_mag_absent+256*self.advr_main.advr_needs_charge+512*floor(self.advr_main.advr_charge_pull*15);self.weaponflags2=32*self.advr_off.advr_ssg_open+128*self.advr_off.advr_mag_absent+256*self.advr_off.advr_needs_charge+512*floor(self.advr_off.advr_charge_pull*15);
-    self.advr_reload_hands=(self.advr_round[0]!=world || self.advr_charge_record[0]!=world)+2*(self.advr_round[1]!=world || self.advr_charge_record[1]!=world);
+    ADVR_PouchPreview();
+    self.weaponflags=32*self.advr_main.advr_ssg_open+128*self.advr_main.advr_mag_absent+256*self.advr_main.advr_needs_charge+512*floor(ADVR_PumpPull(self.advr_main)*15);self.weaponflags2=32*self.advr_off.advr_ssg_open+128*self.advr_off.advr_mag_absent+256*self.advr_off.advr_needs_charge+512*floor(ADVR_PumpPull(self.advr_off)*15);
+    self.advr_reload_hands=(self.advr_round[0]!=world || (self.advr_charge_record[0]!=world && self.advr_charge_record[0].advr_weapon!=IT_SHOTGUN))+2*(self.advr_round[1]!=world || (self.advr_charge_record[1]!=world && self.advr_charge_record[1].advr_weapon!=IT_SHOTGUN));
     ADVR_MagicInit(self);
     self.advr_tome_flags=(self.advr_off.advr_kind==ADVR_DEBUGTOME)+2*(self.advr_main.advr_kind==ADVR_DEBUGTOME);
     ADVR_ClampClip(self.advr_main);ADVR_ClampClip(self.advr_off);
@@ -414,7 +428,7 @@ void(float h) ADVR_Fire = {
             sound(self,CHAN_AUTO,"gunclick.wav",0.6,ATTN_NORM);r.advr_dry_next=time+0.5;
         }
     }
-    if(cvar("vr_reload_mode")==3 && ADVR_ManualMagazine(r) && (r.advr_needs_charge || r.advr_mag_absent)){
+    if(cvar("vr_reload_mode")==3 && (ADVR_ManualMagazine(r) || r.advr_weapon==IT_SHOTGUN) && (r.advr_needs_charge || r.advr_mag_absent)){
         if(button && time>=r.advr_dry_next){sound(self,CHAN_AUTO,"gunclick.wav",0.6,ATTN_NORM);r.advr_dry_next=time+0.5;}
         return;
     }
@@ -433,6 +447,7 @@ void(float h) ADVR_Fire = {
     }
     ADVR_InitClip(r);
     total=ADVR_Ammo(r.advr_weapon);limited=cvar("vr_reload_mode")!=0;available=total;
+    if(!limited)available=max(0,total-ADVR_AmmoReserved(r));
     if(limited)available=min(total,r.wi_clip);
     if(r.advr_kind==ADVR_WIDOWMAKER && available<3)button=0;
     if(ADVR_ManualSsg(r) && r.advr_ssg_open)button=0;
@@ -450,7 +465,7 @@ void(float h) ADVR_Fire = {
     advr_activehand=h;
     local float oldbutton;
     oldbutton=self.button0;self.button0=button;
-    makevectors(self.v_angle);
+    makevectors(self.v_angle);ADVR_AmmoNormalize(r);advr_ammo_shot=1;
     if(r.advr_animtime>0 && time>=r.advr_animtime) {
         didrun=1;self.think=r.advr_anim;self.nextthink=r.advr_animtime;
         self.think();
@@ -462,11 +477,14 @@ void(float h) ADVR_Fire = {
         if(self.think==player_run || self.think==player_stand1) {r.advr_animtime=0;r.advr_anim=SUB_Null;}
         else {r.advr_anim=self.think;r.advr_animtime=self.nextthink;}
     }
-    spent=max(0,available-ADVR_Ammo(r.advr_weapon));
+    advr_ammo_shot=0;
+    spent=max(0,available-ADVR_Ammo(r.advr_weapon));ADVR_AmmoConsume(r,spent);
     ADVR_SetAmmo(r.advr_weapon,max(0,total-spent));
     r.wi_clip=max(0,r.wi_clip-spent);
     if(ADVR_ManualSsg(r))r.advr_ssg_spent=min(2,r.advr_ssg_spent+spent);
     if(spent>0){
+        if(r.advr_weapon==IT_SHOTGUN)r.advr_pump_until=time+.30;
+        if(ADVR_IntegratedBolt(r))r.advr_pump_until=time+.09;
         weaponfired(self,h);haptic(h,0,0.08,90,0.65);
         if(cvar("vr_debug_weaponfx")){dprint("ADVR shot hand ");dprint(ftos(h));dprint(" spent ");dprint(ftos(spent));dprint("\n");}
     }
@@ -591,6 +609,7 @@ void() ADVR_Reset = {
     local float i;
     ADVR_RuneClear();ADVR_ElderEnd();
     ADVR_ManualRefund();
+    for(i=0;i<10;i=i+1)ADVR_PouchSet(i,"");
     self.advr_charge_trigger[0]=self.advr_charge_trigger[1]=0;
     self.advr_reload_hands=0;self.advr_charge_record[0]=self.advr_charge_record[1]=world;self.advr_charge_guard[0]=self.advr_charge_guard[1]=world;self.advr_round_guard[0]=self.advr_round_guard[1]=0;
     ADVR_EnchantClear();self.advr_enchant_latched=0;self.advr_magic_sticks=0;self.advr_magic_oldsticks=0;
@@ -615,6 +634,7 @@ void() ADVR_Reset = {
 void() ADVR_SaveParms = {
     local float i;
     ADVR_ManualRefund();
+    ADVR_AmmoSave();
     ADVR_MagicInit(self);parm40=self.advr_known;parm41=self.advr_mana_max;parm42=self.advr_magic_version;
     parm45=ADVR_EnchantPack(self.advr_main);parm46=ADVR_EnchantPack(self.advr_off);
     parm47=ADVR_EnchantPack(self.advr_holster[0]);parm48=ADVR_EnchantPack(self.advr_holster[1]);
@@ -664,9 +684,10 @@ void() ADVR_LoadParms = {
         if(self.advr_holster[2]){self.advr_holster[2].advr_needs_charge=parm30<-1500;parm30=parm30+2000*self.advr_holster[2].advr_needs_charge;self.advr_holster[2].advr_mag_absent=parm30<0;self.advr_holster[2].wi_clip=parm30+1000*self.advr_holster[2].advr_mag_absent;}if(self.advr_holster[3]){self.advr_holster[3].advr_needs_charge=parm31<-1500;parm31=parm31+2000*self.advr_holster[3].advr_needs_charge;self.advr_holster[3].advr_mag_absent=parm31<0;self.advr_holster[3].wi_clip=parm31+1000*self.advr_holster[3].advr_mag_absent;}
         if(self.advr_holster[4]){self.advr_holster[4].advr_needs_charge=parm32<-1500;parm32=parm32+2000*self.advr_holster[4].advr_needs_charge;self.advr_holster[4].advr_mag_absent=parm32<0;self.advr_holster[4].wi_clip=parm32+1000*self.advr_holster[4].advr_mag_absent;}if(self.advr_holster[5]){self.advr_holster[5].advr_needs_charge=parm33<-1500;parm33=parm33+2000*self.advr_holster[5].advr_needs_charge;self.advr_holster[5].advr_mag_absent=parm33<0;self.advr_holster[5].wi_clip=parm33+1000*self.advr_holster[5].advr_mag_absent;}
     }
-    ADVR_Sync();
+    ADVR_AmmoRestore();ADVR_Sync();
 };
 void() SetNewParms = {
+    local float ai;for(ai=0;ai<18;ai=ai+1){if(advr_ammo_parm[ai])strunzone(advr_ammo_parm[ai]);advr_ammo_parm[ai]="";}
     ADVR_AD_SetNewParms();
     parm40=parm41=parm42=parm43=parm44=0;
     parm45=parm46=parm47=parm48=parm49=parm50=parm51=parm52=0;

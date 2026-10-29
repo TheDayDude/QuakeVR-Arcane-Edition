@@ -412,6 +412,19 @@ void() W_FireSuperShotgun =
 	else spread_pat = SPREAD_SSG;
 
 	// Choose between a projectile or hit-scan system
+	// Each SSG barrel owns a shell: mixed infusions must not turn both barrels
+	// into the first shell's element. Preserve total pellets and casing count.
+	if(QVR_AD_API==1 && advr_ammo_shot && advr_attack_record.advr_kind!=ADVR_WIDOWMAKER &&
+	   ADVR_AmmoCount(advr_attack_record.advr_ammo)==1 && strlen(advr_attack_record.advr_ammo)>=8 &&
+	   substring(advr_attack_record.advr_ammo,2,2)!=substring(advr_attack_record.advr_ammo,6,2)) {
+		advr_ammo_round_offset=0;
+		if(query_configflag(SVR_SHOTGPROJ))FireBullets(floor(ssg_qty/2),spread_pat);
+		else Launch_Shells(floor(ssg_qty/2),spread_pat,CT_PROJ_SSG);
+		advr_ammo_round_offset=1;
+		if(query_configflag(SVR_SHOTGPROJ))FireBullets(ssg_qty-floor(ssg_qty/2),spread_pat);
+		else Launch_Shells(ssg_qty-floor(ssg_qty/2),spread_pat,CT_PROJ_SSG);
+		advr_ammo_round_offset=0;Launch_ShellCasing(shell_qty);return;
+	}
 	if (query_configflag(SVR_SHOTGPROJ)) {
 		FireBullets (ssg_qty, spread_pat);	// Hit-scan
 		Launch_ShellCasing(shell_qty);

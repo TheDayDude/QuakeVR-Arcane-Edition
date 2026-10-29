@@ -112,6 +112,10 @@ enum Stat : int
     STAT_QVR_RELOAD_HANDS, // physical reload ammo held: off bit 0, main bit 1
     STAT_QVR_DARKSIGHT,
     STAT_QVR_ELDER,
+    STAT_QVR_POUCH_KEY,
+    STAT_QVR_POUCH_ITEM0,
+    STAT_QVR_POUCH_ITEM1,
+    STAT_QVR_POUCH_ITEM2,
     STAT_QVR_END
 };
 

@@ -25,6 +25,9 @@
 #include "Zancle/Math/MinMax.hpp"
 
 #include <string.h>
+#include <array>
+#include <string>
+#include <vector>
 
 namespace qvr::progs
 {
@@ -35,6 +38,8 @@ Bindings sv_bindings;
 
 // Level-start values of parm17..parm40, per client (parm1..parm16 live in client_t).
 za::Vector<float> extSpawnParms;
+// Copy the text, not QC string handles: each level owns a different string table.
+std::vector<std::array<std::string, 18>> ammoSpawnParms;
 
 // Set while Host_Loadgame_f respawns the server, for `spawnServerFromSaveFile`.
 bool loadingSaveGame = false;
@@ -478,6 +483,14 @@ extern "C" void VR_OnLoadGame()
 
 extern "C" void VR_StoreSpawnParms(int client)
 {
+    if(client >= static_cast<int>(ammoSpawnParms.size())) ammoSpawnParms.resize(client + 1);
+    for(int i = 0; i < 18; ++i)
+    {
+        char name[40];q_snprintf(name, sizeof(name), "advr_ammo_parm[%d]", i);
+        const ddef_t* def = findGlobalDef(name);
+        ammoSpawnParms[client][i] = def && (def->type & ~DEF_SAVEGLOBAL) == ev_string
+            ? PR_GetString(*reinterpret_cast<int*>(&qcvm->globals[def->ofs])) : "";
+    }
     float* stored = clientExtSpawnParms(client);
     for(int i = 0; i < numExtSpawnParms; i++)
     {
@@ -487,6 +500,26 @@ extern "C" void VR_StoreSpawnParms(int client)
 
 extern "C" void VR_RestoreSpawnParms(int client)
 {
+    for(int i = 0; i < 18; ++i)
+    {
+        char name[40];q_snprintf(name, sizeof(name), "advr_ammo_parm[%d]", i);
+        const ddef_t* def = findGlobalDef(name);
+        if(!def || (def->type & ~DEF_SAVEGLOBAL) != ev_string) continue;
+        const std::string text = client < static_cast<int>(ammoSpawnParms.size()) ? ammoSpawnParms[client][i] : "";
+        char* copy = static_cast<char*>(Z_Malloc(text.size() + 1));
+        const int handle = PR_SetEngineString(copy);
+        const int id = -1 - handle;
+        if(id >= qcvm->knownzonesize)
+        {
+            const int oldBytes = (qcvm->knownzonesize + 7) >> 3;
+            qcvm->knownzonesize = (id + 32) & ~7;
+            qcvm->knownzone = static_cast<unsigned char*>(Z_Realloc(qcvm->knownzone, (qcvm->knownzonesize + 7) >> 3));
+            memset(qcvm->knownzone + oldBytes, 0, ((qcvm->knownzonesize + 7) >> 3) - oldBytes);
+        }
+        qcvm->knownzone[id >> 3] |= 1u << (id & 7);
+        *reinterpret_cast<int*>(&qcvm->globals[def->ofs]) = handle;
+        memcpy(copy, text.c_str(), text.size() + 1);
+    }
     const float* stored = clientExtSpawnParms(client);
     for(int i = 0; i < numExtSpawnParms; i++)
     {

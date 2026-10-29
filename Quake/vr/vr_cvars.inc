@@ -1954,7 +1954,7 @@ QVR_CVAR(vr_headbutt_damage, "32", CVAR_ARCHIVE)         // damage at that speed
 QVR_CVAR(vr_damage_to_enemies, "1", CVAR_ARCHIVE)        // damage the player deals to monsters
 QVR_CVAR(vr_damage_to_player, "1", CVAR_ARCHIVE)         // damage monsters (and the world) deal to the player
 QVR_CVAR(vr_damage_self, "1", CVAR_ARCHIVE)              // damage the player deals to themselves (rockets, grenades)
-QVR_CVAR(vr_headshot_mult, "1.5", CVAR_ARCHIVE)          // positional damage: headshots,
+QVR_CVAR(vr_headshot_mult, "2", CVAR_ARCHIVE)          // positional damage: headshots,
 QVR_CVAR(vr_limbshot_mult, "0.35", CVAR_ARCHIVE)         // arms (far from the body's middle),
 QVR_CVAR(vr_legshot_mult, "0.6", CVAR_ARCHIVE)           // and legs
 QVR_CVAR(vr_melee_push, "0.5", CVAR_ARCHIVE)               // how far your melee blows push what they hit
@@ -2118,6 +2118,8 @@ QVR_CVAR(vr_jobs_parallel, "1", CVAR_NONE)            // parallelFor (the grasp 
 QVR_CVAR(vr_hand_rig, "1", CVAR_ARCHIVE)               // round 21: the jointed hand (progs/hand_rig.md5mesh: three joints a finger, an opposable thumb, continuous curls; vr_handrig.cpp). 0: the palm and five finger models as before
 QVR_CVAR(vr_reload_mode, "2", CVAR_ARCHIVE)
 QVR_CVAR(vr_ad_manual_version, "0", CVAR_ARCHIVE)
+QVR_CVAR(vr_ad_ammo_enchant_mag_cost, "3", CVAR_ARCHIVE)
+QVR_CVAR(vr_ad_ammo_enchant_round_cost, "1", CVAR_ARCHIVE)
 QVR_CVAR(vr_ad_reload_pouch_forward, "3", CVAR_ARCHIVE)
 QVR_CVAR(vr_ad_reload_pouch_up, "8", CVAR_ARCHIVE)
 QVR_CVAR(vr_ad_reload_pouch_reach, "7", CVAR_ARCHIVE)

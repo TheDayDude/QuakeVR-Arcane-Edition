@@ -320,9 +320,18 @@ void() ADVR_EnchantClear = {
     if(self.advr_enchant_fx){remove(self.advr_enchant_fx);self.advr_enchant_fx=world;}
 };
 void(entity book,float h,float down,float old) ADVR_EnchantFrame = {
-    local entity r;
-    r=ADVR_Hand(h);
-    if(!down || !r || ADVR_IsTome(r) || ADVR_HandBusy(h) || ADVR_Mana()<5) {ADVR_EnchantClear();return;}
+    local entity r;local float ammo,cost;
+    r=ADVR_Hand(h);if(!r)r=self.advr_round[h];ammo=(r.classname=="advr_reload_round");cost=5;
+    if(ammo){
+        if(r.advr_round_type==2 || r.advr_round_type==4 || r.advr_round_kind==ADVR_WIDOWMAKER)cost=max(0,cvar("vr_ad_ammo_enchant_mag_cost"));
+        else cost=max(0,cvar("vr_ad_ammo_enchant_round_cost"))*r.advr_round_count;
+        if(self.advr_spell>4 && self.advr_spell!=7){
+            if(down && !old)sprint(self,"Ammo accepts Fire, Lightning, Frost, Acid, Void or Slipstep.\n");
+            ADVR_EnchantClear();return;
+        }
+        if(r.advr_round_count<=0 || r.advr_grenade_fuse){ADVR_EnchantClear();return;}
+    }
+    if(!down || !r || ADVR_IsTome(r) || (!ammo && ADVR_HandBusy(h)) || ADVR_Mana()<cost) {ADVR_EnchantClear();return;}
     if(self.advr_enchant_record && (self.advr_enchant_record!=r || self.advr_enchant_book!=book || self.advr_enchant_hand!=h)) {
         ADVR_EnchantClear();return;
     }
@@ -334,6 +343,12 @@ void(entity book,float h,float down,float old) ADVR_EnchantFrame = {
     self.advr_enchant_charge=self.advr_enchant_charge+bound(0,frametime,0.05);
     if(time>=self.advr_magic_haptic){haptic(h,0,0.05,90,0.15+0.25*self.advr_enchant_charge/3);self.advr_magic_haptic=time+0.25;}
     if(self.advr_enchant_charge<3)return;
+    if(ammo){
+        r.advr_enchant_type=self.advr_enchant_spell+1;r.advr_enchant_until=0;r.advr_enchant_scale=ADVR_MagicMultiplier();
+        ADVR_SpendMana(cost);self.advr_enchant_latched=1;
+        haptic(h,0,.12,150,.7);sound(self,CHAN_AUTO,"skullwiz/attack.wav",.45,ATTN_NORM);
+        sprint(self,"Ammunition permanently enchanted.\n");ADVR_EnchantClear();return;
+    }
     ADVR_VoidRestore(r);
     r.advr_enchant_type=self.advr_enchant_spell+1;r.advr_enchant_until=time+30;
     if(r.advr_enchant_type==5)ADVR_VoidWeapon(r);
@@ -349,11 +364,12 @@ void(entity book,float h,float down,float old) ADVR_EnchantFrame = {
 // Projectile payload is copied at launch, never looked up from the shooter's
 // current hand at impact. Burning ticks and unrelated spells have no payload.
 void(entity missile) ADVR_EnchantMissile = {
-    if(!advr_attack_record || missile.owner!=advr_attack_actor || time>=advr_attack_record.advr_enchant_until)return;
-    if(advr_attack_record.advr_enchant_type>=10)return; // utility enchantments affect the weapon, not its ammunition
-    missile.advr_enchant_type=advr_attack_record.advr_enchant_type;
-    missile.advr_enchant_until=advr_attack_record.advr_enchant_until;
-    missile.advr_enchant_scale=advr_attack_record.advr_enchant_scale;
+    local entity payload;payload=ADVR_AmmoPayload(advr_attack_record);
+    if(!advr_attack_record || missile.owner!=advr_attack_actor || time>=payload.advr_enchant_until)return;
+    if(payload.advr_enchant_type>=10)return; // utility enchantments affect the weapon, not its ammunition
+    missile.advr_enchant_type=payload.advr_enchant_type;
+    missile.advr_enchant_until=payload.advr_enchant_until;
+    missile.advr_enchant_scale=payload.advr_enchant_scale;
     ADVR_VoidHoming(missile);
 };
 // Rate-limit attempts as well as successes: pellets and beam ticks must not stunlock.
@@ -369,10 +385,10 @@ float(entity target,entity inflictor,entity attacker,float damage) ADVR_EnchantD
     local entity r;local float bonus;
     advr_enchant_stagger=0;
     if(QVR_AD_API!=1 || !(attacker.flags & FL_CLIENT) || !(target.flags & FL_MONSTER) || damage<=0)return damage;
-    if(inflictor==attacker && attacker==advr_attack_actor)r=advr_attack_record;
+    if(inflictor==attacker && attacker==advr_attack_actor)r=ADVR_AmmoPayload(advr_attack_record);
     else if(inflictor.classname=="advr_dropped_weapon")r=inflictor.weaponinst;
     else if(inflictor!=attacker)r=inflictor;
-    if(!r || !r.advr_enchant_type || time>=r.advr_enchant_until)return damage;
+    if(!r || !r.advr_enchant_type || (r.classname!="advr_reload_round" && time>=r.advr_enchant_until))return damage;
     if(r.advr_enchant_type==8)ADVR_SlipHit(target,attacker);
     if(r.advr_enchant_type>=6)return damage; // Haste changes cadence, never elemental damage.
     bonus=damage*0.05*max(1,r.advr_enchant_scale);
@@ -433,6 +449,9 @@ void() ADVR_MagicFrame = {
     if(ADVR_IsTome(self.advr_main) && !ADVR_IsTome(self.advr_off)){h=0;book=self.advr_main;}
     else if(ADVR_IsTome(self.advr_off) && !ADVR_IsTome(self.advr_main)){h=1;book=self.advr_off;}
     if(h<0){ADVR_MagicClear();ADVR_EnchantClear();return;}
+    if((self.advr_magic_sticks & pow(2,1-h)) && !(previoussticks & pow(2,1-h))){
+        ADVR_PouchCycle();haptic(1-h,0,0.05,80,0.35);
+    }
     stick=(self.advr_magic_sticks & pow(2,h))!=0;oldstick=(previoussticks & pow(2,h))!=0;
     if(!stick)self.advr_enchant_latched=0;
     if(!(ADVR_SpellMask(self,book) & pow(2,self.advr_spell))) {
@@ -453,7 +472,7 @@ void() ADVR_MagicFrame = {
         else if(ADVR_SpellMask(self,book) & 8192)self.advr_spell=13;
         else return;
     }
-    if(ADVR_Hand(h)) {
+    if(ADVR_Hand(h) || self.advr_round[h]) {
         if(self.advr_magic_book || self.advr_magic_fx)ADVR_MagicClear();
         if(self.advr_spell==8 || self.advr_spell==11 || self.advr_spell==12 || self.advr_spell==13){ADVR_EnchantClear();return;}
         ADVR_EnchantFrame(book,h,stick,oldstick);return;

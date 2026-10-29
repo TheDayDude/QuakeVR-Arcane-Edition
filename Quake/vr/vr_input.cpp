@@ -343,9 +343,10 @@ void update(const InputState& tracked)
                     logButton(h,b,now,b.key[h],"held ammunition");
                     continue;
                 }
-                // Consume the click only for the hand opposite a tome, keeping movement axes free.
+                // Both clicks belong to the tome: its hand selects pouch ammo;
+                // the opposite hand casts or enchants. Movement axes remain free.
                 if(b.button==&HandInput::stickClick && (tomeStick[h] ||
-                    (now && key_dest==key_game && tomeHand(1-h) && !tomeHand(h))))
+                    (now && key_dest==key_game && (tomeHand(1-h) || tomeHand(h)))))
                 {
                     tomeStick[h]=now;keyEvent(b.key[h],false);
                     logButton(h,b,now,b.key[h],"tome casting/enchantment");continue;
@@ -510,7 +511,7 @@ int magicSticks()
 {
     if(key_dest!=key_game || posing::active() || !vrActive())return 0;
     int bits=0;
-    for(int h=0;h<HAND_COUNT;h++)if(tomeStick[h] && tomeHand(1-h) && !tomeHand(h))bits|=1<<h;
+    for(int h=0;h<HAND_COUNT;h++)if(tomeStick[h] && (tomeHand(1-h) || tomeHand(h)))bits|=1<<h;
     return bits;
 }
 

@@ -15,11 +15,4 @@ Usable Crossbows, Widowmakers, Plasma Guns, and Shadow Axes
 
 [Tome magic](QC_AD/MAGIC.md): Skull Wizard tomes, free-hand fireballs, and Arcane Essence.
 
-TODO:
-Fix weapon textures
-Ogre Hammer
-Fury Knight's Swords
-Valve Finger Tracking compat
-Decapitation
-Crossbow bonus headshot damage
-Traps (Nail Bomb? Bear trap? Rune traps?)
+WIP, more info coming soon

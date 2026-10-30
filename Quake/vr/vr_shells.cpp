@@ -71,7 +71,7 @@ struct Weapon
 };
 
 constexpr Weapon weaponTable[] = {
-    {"progs/advr_base_shot.mdl", 1, {{4.f, -1.5f, 2.8f}}, {{-0.3f, -1.f, 0.65f}}, 1.6f, {0.f, 0.f, 1.f}, -16.f, 1.f, 3, 70},
+    {"progs/advr_base_shot.mdl", 1, {{4.2f, -1.13f, -1.13f}}, {{-0.3f, -1.f, 0.65f}}, 1.6f, {0.f, 0.f, 1.f}, -16.f, 1.f, 3, -1},
     {"progs/v_shot2.mdl", 2, {{11.6f, 1.2f, 6.9f}, {11.6f, -1.2f, 6.9f}}, {{-1.f, 0.15f, 0.5f}, {-1.f, -0.15f, 0.5f}},
         1.6f, {0.f, 1.f, 0.f}, 9.f, 1.5f, 1, 17},
 };
@@ -342,6 +342,7 @@ void eject(const view::ViewEntity (&weapons)[2], const Pending& p)
         return; // the weapon is gone from the hand (thrown, holstered) or has no port
     }
 
+    if(Cvar_VariableValue("vr_debug_weaponfx"))Con_Printf("VR casing: hand %d frame %d port %.2f %.2f %.2f count %d\n",p.hand,ve.ent.frame,w->port[0].x,w->port[0].y,w->port[0].z,p.count);
     const bool flick = (p.flags & FlagFlick) != 0;
     const glm::vec3 shift = animationShift(ve, *w);
     const float upm = unitsPerMetre();

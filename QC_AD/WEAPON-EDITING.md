@@ -55,6 +55,35 @@ would make an invalid MDL. Keep the PNG beside the MDL when moving either file.
 
 ## GIMP and testing
 
+### Charging bolts (Models add-on 1.2.0)
+
+Reinstall `tools/quakevr_models.zip` and reimport the repaired nailgun, super
+nailgun, plasma and Widowmaker models before editing. These models now contain bolt metadata.
+The importer exposes one shared animation: 512 poses for each nailgun (16 bolt
+positions times 32 firing/magazine states), and 16 each for plasma and Widowmaker. Edit the Basis to
+carry a geometry adjustment through the motion. Export with **Quake VR Model**;
+the scene's timeline range is not an export range.
+
+The exporter derives the engine's left-hand rendering bank automatically from
+that animation, keeping the handle on the same physical side of the gun.
+Do not author a separate left-hand animation. The extra runtime vertex corners
+keep triangle winding and your UV mapping correct during reflection; they are
+hidden on import. Only one variant has visible faces per pose; the other is
+collapsed to zero area, so the render copies cannot Z-fight.
+UV seams and hard shading edges also require split file vertices. Do not delete
+vertices merely because their positions match.
+
+The face attribute `qvr_bolt` identifies the complete assembly (including its
+stationary sleeve). It follows existing faces through edits and extrusion.
+For newly created disconnected bolt geometry, set this face attribute to 1;
+body faces should be 0. Keep the animation shape keys and use this add-on to
+preserve the metadata. Generic MDL exporters can discard it or export only a
+short, shifted timeline range, breaking the game's frame layout.
+
+Moving a handle to a new location also requires updating its interaction point
+in the engine (`vr_ad_base_ports.inc`, or the plasma/Widowmaker home in `vr_view.cpp`).
+The mesh export does not silently rewrite gameplay code.
+
 Open the matching PNG directly in GIMP, edit, and export back to that same PNG.
 Keep its dimensions and UV layout unless deliberately remapping the model.
 Restart the game to reload assets. Both game launchers use this same weapon
@@ -72,3 +101,13 @@ Superseded loose weapon textures are archived outside the game in
 `work/weapon-texture-cleanup/backup/redundant-textures`. Original PAK archives
 remain intact. Their assets are overridden by the explicit `advr/progs` files.
 No world textures, monster textures, or unrelated models were removed.
+
+## Shotgun loading and ejection ports
+
+The standard shotgun retains its 16 pump poses. The small inner plate in the
+right receiver slides back with the pump; its outer rim stays fixed. The underside
+loading mouth has a dark inset and metal rim using the existing skin. The engine
+places the loaded-shell count over that inset when viewed from underneath.
+Keep this area near model coordinates (3.65, 0, -3.11) when editing. Spent shells
+eject at (4.2, -1.13, -1.13), halfway through the automatic 0.30-second pump cycle.
+Original weapon UVs and texture files were preserved.

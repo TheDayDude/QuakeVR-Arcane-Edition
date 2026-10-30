@@ -483,7 +483,11 @@ void(float h) ADVR_Fire = {
     r.wi_clip=max(0,r.wi_clip-spent);
     if(ADVR_ManualSsg(r))r.advr_ssg_spent=min(2,r.advr_ssg_spent+spent);
     if(spent>0){
-        if(r.advr_weapon==IT_SHOTGUN)r.advr_pump_until=time+.30;
+        if(r.advr_weapon==IT_SHOTGUN){
+            r.advr_pump_until=time+.30;
+            // Eject at the midpoint of the pump stroke, with the side port open.
+            ejectcasings(h,0,1,.15,0);
+        }
         if(ADVR_IntegratedBolt(r))r.advr_pump_until=time+.09;
         weaponfired(self,h);haptic(h,0,0.08,90,0.65);
         if(cvar("vr_debug_weaponfx")){dprint("ADVR shot hand ");dprint(ftos(h));dprint(" spent ");dprint(ftos(spent));dprint("\n");}
@@ -589,9 +593,11 @@ void() ADVR_Frame = {
     if(self.impulse==42 || self.impulse==43) {
         ADVR_Unload(self.impulse==43);self.impulse=0;
     }
-    if(self.impulse) {ImpulseCommands();desired=self.weapon;}
+    // 44 is the left-hand manual eject button; ManualFrame consumes it below.
+    if(self.impulse && self.impulse!=44) {ImpulseCommands();desired=self.weapon;}
     if(desired!=self.advr_main.advr_weapon)ADVR_Select(desired);
     ADVR_ManualFrame();
+    if(self.impulse==44)self.impulse=0;
     ADVR_HolsterHaptic(1);ADVR_HolsterHaptic(0);
     ADVR_ForceGrab(1);ADVR_ForceGrab(0);
     ADVR_GripFrame(1);ADVR_GripFrame(0);

@@ -25,6 +25,7 @@ inline constexpr int U_QVR_WEAPONUID = 1 << 28;    // long: a weapon prop's weap
 
 // Byte: low 2 bits element, high 6 bits glow strength. Absent means no enchantment.
 inline constexpr int U_QVR_ENCHANT = 1 << 29;
+inline constexpr int U_QVR_AMMOCOUNT = 1 << 30; // short: physical ammo count, including zero
 
 // Server -> client.
 inline constexpr int svc_quakevr = 39;

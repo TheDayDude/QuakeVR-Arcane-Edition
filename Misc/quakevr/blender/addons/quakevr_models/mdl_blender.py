@@ -30,6 +30,7 @@ import numpy as np
 
 from . import checks
 from . import mdl
+from . import bolt_banks
 from . import qpal
 
 KIND = "mdl"
@@ -117,7 +118,7 @@ def import_mdl(context, path):
     with open(path, "rb") as f:
         data = f.read()
     base = os.path.basename(path)
-    model = mdl.Model(data, base)
+    model = bolt_banks.editable(mdl.Model(data, base))
     name = os.path.splitext(base)[0]
     ob = build_object(context, name, model, path)
     ob["qvr_kind"] = KIND
@@ -154,6 +155,11 @@ def build_object(context, name, model, source_path=None):
     av.data.foreach_set("value", list(range(len(groups))))
     at = me.attributes.new(A_TRI, 'INT', 'FACE')
     at.data.foreach_set("value", face_tri)
+    bolt_info = bolt_banks.metadata(model)
+    if bolt_info:
+        bolt_faces = set(bolt_info['bolt_triangles'])
+        ab = me.attributes.new('qvr_bolt', 'INT', 'FACE')
+        ab.data.foreach_set('value', [int(t in bolt_faces) for t in face_tri])
     vids, uvs = [], []
     for ti in face_tri:
         tri = model.tris[ti]
@@ -629,6 +635,8 @@ def export_mdl(context, ob, path, report, grow=False, allow_remap=False):
     new_key = {}
     twin_of = {}
     new_tris = []
+    new_bolt_faces = []
+    bolt_attribute = me.attributes.get('qvr_bolt')
     kept_faces = set(kept.values())
     for f in me.polygons:
         if f.index in kept_faces:
@@ -649,6 +657,7 @@ def export_mdl(context, ob, path, report, grow=False, allow_remap=False):
                         twin_of[new_key[key]] = vid
             idx.append(new_key[key])
         new_tris.append((1, idx[0], idx[2], idx[1]))  # counter-clockwise to clockwise (Quake)
+        new_bolt_faces.append(bool(bolt_attribute and bolt_attribute.data[f.index].value))
     total_v = old_nv + len(new_verts)
     moved_st = [x for x, o in zip(st, old.st) if list(x) != list(o)] + [[0, s_, t_] for (_, s_, t_) in new_verts]
     outside = sum(1 for x in moved_st if not (0 <= x[1] < sw and 0 <= x[2] < sh))
@@ -704,6 +713,16 @@ def export_mdl(context, ob, path, report, grow=False, allow_remap=False):
         q = np.round((places - org) / sc)
         for line in grow_lines:
             report({'WARNING'}, line)
+    if bolt_banks.metadata(old) and grow:
+        # Account for the generated reflection as well as the editable mesh.
+        y_extent = max(abs(float(places[:, :, 1].min())), abs(float(places[:, :, 1].max())))
+        if -y_extent < org[1] - sc[1]*.5 or y_extent > org[1] + 255*sc[1] + sc[1]*.5:
+            y_extent = max(y_extent, abs(org[1]), abs(org[1]+255*sc[1])) + 1e-4
+            org[1] = f32(-y_extent)
+            sc[1] = f32(2*y_extent/255*(1+1e-6))
+            origin, scale = tuple(float(x) for x in org), [float(x) for x in sc]
+            q = np.round((places-org)/sc)
+            report({'WARNING'}, 'Expanded Y bounds for the generated bolt reflection')
     q = np.clip(q, 0, 255).astype(np.int64)
     same_grid = tuple(scale) == tuple(old.scale) and tuple(origin) == tuple(old.origin)
     # Unchanged old vertices keep their bytes exactly.
@@ -825,6 +844,13 @@ def export_mdl(context, ob, path, report, grow=False, allow_remap=False):
     if geometry_changed or not same_grid:
         radius = float(np.linalg.norm(grid_pos, axis=2).max())
         new.h[8] = max(new.h[8], f32(radius))
+    bolt_info = bolt_banks.metadata(old)
+    if bolt_info:
+        old_bolt = set(bolt_info['bolt_triangles'])
+        bolt_faces = [i for i, oi in enumerate(tri_old_index) if oi in old_bolt]
+        first_new = len(tri_old_index) - len(new_bolt_faces)
+        bolt_faces += [first_new+i for i, is_bolt in enumerate(new_bolt_faces) if is_bolt]
+        bolt_banks.tag(new, bolt_info['original_frames'], bolt_faces)
     data = new.to_bytes()
     new = mdl.Model(data, old.name)  # read back: what the engine will read
 
@@ -872,8 +898,9 @@ def export_mdl(context, ob, path, report, grow=False, allow_remap=False):
                                 raise ExportError("Different support map already exists at " + target_map)
                     else:
                         shutil.copy2(source_map, target_map)
+    runtime_data = bolt_banks.expanded(new).to_bytes()
     with open(path, "wb") as f:
-        f.write(data)
+        f.write(runtime_data)
     report({'INFO'}, "wrote %s: %d vertices (%d new), %d triangles (%d kept in place, %d new), %d frames, %d texels "
            "changed" % (path, total_v, len(new_verts), len(tris), len(kept), len(new_tris), P, changed_texels))
     if fr.new_count:

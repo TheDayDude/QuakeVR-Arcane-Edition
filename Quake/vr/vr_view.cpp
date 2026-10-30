@@ -28,6 +28,7 @@
 #include "vr_ledges.hpp"
 #include "vr_lines.hpp"
 #include "vr_protocol.hpp"
+#include "vr_client.hpp"
 #include "vr_render.hpp"
 #include "vr_shells.hpp"
 #include "vr_explosiondebris.hpp"
@@ -642,6 +643,7 @@ GrappleDebug grappleDebug;
 
 void queueWeaponText(const glm::vec3& handRot, bool mirrored, int hand, const view::ViewEntity& ve, int slot)
 {
+    if(vr_reload_mode.value == 3.f && ve.ent.model && strcmp(ve.ent.model->name,"progs/advr_tome.mdl"))return;
     // The view may be set up more than once per frame; queue once.
     int(&queuedFrame)[2] = oncePerFrame.weaponText;
     if(ve.enchant==1 || !vr_show_weapon_text.value || !ve.visible || weapons::value(slot, Key::WpnTextMode) == 0.f ||
@@ -1304,7 +1306,7 @@ void setupWeapon(hands::State& s, int hand, qmodel_t* model, int frame, bool flo
         else if(!strcmp(n,"progs/advr_base_nail.mdl"))point={6.9f,0.f,-1.45f};
         else if(!strcmp(n,"progs/advr_base_nail2.mdl"))point={7.2f,5.17f,1.76f};
         else if(!strcmp(n,"progs/advr_base_light.mdl"))point={11.6f,0.f,3.f};
-        else if(!strcmp(n,"progs/advr_widowmaker.mdl"))point={5.4f,0.f,-2.4f};
+        else if(!strcmp(n,"progs/advr_widowmaker.mdl"))point={7.f,0.f,-2.55f};
         else if(!strcmp(n,"progs/advr_plasma.mdl"))point={3.8f,-0.02f,-2.6f};
         else if(!strcmp(n,"progs/advr_crossbow.mdl"))point={7.f,0.f,2.2f};
         else if(!strcmp(n,"progs/advr_base_rock.mdl") || !strcmp(n,"progs/advr_base_rock2.mdl"))point=glm::vec3{0.f};
@@ -1338,7 +1340,12 @@ void setupWeapon(hands::State& s, int hand, qmodel_t* model, int frame, bool flo
                 for(int axis=0;axis<3;++axis)mag.ent.origin[axis]+=at[axis]-seat[axis];
             }
             const int flags=cl.stats[hand==HAND_MAIN ? STAT_QVR_WEAPONFLAGS : STAT_QVR_WEAPONFLAGS2];
-            if(base && base->magazine){ve.ent.frame=(ve.ent.frame%16)+((flags&128)?16:0);ve.zeroBlend=0.f;}
+            if(base && base->magazine){
+                int pose=ve.ent.frame%16;
+                // Visual barrel speed only; QuakeC still controls every shot.
+                if(!strcmp(n,"progs/advr_base_nail2.mdl"))pose=(pose*2)%16;
+                ve.ent.frame=pose+((flags&128)?16:0);ve.zeroBlend=0.f;
+            }
             const bool integrated=!strcmp(n,"progs/advr_widowmaker.mdl") || !strcmp(n,"progs/advr_base_light.mdl") || !strcmp(n,"progs/advr_base_nail.mdl") || !strcmp(n,"progs/advr_base_nail2.mdl") || !strcmp(n,"progs/advr_plasma.mdl");
             // Each bolt pose retains all original firing and magazine frames.
             // The second bank reflects only the bolt, cancelling hand mirroring.
@@ -1351,7 +1358,7 @@ void setupWeapon(hands::State& s, int hand, qmodel_t* model, int frame, bool flo
             if(pump){ve.ent.frame=(flags>>9)&15;ve.zeroBlend=0.f;}
             const bool chargeable=pump || (base && base->magazine) || !strcmp(n,"progs/advr_plasma.mdl") || !strcmp(n,"progs/advr_widowmaker.mdl");
             if(chargeable && vr_reload_mode.value==3.f){
-                glm::vec3 home=pump ? glm::vec3{9.f,0.f,-2.1f} : base ? base->charge : (!strcmp(n,"progs/advr_plasma.mdl") ? glm::vec3{2.f,-2.7f,1.f} : glm::vec3{3.f,-2.7f,1.f});
+                glm::vec3 home=pump ? glm::vec3{9.f,0.f,-2.1f} : base ? base->charge : (!strcmp(n,"progs/advr_plasma.mdl") ? glm::vec3{3.21f,-2.3f,-1.f} : glm::vec3{8.1f,1.4f,2.45f});
                 if(integrated && mirrored)home.y=-home.y;
                 s.chargeHome[hand]=view::modelPoint(ve,home);
                 s.chargeBack[hand]=view::modelPoint(ve,home-glm::vec3{3.f,0.f,0.f});
@@ -2963,7 +2970,7 @@ void adBaseMainGrip(int hand, const entity_t& weapon, bool mirrored, glm::vec3& 
     // Place the fingers around the forward face of the grip, with the index
     // beside the trigger, rather than embedding the knuckles in its centre.
     const auto frame=hotspotFrame(weapon, mirrored);
-    const glm::vec3 target{frame * glm::vec4{(widow ? glm::vec3{-3.6f,0.f,-4.6f} : base->grip + glm::vec3{.8f, 0.f, -.25f}), 1.f}};
+    const glm::vec3 target{frame * glm::vec4{(widow ? glm::vec3{-1.5f,0.f,-3.45f} : base->grip + glm::vec3{.8f, 0.f, -.25f}), 1.f}};
     if(widow)alignChannel(hand,mirrored,target,glm::mat3{frame}*glm::vec3{-.7f,0.f,-1.f},pos,handRot);
     const glm::vec3 current{rigPlacement(hand, pos, handRot, mirrored, nullptr) * glm::vec4{channel, 1.f}};
     pos += target - current;
@@ -4530,7 +4537,7 @@ bool holsterLive[HolsterCount]{};
 void idleAttachments(const entity_t& e, bool mirrored, int slot, view::ViewEntity& button, view::ViewEntity& front, int clip,
     bool queueText)
 {
-    const bool on = vr_weapon_screen_idle.value != 0.f && slot >= 0 && e.model && !isHandModel(e.model) &&
+    const bool on = vr_reload_mode.value != 3.f && vr_weapon_screen_idle.value != 0.f && slot >= 0 && e.model && !isHandModel(e.model) &&
                     slot != weapons::fistSlot();
     const glm::vec3 drawn{e.angles[0], e.angles[1], e.angles[2]};
     if(on && weapons::value(slot, Key::WpnButtonMode) != 0.f)
@@ -4829,7 +4836,70 @@ bool adSsgReplaced(const view::ViewEntity& ve){
         return entities.ssgFrame[i].visible && entities.ssgBarrels[i].visible;
     return false;
 }
-void setupAmmoPouch(const hands::State& s)
+// Magazine-only labels, flush with the top face. The same transform as the mesh
+// handles carried props, network scaling, pouch previews and either hand.
+bool magazineModel(const qmodel_t* model)
+{
+    if(!model)return false;
+    const char* n=model->name;
+    return !strcmp(n,"progs/advr_base_mag_nail.mdl") || !strcmp(n,"progs/advr_base_mag_nail2.mdl") ||
+        !strcmp(n,"progs/advr_base_mag_light.mdl") || !strcmp(n,"progs/vr_mag_light.mdl") ||
+        !strcmp(n,"progs/advr_mag_shell.mdl");
+}
+void queueMagazineCount(const entity_t& e,int count,const hands::State& s)
+{
+    if(count<0 || !vr_show_weapon_text.value || !magazineModel(e.model))return;
+    float m[16];
+    if(const auto* ve=view::find(&e))render::anchorMatrix(*ve,glm::vec3{0.f},m);
+    else render::entityMatrix(e,false,e.scale ? e.scale : ENTSCALE_DEFAULT,glm::vec3{0.f},m);
+    const auto point=[&](float x,float y,float z){return glm::vec3{
+        m[0]*x+m[4]*y+m[8]*z+m[12],m[1]*x+m[5]*y+m[9]*z+m[13],m[2]*x+m[6]*y+m[10]*z+m[14]};};
+    const auto normal=glm::normalize(point(127.5f,127.5f,256.f)-point(127.5f,127.5f,255.f));
+    const auto top=point(127.5f,127.5f,255.f)+normal*.04f;
+    const auto toEye=s.head-top;
+    if(glm::length(toEye)>80.f || glm::dot(normal,toEye)<=0.f)return;
+    const auto up=glm::normalize(point(127.5f,255.f,255.f)-point(127.5f,0.f,255.f));
+    const float width=glm::length(point(255.f,127.5f,255.f)-point(0.f,127.5f,255.f));
+    const float height=glm::length(point(127.5f,255.f,255.f)-point(127.5f,0.f,255.f));
+    char text[16];q_snprintf(text,sizeof(text),"%d",count);
+    const float scale=za::min(width/(8.f*strlen(text)+4.f),height/12.f)*.8f;
+    const auto angles=hands::anglesFromVectors(-normal,up);
+    const auto right=glm::normalize(glm::cross(-normal,up));
+    // A dark outline keeps the white digits legible on the plasma cell's bright cap.
+    for(float x : {-1.f,1.f})for(float y : {-1.f,1.f})
+        text3d::queue(text,top+(right*x+up*y)*scale*.45f,angles,text3d::Align::Centre,scale,false,true);
+    text3d::queue(text,top+normal*.002f,angles,text3d::Align::Centre,scale,false);
+}
+void queueShotgunCounts(const hands::State& s)
+{
+    if(vr_reload_mode.value!=3.f || !vr_show_weapon_text.value)return;
+    for(int h=0;h<2;++h){
+        const auto& ve=entities.weapon[h];
+        if(!ve.visible || !ve.ent.model || strcmp(ve.ent.model->name,"progs/advr_base_shot.mdl"))continue;
+        const auto top=view::modelPoint(ve,{3.65f,0.f,-3.11f});
+        const auto normal=glm::normalize(view::modelPoint(ve,{3.65f,0.f,-4.11f})-top);
+        if(glm::length(s.head-top)>80.f || glm::dot(normal,s.head-top)<=0.f)continue;
+        const auto up=glm::normalize(view::modelPoint(ve,{4.65f,0.f,-3.11f})-top);
+        const auto angles=hands::anglesFromVectors(-normal,up);
+        const auto right=glm::normalize(glm::cross(-normal,up));
+        char text[16];q_snprintf(text,sizeof(text),"%d",cl.stats[h==HAND_MAIN ? STAT_QVR_WEAPONCLIP : STAT_QVR_WEAPONCLIP2]);
+        constexpr float scale=.065f;
+        for(float x : {-1.f,1.f})for(float y : {-1.f,1.f})
+            text3d::queue(text,top+(right*x+up*y)*scale*.45f,angles,text3d::Align::Centre,scale,false,true);
+        text3d::queue(text,top+normal*.002f,angles,text3d::Align::Centre,scale,false);
+    }
+}
+
+void queueWorldMagazineCounts(const hands::State& s)
+{
+    for(int i=0;i<cl_numvisedicts;++i){
+        const entity_t* e=cl_visedicts[i];
+        if(!e || !magazineModel(e->model) || e<cl_entities || e>=cl_entities+cl.num_entities)continue;
+        if(const auto* data=client::entityVr(static_cast<int>(e-cl_entities)))queueMagazineCount(*e,data->ammoCount,s);
+    }
+}
+
+void setupAmmoPouch(const hands::State& s,bool queueTexts)
 {
     for(auto& bolt:entities.pouchBolts)bolt.visible=false;
     auto& ve = entities.ammoPouch;
@@ -4863,6 +4933,7 @@ void setupAmmoPouch(const hands::State& s)
         item.scale=glm::vec3{bolt ? .45f : .85f};
         item.ent.skinnum=key==4 ? 1 : 0;
         item.enchant=element>=1 && element<=8 ? (element&7)|(31<<3) : 0;
+        if(queueTexts)queueMagazineCount(item.ent,count,s);
     }
     highlight(ve,glm::distance(s.pos[0],at)<vr_ad_reload_pouch_reach.value || glm::distance(s.pos[1],at)<vr_ad_reload_pouch_reach.value);
 }
@@ -5431,7 +5502,7 @@ void setupButton(int hand)
     const view::ViewEntity& weapon = entities.weapon[hand];
     const int slot = weapons::slotForModel(weapon.ent.model);
 
-    if(!weapon.ent.model || slot < 0 || weapons::value(slot, Key::WpnButtonMode) == 0.f)
+    if(vr_reload_mode.value == 3.f || !weapon.ent.model || slot < 0 || weapons::value(slot, Key::WpnButtonMode) == 0.f)
     {
         ve.visible = false;
         return;
@@ -6313,7 +6384,8 @@ extern "C" void VR_SetupViewEntities()
     chainsaw::setupView(s); // the chainsaw's starter cord (vr_chainsaw.cpp)
     setupSawHandle();
     setupPouch(s);
-    setupAmmoPouch(s);
+    setupAmmoPouch(s,idleTexts);
+    if(idleTexts){queueWorldMagazineCounts(s);queueShotgunCounts(s);}
     setupAdSsgParts();
     dripBlood(s);
     shock::frame(s); // the lightning gun in water's arcs and flash (vr_lg_water)

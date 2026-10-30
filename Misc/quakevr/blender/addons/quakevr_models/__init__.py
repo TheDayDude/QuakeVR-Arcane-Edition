@@ -11,7 +11,7 @@
 bl_info = {
     "name": "Quake VR Models",
     "author": "Quake VR",
-    "version": (1, 1, 1),
+    "version": (1, 2, 0),
     "blender": (4, 0, 0),
     "location": "File > Import/Export > Quake VR Body / Quake VR Model (.mdl); 3D View > Sidebar > Quake VR",
     "description": "Edit Quake VR's body, weapons, wrist gadget, flashlight and other models with their bones, "

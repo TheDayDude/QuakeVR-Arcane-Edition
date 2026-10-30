@@ -2068,6 +2068,11 @@ void(float shell_qty) Launch_ShellCasing =
 	local vector org, dir, avel;
 	
 	if ( self.health < 1 ) return;
+    // Tracked shotgun casings originate at its animated receiver, client-side.
+    if(QVR_AD_API==1 && self.advr_initialized && self.weapon==IT_SHOTGUN)return;
+    // Break-action SSG retains its spent shells until the player opens the breech.
+    if(QVR_AD_API==1 && self.advr_initialized && advr_ammo_shot &&
+       ADVR_ManualSsg(ADVR_Hand(advr_activehand)))return;
 	if (query_configflag(SVR_SHOTGCASE)) return;
 
 	if (self.flags & FL_CLIENT) makevectors (self.v_angle);

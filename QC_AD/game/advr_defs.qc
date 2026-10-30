@@ -219,6 +219,7 @@ void(entity r) ADVR_InitClip;
 entity(float h) ADVR_Hand;
 float(float h) ADVR_Holster;
 void(entity shooter,float hand) weaponfired = #0;
+void(float hand,float kind,float count,float delay,float flags) ejectcasings = #0;
 void(float hand,float delay,float duration,float frequency,float amplitude) haptic = #0;
 void(float hand,float strength,vector direction) handimpact = #0;
 void() ADVR_ParryFrame;

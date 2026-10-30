@@ -326,6 +326,7 @@ void() ADVR_ManualFrame = {
     if(cvar("vr_reload_mode")!=3){for(h=0;h<2;h=h+1)if(self.advr_round[h] && !self.advr_round[h].advr_grenade)ADVR_ManualRelease(h,1);}
     for(h=0;h<2;h=h+1){
         if(h)secondary=(self.vrbits0 & 1048576)!=0;else secondary=(self.vrbits0 & 524288)!=0;
+        if(!h && self.impulse==44)secondary=1; // D-pad Left shares the Y/B edge and cooldown logic.
         if(h)flick=(self.vrbits0 & 4096) && !(self.vrbits0 & 8192);
         else flick=(self.vrbits0 & 1024) && !(self.vrbits0 & 2048);
         if(cvar("vr_reload_mode")==3){
@@ -529,6 +530,14 @@ void() ADVR_TestManualReload = {
     r.advr_reload_until=0;ADVR_Assert(ADVR_ManualInsert(0)>0 && !r.advr_mag_absent,"fresh magazine seats after eject");
     r.wi_clip=0;r.advr_cooldown=r.advr_reload_until=r.advr_dry_next=0;self.button0=1;self.advr_fg_rearm[1]=0;
     ADVR_Fire(1);ADVR_Assert(r.advr_dry_next>time && !r.advr_mag_absent,"dry fire clicks without ejecting");self.button0=0;
+    // D-pad Left follows the same edge-triggered path, without ejecting the right weapon.
+    p=self.advr_off=ADVR_Record(IT_SUPER_NAILGUN);p.wi_clip=7;p.advr_mag_absent=0;p.advr_reload_until=0;
+    self.vrbits0=0;self.advr_round_secondary[0]=self.advr_round_secondary[1]=0;
+    self.impulse=44;ADVR_ManualFrame();self.impulse=0;
+    ADVR_Assert(p.advr_mag_absent && p.wi_clip==0 && !r.advr_mag_absent,"D-pad Left ejects only the left-hand magazine");
+    p.advr_weapon=IT_SUPER_SHOTGUN;p.advr_kind=0;p.advr_ssg_open=0;p.advr_ssg_spent=2;p.advr_reload_until=p.advr_cooldown=p.advr_animtime=0;
+    self.advr_round_secondary[0]=0;self.impulse=44;ADVR_ManualFrame();self.impulse=0;
+    ADVR_Assert(p.advr_ssg_open && p.advr_ssg_spent==0,"D-pad Left opens the left SSG and ejects spent shells");
     ADVR_Reset();cvar_set("vr_reload_mode",ftos(mode));bprint("ADVR MANUAL RELOAD PASS\n");
 };
 
@@ -704,3 +713,20 @@ void() ADVR_TestBoltCheck = {
     ADVR_Assert(r.advr_bolt_sound,"manual pull has its own sound event");
     dprint("ADVR BOLT INPUT PASS\n");
 };
+
+// Visual/network fixture: five magazine types and an unlabelled shell.
+void() ADVR_TestMagazineLabels = {
+    local entity r,p;local float i,k,n;local vector at,side;
+    ADVR_Reset();self.advr_initialized=1;self.health=100;
+    makevectors(self.v_viewangle);at=self.headpos+v_forward*18-'0 0 10';side=v_right;
+    r=spawn();
+    for(i=0;i<6;i=i+1){
+        k=2;if(i==1)k=3;if(i==2)k=6;if(i==3)k=7;if(i==4)k=8;if(i==5)k=0;
+        self.advr_pouch_selection=k;ADVR_PouchDescriptor(r);
+        n=7+i*5;if(i==0)n=0;if(i==5)n=1;
+        p=ADVR_ManualProp(r,n);p.movetype=MOVETYPE_NONE;p.solid=SOLID_NOT;
+        setorigin(p,at+side*((i-2.5)*4));p.angles='0 0 0';
+    }
+    remove(r);ADVR_Sync();dprint("ADVR MAGAZINE LABEL FIXTURE READY\n");
+};
+

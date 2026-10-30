@@ -763,6 +763,7 @@ extern "C" int VR_EntityUpdateBits(edict_t* ent)
         bits |= U_QVR_WEAPONUID; // a weapon prop (not a player: his .weaponinst is his main hand's, sent as a stat)
     }
     if(entityEnchantCode(ent))bits |= U_QVR_ENCHANT;
+    if(!strcmp(PR_GetString(ent->v.classname), "advr_reload_round"))bits |= U_QVR_AMMOCOUNT;
     return bits;
 }
 
@@ -800,6 +801,7 @@ extern "C" void VR_WriteEntityUpdate(sizebuf_t* msg, edict_t* ent, int bits)
         MSG_WriteLong(msg, weaponUid(weaponInst(ent, f.weaponinst)));
     }
     if(bits & U_QVR_ENCHANT)MSG_WriteByte(msg,entityEnchantCode(ent));
+    if(bits & U_QVR_AMMOCOUNT)MSG_WriteShort(msg,static_cast<int>(CLAMP(0.f,fieldFloatOr(ent,f.advr_round_count,0.f),32767.f)));
 }
 
 // Movement and attacks advance through these same animation/AI thinks. Do not
@@ -1149,6 +1151,18 @@ void adTest_f()
         Con_Printf("ADVR AMMO GLOW %s tested=%d\n",ok && tested ? "PASS" : "FAIL",tested);
         PR_SwitchQCVM(nullptr);return;
     }
+    if(Cmd_Argc()>1 && !strcmp(Cmd_Argv(1),"maglabelcheck")) {
+        int tested=0;bool ok=true;
+        for(int i=svs.maxclients+1;i<qcvm->num_edicts;++i){
+            auto* e=EDICT_NUM(i);
+            if(e->free || strcmp(PR_GetString(e->v.classname),"advr_reload_round"))continue;
+            const auto* data=client::entityVr(i);
+            const int expected=static_cast<int>(fieldFloatOr(e,fields().advr_round_count,0.f));
+            ok=ok && data && data->ammoCount==expected;++tested;
+        }
+        Con_Printf("ADVR MAGAZINE LABEL NETWORK %s tested=%d\n",ok && tested==6 ? "PASS" : "FAIL",tested);
+        PR_SwitchQCVM(nullptr);return;
+    }
     const char* fixture = "ADVR_Test";
     if(Cmd_Argc() > 1)
     {
@@ -1242,6 +1256,7 @@ void adTest_f()
         else if(!strcmp(Cmd_Argv(1), "fire")) fixture = "ADVR_TestFire";
         else if(!strcmp(Cmd_Argv(1), "flashlight")) fixture = "ADVR_TestFlashlight";
         else if(!strcmp(Cmd_Argv(1), "flashlightview")) fixture = "ADVR_TestFlashlightView";
+        else if(!strcmp(Cmd_Argv(1), "maglabels")) fixture = "ADVR_TestMagazineLabels";
         else if(!strcmp(Cmd_Argv(1), "pouchpreview")) fixture = "ADVR_TestPouchPreview";
         else if(!strcmp(Cmd_Argv(1), "pouchinput")) fixture = "ADVR_TestPouchInput";
         else if(!strcmp(Cmd_Argv(1), "magicview")) fixture = "ADVR_TestMagicView";
@@ -1538,19 +1553,28 @@ cvar_t adFlashlightVersion{"advr_flashlight_version", "0", CVAR_ARCHIVE};
 cvar_t adBalanceVersion{"advr_balance_version", "0", CVAR_ARCHIVE};
 cvar_t adBaseVersion{"advr_base_models_version","0",CVAR_ARCHIVE};
 void adBaseDefaults(){
-    if(adBaseVersion.value>=12.f)return;
+    if(adBaseVersion.value>=13.f)return;
     using weapons::Key;
+    // Apply only the rocket-launcher revision to existing calibrated profiles.
+    Cvar_SetValueQuick(weapons::cvar(6,Key::Scale),.92f);
+    Cvar_SetValueQuick(weapons::cvar(6,Key::SpringStiffness),.60f);
+    Cvar_SetValueQuick(weapons::cvar(6,Key::SpringStrength),.75f);
+    Cvar_SetValueQuick(weapons::cvar(6,Key::SpringSwing),1.60f);
+    Cvar_SetValueQuick(weapons::cvar(6,Key::SpringTwoHanded),1.75f);
+    if(adBaseVersion.value>=12.f){
+        Cvar_SetValueQuick(&adBaseVersion,13.f);weapons::resetCaches();return;
+    }
     if(adBaseVersion.value>=11.f){
         Cvar_SetValueQuick(weapons::cvar(1,Key::TwoHFixedHandYaw),-45.f);
         Cvar_SetValueQuick(weapons::cvar(1,Key::Hotspot1X),9.f);
-        Cvar_SetValueQuick(&adBaseVersion,12.f);weapons::resetCaches();return;
+        Cvar_SetValueQuick(&adBaseVersion,13.f);weapons::resetCaches();return;
     }
 #define AD_BASE_ID(slot, name) weapons::stopInheriting(slot); Cvar_SetQuick(weapons::cvar(slot,Key::ID),name);
 #define AD_BASE_SETTING(slot,key,value) Cvar_SetValueQuick(weapons::cvar(slot,Key::key),value);
 #include "vr_ad_base.inc"
 #undef AD_BASE_ID
 #undef AD_BASE_SETTING
-    Cvar_SetValueQuick(&adBaseVersion,12.f);weapons::resetCaches();
+    Cvar_SetValueQuick(&adBaseVersion,13.f);weapons::resetCaches();
 }
 void adDefaults_f()
 {

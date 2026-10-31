@@ -111,3 +111,13 @@ places the loaded-shell count over that inset when viewed from underneath.
 Keep this area near model coordinates (3.65, 0, -3.11) when editing. Spent shells
 eject at (4.2, -1.13, -1.13), halfway through the automatic 0.30-second pump cycle.
 Original weapon UVs and texture files were preserved.
+
+## Plasma top-loading cylinder
+
+`advr_plasma.mdl` has 32 editable poses: loaded/empty pairs for each of the
+16 bolt positions. Its glowing upper cylinder is the loaded cell; only that
+surface collapses in empty poses. The left-hand bolt bank is derived as before.
+`vr_mag_light.mdl` is now the complete removable cylinder, centered on its body,
+with its axis along X. Its texture and normal maps are copies of the plasma gun
+atlas; the original upper-half UV coordinates are retained. The top loading
+contact is (4.090084, -0.039266, 0.508208) in weapon model space.

@@ -35,11 +35,13 @@
       -1
     ],
     "travel": 3,
-    "original_frames": 1,
-    "frames": 32,
+    "original_frames": 2,
+    "frames": 64,
     "editable_frames": 16,
     "metadata": "Embedded QVRBOLT1: canonical topology, bolt triangle IDs, generated left render triangle IDs",
-    "note": "Manual geometry and UV edits preserved. Import with Quake VR Models 1.2.0; old vertex ranges are obsolete."
+    "note": "Manual geometry and UV edits preserved. Import with Quake VR Models 1.2.0; old vertex ranges are obsolete.",
+    "canonical_frames": 32,
+    "magazine_frames": "even loaded, odd empty, interleaved per bolt pose"
   },
   "advr_base_light": {
     "design": "ribbed capacitor T-handle",

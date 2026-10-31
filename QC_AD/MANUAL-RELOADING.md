@@ -17,7 +17,7 @@ The console equivalent is `vr_reload_mode 3`; `vr_reload_mode 2` restores hip re
 4. Grip works with either normal hold-to-grab or sticky grip. Release/toggle a
    round at the pouch to return it to your inventory, or elsewhere to drop it.
 5. B/Y on the weapon hand ejects
-   its magazine or remaining ammunition. Partially used magazines keep their remaining rounds.
+   its magazine or remaining ammunition. Left D-Pad also performs this action for a weapon in the left hand. Partially used magazines keep their remaining rounds.
 
 Dropped ammunition can be picked up or force-grabbed. Ordinary held reload rounds
 are returned before changing maps or switching to simple reload mode. Abandoned
@@ -32,7 +32,8 @@ and cannot be refunded; held grenades remain usable in simple reload mode.
 | Widowmaker | Dedicated 24-shell box magazine under the receiver (eight shots) |
 | Nailgun | Native magazine under the receiver |
 | Super nailgun | Native box magazine under the receiver |
-| Thunderbolt / Plasma gun | Energy cell, underside; capacities remain 36 / 24 |
+| Thunderbolt | Energy cell, underside; capacity 36 |
+| Plasma gun | Cylindrical energy cell, top socket; capacity 24 |
 | Grenade / Rocket launcher | Individual rounds, at the muzzle |
 | Crossbow | One bolt, on the rail |
 
@@ -178,3 +179,7 @@ To regenerate from source, run `make_classic_vr_models.py GAME/ad`, then
 `make_plasma_model.py GAME/ad`, then `make_charging_bolts.py` from `QC_AD/tools`.
 The final command must run once on fresh base models. Its dimensions and shape
 builders can be edited directly for repeatable future changes.
+
+## Inspecting ammunition
+
+Look at the top of a magazine to see its remaining rounds. The standard shotgun shows its loaded shell count on the underside receiver. While holding a tome, click the tome-hand thumbstick to cycle pouch ammunition types. Pouch previews show the next items available, including enchantments: the rightmost item is drawn first (topmost for crossbow bolts). See AMMO-ENCHANTMENTS.md for permanent enchantment and storage behavior.

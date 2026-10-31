@@ -253,7 +253,7 @@ void(float h) ADVR_Drop = {
     p.advr_moditems = self.moditems-(self.moditems & (IT_UPGRADE_LG|IT_UPGRADE_SSG|IT_UPGRADE_AXE));if(r.advr_kind)p.advr_moditems=0; p.advr_cooldown = time + 0.4;
     p.movetype = MOVETYPE_BOUNCE; p.solid = SOLID_BBOX; p.touch = ADVR_PropTouch;
     // Use the held mesh: the engine applies its calibrated transform to world entities too.
-    setmodel(p,ADVR_RecordModel(r)); if(!r.advr_kind && (r.advr_weapon==IT_NAILGUN || r.advr_weapon==IT_SUPER_NAILGUN || r.advr_weapon==IT_LIGHTNING))p.frame=16*r.advr_mag_absent; if(r.advr_kind==ADVR_CROSSBOW)p.frame=4*(r.wi_clip>0); setsize(p,'-4 -4 -4','4 4 4'); setorigin(p,pos);
+    setmodel(p,ADVR_RecordModel(r)); if(!r.advr_kind && (r.advr_weapon==IT_NAILGUN || r.advr_weapon==IT_SUPER_NAILGUN || r.advr_weapon==IT_LIGHTNING))p.frame=16*r.advr_mag_absent; if(r.advr_kind==ADVR_PLASMA)p.frame=r.advr_mag_absent; if(r.advr_kind==ADVR_CROSSBOW)p.frame=4*(r.wi_clip>0); setsize(p,'-4 -4 -4','4 4 4'); setorigin(p,pos);
     p.angles = ADVR_Angles(h);
     if (h) { vel = self.handthrowvel; p.avelocity = self.handavel; }
     else { vel = self.offhandthrowvel; p.avelocity = self.offhandavel; }

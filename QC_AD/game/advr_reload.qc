@@ -200,13 +200,22 @@ void() ADVR_TestPouchPreview = {
     ADVR_PouchSet(k,strcat(ADVR_AmmoEntry(1,1,1),ADVR_AmmoEntry(1,3,1),ADVR_AmmoEntry(1,5,1)));
     remove(r);ADVR_Sync();dprint("ADVR POUCH PREVIEW PASS\n");
 };
+// Plasma cells leave through the upward-facing socket, including empty cells.
+void(entity p,entity r,float h) ADVR_PlaceEjectedMagazine = {
+    setorigin(p,ADVR_ManualPort(h));p.angles=ADVR_Angles(h);
+    makevectors(p.angles);p.velocity='0 0 -35';
+    if(r.advr_kind==ADVR_PLASMA){
+        p.velocity=v_up*65;
+        p.angles_x=-p.angles_x; // alias model pitch follows the held ammunition convention
+    }
+};
 // Magazine presence is independent of its remaining ammunition.
 void(float h) ADVR_ManualEject = {
     local entity r,p;local float n,chunk,index;
     r=ADVR_Hand(h);if(!ADVR_ManualType(r) || time<r.advr_reload_until)return;
     ADVR_ClampClip(r);n=r.wi_clip;
     if(ADVR_ManualMagazine(r)){if(r.advr_mag_absent)return;r.advr_mag_absent=1;
-        if(n<=0){p=ADVR_ManualProp(r,0);setorigin(p,ADVR_ManualPort(h));p.velocity='0 0 -35';p.owner=self;p.advr_cooldown=time+0.15;}
+        if(n<=0){p=ADVR_ManualProp(r,0);ADVR_PlaceEjectedMagazine(p,r,h);p.owner=self;p.advr_cooldown=time+0.15;}
     }else if(n<=0)return;
     ADVR_AmmoNormalize(r);
     r.wi_clip=0;r.advr_mag_absent=1;
@@ -216,8 +225,8 @@ void(float h) ADVR_ManualEject = {
         p=ADVR_ManualProp(r,chunk);n=n-chunk;
         p.advr_enchant_type=ADVR_AmmoDigit(r.advr_ammo,2);p.advr_enchant_scale=1+.05*ADVR_AmmoDigit(r.advr_ammo,3);
         ADVR_AmmoConsume(r,chunk);
-        setorigin(p,ADVR_ManualPort(h));p.angles=ADVR_Angles(h);
-        makevectors(p.angles);p.velocity='0 0 -35'+v_right*(index-1)*4;
+        ADVR_PlaceEjectedMagazine(p,r,h);
+        if(r.advr_kind!=ADVR_PLASMA)p.velocity=p.velocity+v_right*(index-1)*4;
         p.owner=self;p.advr_cooldown=time+0.15;index=index+1;
     }
     r.advr_reload_until=time+0.25;r.advr_cooldown=max(r.advr_cooldown,r.advr_reload_until);
@@ -447,7 +456,7 @@ void() ADVR_TestCharging = {
 };
 
 void() ADVR_TestManualReload = {
-    local entity r,p;local float mode,before;
+    local entity r,p;local float mode,before,h;
     mode=cvar("vr_reload_mode");cvar_set("vr_reload_mode","3");
     ADVR_Reset();self.advr_initialized=1;self.health=100;self.vrbits0=16384;self.moditems=0;
     self.advr_round_guard[0]=self.advr_round_guard[1]=0;
@@ -538,6 +547,21 @@ void() ADVR_TestManualReload = {
     p.advr_weapon=IT_SUPER_SHOTGUN;p.advr_kind=0;p.advr_ssg_open=0;p.advr_ssg_spent=2;p.advr_reload_until=p.advr_cooldown=p.advr_animtime=0;
     self.advr_round_secondary[0]=0;self.impulse=44;ADVR_ManualFrame();self.impulse=0;
     ADVR_Assert(p.advr_ssg_open && p.advr_ssg_spent==0,"D-pad Left opens the left SSG and ejects spent shells");
+    for(h=0;h<2;h=h+1){
+        ADVR_Reset();self.advr_initialized=1;self.ammo_cells=60;
+        p=find(world,classname,"advr_reload_round");while(p){remove(p);p=find(world,classname,"advr_reload_round");}
+        r=ADVR_Record(IT_LIGHTNING);r.advr_kind=ADVR_PLASMA;ADVR_SetHand(h,r);
+        r.wi_clip=7;r.advr_reload_until=0;ADVR_AmmoSet(r,ADVR_AmmoEntry(7,2,1.1));
+        ADVR_ManualEject(h);p=find(world,classname,"advr_reload_round");
+        makevectors(ADVR_Angles(h));
+        ADVR_Assert(p.model=="progs/vr_mag_light.mdl" && p.velocity*v_up>60 && p.advr_round_count==7,"plasma cylinder ejects upward with its remaining charge");
+        ADVR_Assert(r.advr_mag_absent && r.wi_clip==0,"plasma socket becomes empty");
+        self.advr_round_guard[1-h]=0;ADVR_ManualCatch(p,1-h);r.advr_reload_until=0;ADVR_ManualInsert(1-h);
+        ADVR_Assert(!r.advr_mag_absent && r.wi_clip==7 && self.ammo_cells==60 && ADVR_AmmoDigit(r.advr_ammo,2)==2,"plasma cylinder reinsertion preserves charge and enchantment");
+        r.wi_clip=0;ADVR_AmmoSet(r,"");r.advr_reload_until=0;ADVR_ManualEject(h);
+        p=find(world,classname,"advr_reload_round");makevectors(ADVR_Angles(h));
+        ADVR_Assert(p.advr_round_count==0 && p.velocity*v_up>60,"empty plasma cell also ejects upward");
+    }
     ADVR_Reset();cvar_set("vr_reload_mode",ftos(mode));bprint("ADVR MANUAL RELOAD PASS\n");
 };
 

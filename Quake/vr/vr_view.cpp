@@ -1307,7 +1307,7 @@ void setupWeapon(hands::State& s, int hand, qmodel_t* model, int frame, bool flo
         else if(!strcmp(n,"progs/advr_base_nail2.mdl"))point={7.2f,5.17f,1.76f};
         else if(!strcmp(n,"progs/advr_base_light.mdl"))point={11.6f,0.f,3.f};
         else if(!strcmp(n,"progs/advr_widowmaker.mdl"))point={7.f,0.f,-2.55f};
-        else if(!strcmp(n,"progs/advr_plasma.mdl"))point={3.8f,-0.02f,-2.6f};
+        else if(!strcmp(n,"progs/advr_plasma.mdl"))point={4.090084f,-0.039266f,0.508208f};
         else if(!strcmp(n,"progs/advr_crossbow.mdl"))point={7.f,0.f,2.2f};
         else if(!strcmp(n,"progs/advr_base_rock.mdl") || !strcmp(n,"progs/advr_base_rock2.mdl"))point=glm::vec3{0.f};
         else found=false;
@@ -1321,7 +1321,7 @@ void setupWeapon(hands::State& s, int hand, qmodel_t* model, int frame, bool flo
             if(!strcmp(n,"progs/advr_base_nail.mdl")){magName="progs/vr_mag_nail.mdl";top=3.3f;}
             else if(!strcmp(n,"progs/advr_base_nail2.mdl")){magName="progs/vr_mag_snail.mdl";top=4.7f;}
             else if(!strcmp(n,"progs/advr_base_light.mdl") || !strcmp(n,"progs/advr_plasma.mdl")){magName="progs/vr_mag_light.mdl";top=3.5f;}
-            if(base)magName=nullptr; // Native magazines are articulated in the gun mesh.
+            if(base || !strcmp(n,"progs/advr_plasma.mdl"))magName=nullptr; // Native magazines are articulated in the gun mesh.
             if(magName && vr_reload_mode.value==3.f && !(cl.stats[hand==HAND_MAIN ? STAT_QVR_WEAPONFLAGS : STAT_QVR_WEAPONFLAGS2]&128)){
                 const auto at=s.loadPort[hand];
                 glm::vec3 localForward{1.f,0.f,0.f},localUp{0.f,0.f,1.f};
@@ -1350,8 +1350,9 @@ void setupWeapon(hands::State& s, int hand, qmodel_t* model, int frame, bool flo
             // Each bolt pose retains all original firing and magazine frames.
             // The second bank reflects only the bolt, cancelling hand mirroring.
             if(integrated){
-                const int original=base ? 32 : 1;
-                ve.ent.frame=(base ? ve.ent.frame : 0)+original*(((flags>>9)&15)+(mirrored?16:0));
+                const bool plasma=!strcmp(n,"progs/advr_plasma.mdl");
+                const int original=base ? 32 : plasma ? 2 : 1;
+                ve.ent.frame=(base ? ve.ent.frame : plasma && (flags&128) ? 1 : 0)+original*(((flags>>9)&15)+(mirrored?16:0));
                 ve.zeroBlend=0.f;
             }
             const bool pump=!strcmp(n,"progs/advr_base_shot.mdl");
@@ -4717,7 +4718,7 @@ void setupHolsters(const hands::State& s, bool queueTexts)
         view::ViewEntity& ve = entities.holster[h];
         int idleFrame = model && !strcmp(model->name, "progs/advr_crossbow.mdl") && clip > 0
                                   ? 4 : holsteredGrappleOut(model, pose.weaponPos) ? 2 : 0;
-        if(model){const auto* a=adBaseAttachment(model->name);if(a && a->magazine && (cl.stats[STAT_QVR_HOLSTERWEAPONFLAGS0+stat]&128))idleFrame=16;}
+        if(model){const auto* a=adBaseAttachment(model->name);if(a && a->magazine && (cl.stats[STAT_QVR_HOLSTERWEAPONFLAGS0+stat]&128))idleFrame=16;else if(!strcmp(model->name,"progs/advr_plasma.mdl") && (cl.stats[STAT_QVR_HOLSTERWEAPONFLAGS0+stat]&128))idleFrame=1;}
         place(ve, model, pose.weaponPos, pose.weaponAngles, idleFrame, mirrored);
         if(!previewHere && !posedHere) {
             ve.enchant=cl.stats[STAT_QVR_ENCHANT_HOLSTER0+stat];

@@ -16,3 +16,5 @@ Usable Crossbows, Widowmakers, Plasma Guns, and Shadow Axes
 [Tome magic](QC_AD/MAGIC.md): Skull Wizard tomes, free-hand fireballs, and Arcane Essence.
 
 WIP, more info coming soon
+
+Note: I am aware QVR's latest iteration was created with ai-assisted tools. Originally it was created as a hand-made project and with my project I aim create my own custom maps, modeles, textures, and edits to the QuakeC. Otherwise it will simply be using assets provided by Quake 1, AD, and the AD hires pack.

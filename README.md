@@ -1,20 +1,5 @@
 # Quake VR: Arcane Edition
 
-This is an unofficial fork of Vittorio Romeo's [vr-ironwail](https://github.com/vittorioromeo/quakevr/tree/vr-ironwail) made to run the mod [Arcane Dimensions](https://www.moddb.com/mods/arcane-dimensions).
-
-The base engine is [Ironwail](https://github.com/andrei-drexler/ironwail) and talks to your
-headset through [OpenXR](https://www.khronos.org/openxr/).
-
-Compatibility with AD:
-I've taken the framework for VR weapons, physics and enemies and applied those to all monsters in arcane dimensions.
-
-Additional features (WIP):
-Usable Crossbows, Widowmakers, Plasma Guns, and Shadow Axes
-
-[Manual reloading](QC_AD/MANUAL-RELOADING.md): physical shells, magazines, cells, launcher rounds and crossbow bolts from a belt pouch.
-
-[Tome magic](QC_AD/MAGIC.md): Skull Wizard tomes, free-hand fireballs, and Arcane Essence.
-
-WIP, more info coming soon
+An adaptation of QuakeVR for Arcane Dimensions with some Blade & Sorcery inspired magic mechanics.
 
 Note: I am aware QVR's latest iteration was created with ai-assisted tools. Originally it was created as a hand-made project and with my project I aim create my own custom maps, modeles, textures, and edits to the QuakeC. Otherwise it will simply be using assets provided by Quake 1, AD, and the AD hires pack.
